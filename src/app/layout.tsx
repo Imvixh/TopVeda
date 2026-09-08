@@ -18,13 +18,42 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "TopVeda — Foundation & Design System",
+    default: "TopVeda — Learn Smarter. Prepare Better. Achieve More.",
     template: "%s | TopVeda",
   },
   description:
-    "TopVeda is a modern, extensible e-learning platform delivering live interactive classes, assessments, and comprehensive learning resources.",
+    "TopVeda is a modern, student-first education platform delivering daily live interactive classes, structured board exam test series, curated chapter notes, and 24×7 doubt resolution.",
+  keywords: [
+    "TopVeda",
+    "e-learning platform",
+    "live classes",
+    "CBSE",
+    "Bihar Board",
+    "BSEB",
+    "online coaching",
+    "sample papers",
+    "doubt solving",
+    "board exams",
+  ],
+  authors: [{ name: "TopVeda" }],
+  creator: "TopVeda",
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    url: "https://topveda.com",
+    title: "TopVeda — Learn Smarter. Prepare Better. Achieve More.",
+    description:
+      "A modern education platform delivering live interactive classes, comprehensive test series, curated notes, and 24×7 doubt solving.",
+    siteName: "TopVeda",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TopVeda — Learn Smarter. Prepare Better. Achieve More.",
+    description:
+      "A modern education platform delivering live interactive classes, comprehensive test series, curated notes, and 24×7 doubt solving.",
   },
 };
 
@@ -42,7 +71,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plusJakarta.variable} ${inter.variable} antialiased`}
+      className={`${plusJakarta.variable} ${inter.variable} antialiased scroll-smooth`}
     >
       <body className="min-h-screen bg-brand-bg-warm text-brand-text-primary">
         {children}
