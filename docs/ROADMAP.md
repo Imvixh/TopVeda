@@ -14,30 +14,36 @@
 
 ---
 
-## Phase 2: Public Landing Page & Course Discovery
-- Implement modular public landing page sections:
+## Phase 2: Public Landing Page & Course Discovery (Completed)
+- [x] Implement modular public landing page sections:
   - Header & Navigation with brand wordmark and responsive mobile drawer
-  - Hero Section (Warm, focused, student-oriented)
+  - Hero Section (Approved visual carousel with 4 custom educational slides)
   - Platform Highlights (Daily Live Classes, 100+ Tests & Notes, 24×7 Doubt Solving)
   - "What Are You Looking For?" Category Navigation
-  - Exam Categories & Boards Grid
+  - Exam Categories & Boards Grid (CBSE & Bihar Board active)
   - Featured Courses Carousel/Grid
-  - "Why TopVeda?" Trust & Feature Cards
-  - "How It Works" 3-step learning pathway
+  - "Why TopVeda?" 6 wide rectangular visual hover cards
+  - "How It Works" 4-step equal zig-zag learning pathway
   - Learning Experience & Student Dashboard Preview
   - Student Success & Testimonials
   - Interactive FAQ Accordion
   - Final Call to Action
   - Footer with dynamic social links (X, YouTube, Instagram, Facebook) and legal links
-- Modal-based Auth triggers (Login & Register modals with backdrop blur).
+- [x] Modal-based Auth triggers (Login & Register modals with backdrop blur).
 
 ---
 
-## Phase 3: Supabase Authentication & Role-Based Access Control
-- Supabase client integration (`@supabase/ssr` / `@supabase/supabase-js`).
-- Email & Phone authentication flows inside the reusable modal dialog.
-- Registration with full name, email/phone, password, and terms acceptance.
-- Server-side middleware session verification and RBAC route protection (`/student/*` and `/admin/*`).
+## Phase 3: Supabase Authentication & Role-Based Access Control (Completed)
+- [x] Supabase client integration (`@supabase/ssr` / `@supabase/supabase-js`) for browser, server, and middleware.
+- [x] Email (strict Gmail) & Indian Mobile (+91 10-digit) authentication flows inside modal overlay.
+- [x] Registration with full name validation, strong password enforcement, and mandatory terms acceptance.
+- [x] Database-side profile creation via PostgreSQL trigger (`handle_new_user()`) defaulting role to `'STUDENT'`.
+- [x] Database-level phone uniqueness constraint (`uq_profiles_phone`) preventing duplicate registrations.
+- [x] Row Level Security (RLS) policies on `public.profiles`.
+- [x] Server-side Next.js middleware session refresh and RBAC route protection (`/student/*` and `/admin/*`).
+- [x] Email verification callback handler (`/auth/callback`) and branded password reset page (`/auth/reset-password`).
+- [x] Protected Student and Admin foundation routes (`/student` and `/admin`).
+
 
 ---
 

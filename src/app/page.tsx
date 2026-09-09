@@ -64,6 +64,25 @@ export default function LandingPage() {
     setTeachModalOpen(true);
   };
 
+  // Check URL query parameters for auth triggers (e.g. ?auth=login or ?auth=register)
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const authParam = params.get("auth");
+      if (authParam === "login") {
+        setTimeout(() => {
+          setAuthMode("login");
+          setAuthModalOpen(true);
+        }, 0);
+      } else if (authParam === "register") {
+        setTimeout(() => {
+          setAuthMode("register");
+          setAuthModalOpen(true);
+        }, 0);
+      }
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-brand-bg-warm text-brand-text-primary flex flex-col selection:bg-brand-bg-peach selection:text-brand-orange">
       {/* 1. Navbar */}

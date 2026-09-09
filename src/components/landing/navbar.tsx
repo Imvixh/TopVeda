@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/brand/wordmark";
 import { BrandGlyph } from "@/components/brand/glyph";
 import { landingConfig } from "@/config/landing.config";
-import { Menu, X, LogIn, UserPlus } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut, Shield } from "lucide-react";
 
 export interface NavbarProps {
   onOpenLogin: () => void;
@@ -14,6 +16,7 @@ export interface NavbarProps {
 }
 
 export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
+  const { user, profile, role, isAuthenticated, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [scrolled, setScrolled] = React.useState(false);
 
@@ -27,6 +30,8 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  const dashboardHref = role === "ADMIN" ? "/admin" : "/student";
+
   return (
     <header
       className={`sticky top-0 z-40 w-full transition-all duration-200 ${
@@ -38,14 +43,14 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
       <Container size="xl">
         <div className="flex h-18 items-center justify-between gap-4">
           {/* Brand Logo & Wordmark */}
-          <a
-            href="#"
+          <Link
+            href="/"
             className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange rounded-lg p-1 transition-transform active:scale-95"
             aria-label="TopVeda Homepage"
           >
             <BrandGlyph size={28} />
             <Wordmark size="md" />
-          </a>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1 lg:gap-2" aria-label="Main Navigation">
@@ -62,24 +67,58 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
 
           {/* Right Action Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onOpenLogin}
-              className="text-sm font-semibold"
-            >
-              <LogIn className="h-4 w-4 mr-1.5" />
-              Sign In
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onOpenRegister}
-              className="shadow-subtle"
-            >
-              <UserPlus className="h-4 w-4 mr-1.5" />
-              Get Started
-            </Button>
+            {isAuthenticated ? (
+              <div className="flex items-center gap-3">
+                <Link href={dashboardHref}>
+                  <Button variant="primary" size="sm" className="shadow-subtle">
+                    {role === "ADMIN" ? (
+                      <Shield className="h-4 w-4 mr-1.5" />
+                    ) : (
+                      <LayoutDashboard className="h-4 w-4 mr-1.5" />
+                    )}
+                    {role === "ADMIN" ? "Admin Area" : "Student Area"}
+                  </Button>
+                </Link>
+
+                <div className="flex items-center gap-2 pl-2 border-l border-brand-border">
+                  <div className="h-8 w-8 rounded-full bg-brand-bg-peach border border-brand-orange-border flex items-center justify-center text-brand-orange font-bold text-xs">
+                    {profile?.fullName ? profile.fullName.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-xs font-semibold text-brand-text-primary max-w-[120px] truncate">
+                    {profile?.fullName || user?.email}
+                  </span>
+                  <button
+                    onClick={() => logout()}
+                    className="p-1.5 rounded-lg text-brand-text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Sign Out"
+                    aria-label="Sign Out"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onOpenLogin}
+                  className="text-sm font-semibold"
+                >
+                  <LogIn className="h-4 w-4 mr-1.5" />
+                  Sign In
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onOpenRegister}
+                  className="shadow-subtle"
+                >
+                  <UserPlus className="h-4 w-4 mr-1.5" />
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Hamburger Button */}
@@ -116,30 +155,68 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
               ))}
             </nav>
             <div className="pt-3 border-t border-brand-border-subtle flex flex-col gap-2 px-2">
-              <Button
-                variant="outline"
-                size="md"
-                className="w-full justify-center"
-                onClick={() => {
-                  closeMobileMenu();
-                  onOpenLogin();
-                }}
-              >
-                <LogIn className="h-4 w-4 mr-2" />
-                Sign In
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                className="w-full justify-center"
-                onClick={() => {
-                  closeMobileMenu();
-                  onOpenRegister();
-                }}
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Get Started
-              </Button>
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-center gap-2.5 px-2 py-1.5 bg-brand-bg-warm rounded-lg">
+                    <div className="h-8 w-8 rounded-full bg-brand-bg-peach border border-brand-orange-border flex items-center justify-center text-brand-orange font-bold text-xs">
+                      {profile?.fullName ? profile.fullName.charAt(0).toUpperCase() : "U"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-brand-text-primary truncate">
+                        {profile?.fullName || user?.email}
+                      </p>
+                      <p className="text-[10px] text-brand-text-muted">
+                        Role: {role || "STUDENT"}
+                      </p>
+                    </div>
+                  </div>
+                  <Link href={dashboardHref} onClick={closeMobileMenu}>
+                    <Button variant="primary" size="md" className="w-full justify-center">
+                      <LayoutDashboard className="h-4 w-4 mr-2" />
+                      {role === "ADMIN" ? "Admin Area" : "Student Area"}
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    size="md"
+                    className="w-full justify-center text-red-600 hover:bg-red-50"
+                    onClick={() => {
+                      closeMobileMenu();
+                      logout();
+                    }}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="md"
+                    className="w-full justify-center"
+                    onClick={() => {
+                      closeMobileMenu();
+                      onOpenLogin();
+                    }}
+                  >
+                    <LogIn className="h-4 w-4 mr-2" />
+                    Sign In
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
+                    className="w-full justify-center"
+                    onClick={() => {
+                      closeMobileMenu();
+                      onOpenRegister();
+                    }}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Get Started
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -147,3 +224,4 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
     </header>
   );
 }
+

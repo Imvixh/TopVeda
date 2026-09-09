@@ -11,11 +11,15 @@ export interface UserProfile {
   phone?: string;
   fullName: string;
   role: UserRole;
+  avatarUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export type AuthMode = "login" | "register" | "forgot-password";
+
 export interface AuthModalState {
   isOpen: boolean;
-  mode: "login" | "register";
+  mode: AuthMode;
 }
+

@@ -220,19 +220,32 @@ CREATE TABLE public.student_answers (
 ### 2.3 Student Profile, Enrollment & Progress Tables
 
 ```sql
--- 13. Student Profiles
+-- 13. User Profiles (Phase 3 Implemented)
 CREATE TABLE public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
-    phone VARCHAR(50),
+    phone VARCHAR(50) NOT NULL,
     role VARCHAR(50) DEFAULT 'STUDENT' NOT NULL CHECK (role IN ('STUDENT', 'ADMIN')),
-    target_board_id UUID REFERENCES public.boards(id) ON DELETE SET NULL,
-    target_class_id UUID REFERENCES public.class_levels(id) ON DELETE SET NULL,
     avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+-- Unique constraints & indexes
+CREATE UNIQUE INDEX idx_profiles_email ON public.profiles (LOWER(email));
+CREATE UNIQUE INDEX idx_profiles_phone ON public.profiles (phone);
+CREATE INDEX idx_profiles_role ON public.profiles (role);
+
+-- Database Trigger for Auto-Profile Creation on Auth Signup:
+-- Trigger: on_auth_user_created fires AFTER INSERT ON auth.users
+-- Function: handle_new_user() creates profiles record defaulting role to 'STUDENT'
+
+-- Row Level Security (RLS) Policies on public.profiles:
+-- 1. "Users can view own profile": auth.uid() = id
+-- 2. "Users can update own profile": auth.uid() = id (prevents role modification)
+-- 3. "Admins can view all profiles": role = 'ADMIN' check via subquery
+
 
 -- 14. Course Enrollments
 CREATE TABLE public.course_enrollments (

@@ -114,19 +114,40 @@ Board (e.g. CBSE, BSEB, ICSE)
 
 ---
 
-## 4. Role-Based Access Control (RBAC) Strategy
+## 4. Authentication & Role-Based Access Control (RBAC) Architecture (Phase 3 Implemented)
 
-The application defines two foundational user roles:
+TopVeda distinguishes cleanly between **Authentication** ("Who is the user?") and **Authorization** ("What is the user allowed to do?"):
 
-1. **`STUDENT`**:
-   - Access student-facing features, explore courses, enroll, track lesson progress, attempt tests, view results, raise doubts, and manage profile.
-2. **`ADMIN`**:
-   - Comprehensive CMS and curriculum management: boards, classes, subjects, courses, chapters, lessons, resources, tests, questions, and students.
-   - Dynamic landing page configuration (featured courses, categories, FAQs, platform highlight metrics, and social media links).
+```mermaid
+graph TD
+    A[User Client / Browser] -->|Credentials: Gmail / +91 Phone + Password| B[Supabase Auth Engine]
+    B -->|Issues Secure Cookie Session| A
+    B -->|Trigger: on_auth_user_created| C[PostgreSQL public.profiles]
+    C -->|Default Role: STUDENT| C
+    A -->|Next.js Requests| D[Next.js Middleware]
+    D -->|Validates Session & Role| E{Route Guard}
+    E -->|Valid Session| F[/student Foundation]
+    E -->|Valid Session + ADMIN Role| G[/admin Foundation]
+    E -->|Unauthenticated / Unauthorized| H[Redirect to /?auth=login]
+    F -->|RLS-Protected Queries| C
+    G -->|RLS-Protected Queries| C
+```
 
-**Route Protection Model (Planned for Phase 3/4/5)**:
-- Server-side middleware checks the authenticated user's JWT role claims before rendering `/admin/*` or `/student/*` routes.
-- Strict PostgreSQL Row-Level Security (RLS) ensures students can only read published content and write to their own attempts/progress.
+### 4.1 Authentication Identity (Supabase Auth)
+- `auth.users` serves as the sole source of truth for identity, password verification, session cookies, email verification links, and password reset tokens.
+- Strict registration validation: Full Name (letters & spaces only), Gmail addresses only (`@gmail.com`), 10-digit Indian mobile numbers (`+91XXXXXXXXXX`), strong password rules (8+ chars, uppercase, lowercase, number, special char), and Terms acceptance.
+
+### 4.2 Application Profiles & Database-Side Creation
+- `public.profiles` stores application profile metadata linked via `id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`.
+- Database trigger `handle_new_user()` creates profile records automatically on signup, preventing client-side privilege escalation and setting `role = 'STUDENT'`.
+- Unique constraints on `LOWER(email)` and `phone` guarantee zero duplicates across accounts.
+
+### 4.3 Route Protection & Server-Side Authorization
+- Next.js Middleware (`src/middleware.ts`) refreshes session cookies on every request via `@supabase/ssr`.
+- `/student/*` routes require authenticated sessions.
+- `/admin/*` routes require authenticated sessions with role `ADMIN` verified against `public.profiles`.
+- PostgreSQL Row Level Security (RLS) protects `public.profiles` against unauthorized data access or client-side role tampering.
+
 
 ---
 
