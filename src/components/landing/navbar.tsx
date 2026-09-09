@@ -30,7 +30,9 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
-  const dashboardHref = role === "ADMIN" ? "/admin" : "/student";
+  const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+  const dashboardHref = isAdmin ? "/admin" : "/student";
+  const adminLabel = role === "SUPER_ADMIN" ? "Super Admin" : "Admin Area";
 
   return (
     <header
@@ -71,12 +73,12 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
               <div className="flex items-center gap-3">
                 <Link href={dashboardHref}>
                   <Button variant="primary" size="sm" className="shadow-subtle">
-                    {role === "ADMIN" ? (
+                    {isAdmin ? (
                       <Shield className="h-4 w-4 mr-1.5" />
                     ) : (
                       <LayoutDashboard className="h-4 w-4 mr-1.5" />
                     )}
-                    {role === "ADMIN" ? "Admin Area" : "Student Area"}
+                    {isAdmin ? adminLabel : "Student Area"}
                   </Button>
                 </Link>
 
@@ -173,7 +175,7 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
                   <Link href={dashboardHref} onClick={closeMobileMenu}>
                     <Button variant="primary" size="md" className="w-full justify-center">
                       <LayoutDashboard className="h-4 w-4 mr-2" />
-                      {role === "ADMIN" ? "Admin Area" : "Student Area"}
+                      {isAdmin ? adminLabel : "Student Area"}
                     </Button>
                   </Link>
                   <Button

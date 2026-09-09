@@ -3,7 +3,7 @@
  * Note: Pure type contracts for Phase 1. No auth logic or client is implemented yet.
  */
 
-export type UserRole = "STUDENT" | "ADMIN";
+export type UserRole = "STUDENT" | "ADMIN" | "SUPER_ADMIN";
 
 export interface UserProfile {
   id: string;

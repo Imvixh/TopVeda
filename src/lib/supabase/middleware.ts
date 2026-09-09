@@ -70,7 +70,7 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile || profile.role !== "ADMIN") {
+    if (!profile || (profile.role !== "ADMIN" && profile.role !== "SUPER_ADMIN")) {
       const url = request.nextUrl.clone();
       url.pathname = "/student";
       url.searchParams.set("error", "unauthorized");

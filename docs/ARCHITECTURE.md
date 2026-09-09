@@ -127,7 +127,7 @@ graph TD
     A -->|Next.js Requests| D[Next.js Middleware]
     D -->|Validates Session & Role| E{Route Guard}
     E -->|Valid Session| F[/student Foundation]
-    E -->|Valid Session + ADMIN Role| G[/admin Foundation]
+    E -->|Valid Session + ADMIN or SUPER_ADMIN Role| G[/admin Foundation]
     E -->|Unauthenticated / Unauthorized| H[Redirect to /?auth=login]
     F -->|RLS-Protected Queries| C
     G -->|RLS-Protected Queries| C
@@ -141,11 +141,13 @@ graph TD
 - `public.profiles` stores application profile metadata linked via `id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`.
 - Database trigger `handle_new_user()` creates profile records automatically on signup, preventing client-side privilege escalation and setting `role = 'STUDENT'`.
 - Unique constraints on `LOWER(email)` and `phone` guarantee zero duplicates across accounts.
+- Supported roles: `STUDENT`, `ADMIN`, `SUPER_ADMIN`.
+- Initial Super Admin account is bootstrapped directly in Supabase by updating an existing verified profile from `STUDENT` to `SUPER_ADMIN`.
 
 ### 4.3 Route Protection & Server-Side Authorization
 - Next.js Middleware (`src/middleware.ts`) refreshes session cookies on every request via `@supabase/ssr`.
 - `/student/*` routes require authenticated sessions.
-- `/admin/*` routes require authenticated sessions with role `ADMIN` verified against `public.profiles`.
+- `/admin/*` routes require authenticated sessions with role `ADMIN` or `SUPER_ADMIN` verified against `public.profiles`.
 - PostgreSQL Row Level Security (RLS) protects `public.profiles` against unauthorized data access or client-side role tampering.
 
 

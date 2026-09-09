@@ -220,13 +220,13 @@ CREATE TABLE public.student_answers (
 ### 2.3 Student Profile, Enrollment & Progress Tables
 
 ```sql
--- 13. User Profiles (Phase 3 Implemented)
+-- 13. User Profiles (Phase 3 Implemented & Enhanced)
 CREATE TABLE public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
-    role VARCHAR(50) DEFAULT 'STUDENT' NOT NULL CHECK (role IN ('STUDENT', 'ADMIN')),
+    role VARCHAR(50) DEFAULT 'STUDENT' NOT NULL CHECK (role IN ('STUDENT', 'ADMIN', 'SUPER_ADMIN')),
     avatar_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
@@ -237,14 +237,16 @@ CREATE UNIQUE INDEX idx_profiles_email ON public.profiles (LOWER(email));
 CREATE UNIQUE INDEX idx_profiles_phone ON public.profiles (phone);
 CREATE INDEX idx_profiles_role ON public.profiles (role);
 
--- Database Trigger for Auto-Profile Creation on Auth Signup:
--- Trigger: on_auth_user_created fires AFTER INSERT ON auth.users
--- Function: handle_new_user() creates profiles record defaulting role to 'STUDENT'
+-- Security Guard Trigger & Helper Functions:
+-- Function: is_super_admin() / is_admin_or_super_admin() (SECURITY DEFINER helpers)
+-- Trigger: trg_profile_role_guard fires BEFORE UPDATE ON public.profiles
+-- Function: handle_profile_role_guard() strictly prohibits unauthorized role modification, self-promotion to SUPER_ADMIN, and direct email tampering.
 
 -- Row Level Security (RLS) Policies on public.profiles:
 -- 1. "Users can view own profile": auth.uid() = id
--- 2. "Users can update own profile": auth.uid() = id (prevents role modification)
--- 3. "Admins can view all profiles": role = 'ADMIN' check via subquery
+-- 2. "Admins can view all profiles": is_admin_or_super_admin()
+-- 3. "Users can update own profile": auth.uid() = id (non-role profile fields only, guarded by trigger)
+-- 4. "Super Admins can update all profiles": is_super_admin()
 
 
 -- 14. Course Enrollments
@@ -301,8 +303,9 @@ CREATE TABLE public.faq_items (
 
 ---
 
-## 3. Row Level Security (RLS) Policy Strategy (Planned for Phase 3)
+## 3. Row Level Security (RLS) Policy Strategy (Phase 3 Foundation)
 
 - **Public Access**: Any unauthenticated client can read published boards, classes, subjects, courses, chapters, and lessons marked `is_published = true`.
 - **Student Access**: Authenticated users with role `STUDENT` can insert test attempts, submit answers, update their own lesson progress, and read their own profiles.
-- **Admin Access**: Authenticated users with role `ADMIN` bypass read restrictions and possess full write privileges across all curriculum and CMS tables.
+- **Admin Access**: Authenticated users with role `ADMIN` or `SUPER_ADMIN` bypass read restrictions and possess full write privileges across all curriculum and CMS tables.
+- **Super Admin Access**: Authenticated users with role `SUPER_ADMIN` possess full system authority, governance, role management, and administrative control. Initial owner account is bootstrapped manually by promoting the profile in Supabase.

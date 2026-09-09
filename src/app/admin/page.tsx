@@ -74,10 +74,12 @@ export default function AdminFoundationPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Badge variant="peach" size="sm">RBAC Foundation</Badge>
-                <Badge variant="primary" size="sm">ADMINISTRATOR</Badge>
+                <Badge variant="primary" size="sm">
+                  {profile?.role === "SUPER_ADMIN" ? "SUPER ADMIN" : "ADMINISTRATOR"}
+                </Badge>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text-primary tracking-tight">
-                Admin Authorization Foundation
+                {profile?.role === "SUPER_ADMIN" ? "Super Admin Account Foundation" : "Admin Authorization Foundation"}
               </h1>
               <p className="text-sm text-brand-text-muted">
                 Server-side role verified. You have authorized administrative access to TopVeda.
@@ -92,10 +94,10 @@ export default function AdminFoundationPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-brand-text-primary">
-                    {profile?.fullName || "System Administrator"}
+                    {profile?.fullName || (profile?.role === "SUPER_ADMIN" ? "Super Administrator" : "System Administrator")}
                   </h2>
                   <p className="text-xs text-brand-text-muted">
-                    Role: <span className="font-bold text-brand-orange">ADMIN</span> • Session active
+                    Role: <span className="font-bold text-brand-orange">{profile?.role || "ADMIN"}</span> • Session active
                   </p>
                 </div>
               </div>

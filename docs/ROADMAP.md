@@ -38,11 +38,13 @@
 - [x] Email (strict Gmail) & Indian Mobile (+91 10-digit) authentication flows inside modal overlay.
 - [x] Registration with full name validation, strong password enforcement, and mandatory terms acceptance.
 - [x] Database-side profile creation via PostgreSQL trigger (`handle_new_user()`) defaulting role to `'STUDENT'`.
-- [x] Database-level phone uniqueness constraint (`uq_profiles_phone`) preventing duplicate registrations.
+- [x] Database-level phone uniqueness constraint (`idx_profiles_phone`) preventing duplicate registrations.
 - [x] Row Level Security (RLS) policies on `public.profiles`.
-- [x] Server-side Next.js middleware session refresh and RBAC route protection (`/student/*` and `/admin/*`).
+- [x] Role hierarchy supporting `STUDENT`, `ADMIN`, and `SUPER_ADMIN`.
+- [x] Server-side Next.js middleware session refresh and RBAC route protection (`/student/*` and `/admin/*` for ADMIN/SUPER_ADMIN).
 - [x] Email verification callback handler (`/auth/callback`) and branded password reset page (`/auth/reset-password`).
 - [x] Protected Student and Admin foundation routes (`/student` and `/admin`).
+- [x] Manual bootstrap capability for initial owner account to `SUPER_ADMIN`.
 
 
 ---
