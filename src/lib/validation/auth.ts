@@ -1,7 +1,7 @@
 /**
  * TopVeda Authentication & Registration Validation Utilities
  * Enforces strict business rules for names, Gmail domains, 10-digit Indian phone numbers,
- * password strength, and terms acceptance.
+ * password strength, terms acceptance, and government document uploads.
  */
 
 export interface ValidationResult {
@@ -75,7 +75,7 @@ export function validateAndNormalizePhone(phone: string): ValidationResult {
     };
   }
 
-  // Optional: Valid Indian mobile numbers generally start with 6, 7, 8, or 9
+  // Valid Indian mobile numbers start with 6, 7, 8, or 9
   if (!/^[6-9]\d{9}$/.test(digits)) {
     return {
       isValid: false,
@@ -177,6 +177,71 @@ export function validateTerms(agreed: boolean): ValidationResult {
     return {
       isValid: false,
       error: "You must agree to the Terms & Conditions and Privacy Policy to continue.",
+    };
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Validates 6-digit SMS OTP Token.
+ */
+export function validateOtpToken(token: string): ValidationResult {
+  const trimmed = token.trim();
+
+  if (!trimmed) {
+    return { isValid: false, error: "Please enter the 6-digit verification code." };
+  }
+
+  if (!/^\d{6}$/.test(trimmed)) {
+    return { isValid: false, error: "Verification code must be exactly 6 digits." };
+  }
+
+  return { isValid: true, normalizedValue: trimmed };
+}
+
+/**
+ * Maximum document upload size: 10 Megabytes
+ */
+export const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Permitted MIME types for Government ID / Identity Verification
+ */
+export const ALLOWED_DOCUMENT_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+] as const;
+
+export const ALLOWED_DOCUMENT_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"] as const;
+
+/**
+ * Validates Government / Identity Document File.
+ */
+export function validateDocumentFile(file: File | null | undefined): ValidationResult {
+  if (!file) {
+    return { isValid: false, error: "Please upload your government or identity document." };
+  }
+
+  if (file.size > MAX_DOCUMENT_SIZE_BYTES) {
+    return {
+      isValid: false,
+      error: `Document file size cannot exceed 10 MB. Current size: ${(file.size / (1024 * 1024)).toFixed(1)} MB.`,
+    };
+  }
+
+  const mimeType = file.type.toLowerCase();
+  const fileName = file.name.toLowerCase();
+
+  const isAllowedMime = ALLOWED_DOCUMENT_MIME_TYPES.some((type) => mimeType === type);
+  const isAllowedExt = ALLOWED_DOCUMENT_EXTENSIONS.some((ext) => fileName.endsWith(ext));
+
+  if (!isAllowedMime && !isAllowedExt) {
+    return {
+      isValid: false,
+      error: "Invalid file format. Please upload a PDF, JPG, JPEG, or PNG document.",
     };
   }
 

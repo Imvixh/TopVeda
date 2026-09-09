@@ -46,6 +46,18 @@
 - [x] Protected Student and Admin foundation routes (`/student` and `/admin`).
 - [x] Manual bootstrap capability for initial owner account to `SUPER_ADMIN`.
 
+---
+
+## Phase 3.1: Authentication Enhancement & Admin Approval (Completed)
+- [x] Registration role selector (Student Account vs Admin Application).
+- [x] Identity-preserving phone SMS OTP verification (`updateUser({ phone })` -> `verifyOtp`).
+- [x] Private Supabase Storage bucket (`admin-documents`) with 10MB limit and PDF/JPG/PNG validation.
+- [x] Student-only admin application submission with server-side document existence check.
+- [x] Partial unique index allowing at most one `PENDING` application per user while preserving full history.
+- [x] Hardened PostgreSQL RPC function `review_admin_application()` with 9 security checks and atomic role promotion.
+- [x] Super Admin review portal (`/admin/applications`) with 5-minute signed document preview URLs.
+- [x] Decoupled transactional `EmailService` (Resend in production with honest mock logger in development).
+- [x] Automatic owner alert email and applicant approval/rejection decision emails.
 
 ---
 

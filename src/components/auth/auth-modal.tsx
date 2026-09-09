@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Wordmark } from "@/components/brand/wordmark";
+import { AdminApplicationFlow } from "@/components/auth/admin-application-flow";
 import { useAuth } from "@/hooks/use-auth";
-import { AuthMode } from "@/types/auth.types";
+import { AuthMode, LoginType, RegistrationType } from "@/types/auth.types";
 import { 
   Mail, 
   Lock, 
@@ -16,15 +18,19 @@ import {
   Eye, 
   EyeOff, 
   Loader2,
-  AlertCircle
+  AlertCircle,
+  GraduationCap,
+  Shield
 } from "lucide-react";
 
-export type { AuthMode };
+export type { AuthMode, LoginType, RegistrationType };
 
 export interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: AuthMode;
+  initialLoginType?: LoginType;
+  initialRegistrationType?: RegistrationType;
   onOpenTerms?: () => void;
 }
 
@@ -32,11 +38,16 @@ export function AuthModal({
   isOpen,
   onClose,
   initialMode = "login",
+  initialLoginType = "student",
+  initialRegistrationType = "student",
   onOpenTerms,
 }: AuthModalProps) {
+  const router = useRouter();
   const { login, register, requestPasswordReset } = useAuth();
 
   const [mode, setMode] = React.useState<AuthMode>(initialMode);
+  const [loginType, setLoginType] = React.useState<LoginType>(initialLoginType);
+  const [regType, setRegType] = React.useState<RegistrationType>(initialRegistrationType);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
@@ -50,7 +61,7 @@ export function AuthModal({
   const [loginIdentifier, setLoginIdentifier] = React.useState("");
   const [loginPassword, setLoginPassword] = React.useState("");
 
-  // Register Form States
+  // Register Form States (Student)
   const [registerName, setRegisterName] = React.useState("");
   const [registerEmail, setRegisterEmail] = React.useState("");
   const [registerPhone, setRegisterPhone] = React.useState("");
@@ -61,7 +72,7 @@ export function AuthModal({
   // Forgot Password Form State
   const [forgotEmail, setForgotEmail] = React.useState("");
 
-  // Sync mode when initialMode changes
+  // Sync mode when initialMode, initialLoginType, or initialRegistrationType changes
   const [prevInitialMode, setPrevInitialMode] = React.useState(initialMode);
   if (initialMode !== prevInitialMode) {
     setPrevInitialMode(initialMode);
@@ -88,7 +99,7 @@ export function AuthModal({
     onClose();
   };
 
-  // Submit Handler for Login, Registration, and Forgot Password
+  // Submit Handler for Student Registration, Login, and Forgot Password
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -97,16 +108,25 @@ export function AuthModal({
 
     try {
       if (mode === "login") {
-        const res = await login(loginIdentifier, loginPassword);
+        const res = await login(loginIdentifier, loginPassword, loginType);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to sign in. Please verify your credentials.");
         } else {
-          setSuccessMessage("Welcome back to TopVeda!");
+          setSuccessMessage(
+            loginType === "admin"
+              ? "Welcome to TopVeda Administrator Portal!"
+              : "Welcome back to TopVeda!"
+          );
           setTimeout(() => {
             handleClose();
-          }, 800);
+            if (loginType === "admin") {
+              router.push("/admin");
+            } else {
+              router.push("/student");
+            }
+          }, 600);
         }
-      } else if (mode === "register") {
+      } else if (mode === "register" && regType === "student") {
         const res = await register({
           fullName: registerName,
           email: registerEmail,
@@ -123,9 +143,10 @@ export function AuthModal({
             setRequireEmailVerification(true);
             setSuccessMessage("Registration successful! Please check your Gmail inbox to verify your account.");
           } else {
-            setSuccessMessage("Account created successfully!");
+            setSuccessMessage("Student account created successfully!");
             setTimeout(() => {
               handleClose();
+              router.push("/student");
             }, 1000);
           }
         }
@@ -134,7 +155,9 @@ export function AuthModal({
         if (!res.success) {
           setErrorMessage(res.error || "Failed to send reset link. Please try again.");
         } else {
-          setSuccessMessage("Password reset instructions have been sent to your Gmail inbox.");
+          setSuccessMessage(
+            "If an account exists for this email, we've sent a password reset link. Please check your email."
+          );
         }
       }
     } catch {
@@ -150,19 +173,19 @@ export function AuthModal({
       onClose={handleClose}
       maxWidth={mode === "register" ? "lg" : "md"}
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         {/* Brand Header */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-1.5">
           <Wordmark size="md" className="justify-center" />
           <h2 className="text-xl font-bold text-brand-text-primary">
-            {mode === "login" && "Welcome Back to TopVeda"}
-            {mode === "register" && "Create Your TopVeda Account"}
-            {mode === "forgot-password" && "Reset Your Password"}
+            {mode === "login" && (loginType === "student" ? "Student Sign In" : "Admin Sign In")}
+            {mode === "register" && (regType === "student" ? "Student Registration" : "Admin Registration")}
+            {mode === "forgot-password" && "Forgot Password?"}
           </h2>
           <p className="text-xs text-brand-text-muted">
-            {mode === "login" && "Sign in to access your live classes, test series, and notes"}
-            {mode === "register" && "Join thousands of students learning and preparing smarter"}
-            {mode === "forgot-password" && "Enter your registered Gmail address to receive reset instructions"}
+            {mode === "login" && (loginType === "student" ? "Sign in to access your live classes, test series, and notes" : "Sign in with your verified administrator credentials")}
+            {mode === "register" && (regType === "student" ? "Join thousands of students learning smarter" : "Apply for administrator privileges with government ID verification")}
+            {mode === "forgot-password" && "Enter your registered email address and we'll send you a password reset link."}
           </p>
         </div>
 
@@ -185,6 +208,82 @@ export function AuthModal({
           >
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
             <div className="flex-1 font-medium">{successMessage}</div>
+          </div>
+        )}
+
+        {/* LOGIN PORTAL SELECTOR TABS (Student Sign In vs Admin Sign In) */}
+        {mode === "login" && (
+          <div className="flex p-1 rounded-xl bg-brand-bg-warm border border-brand-border text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setLoginType("student");
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                loginType === "student"
+                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
+                  : "text-brand-text-muted hover:text-brand-text-primary"
+              }`}
+            >
+              <GraduationCap className="h-4 w-4" />
+              <span>Student Sign In</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setLoginType("admin");
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                loginType === "admin"
+                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
+                  : "text-brand-text-muted hover:text-brand-text-primary"
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              <span>Admin Sign In</span>
+            </button>
+          </div>
+        )}
+
+        {/* REGISTRATION ROLE SELECTOR TABS (Student Registration vs Admin Registration) */}
+        {mode === "register" && !requireEmailVerification && (
+          <div className="flex p-1 rounded-xl bg-brand-bg-warm border border-brand-border text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                setRegType("student");
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                regType === "student"
+                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
+                  : "text-brand-text-muted hover:text-brand-text-primary"
+              }`}
+            >
+              <GraduationCap className="h-4 w-4" />
+              <span>Student Registration</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRegType("admin");
+                setErrorMessage(null);
+                setSuccessMessage(null);
+              }}
+              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                regType === "admin"
+                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
+                  : "text-brand-text-muted hover:text-brand-text-primary"
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              <span>Admin Registration</span>
+            </button>
           </div>
         )}
 
@@ -214,6 +313,15 @@ export function AuthModal({
               </Button>
             </div>
           </div>
+        ) : mode === "register" && regType === "admin" ? (
+          /* =========================================================
+              ADMIN APPLICATION FLOW WIZARD
+             ========================================================= */
+          <AdminApplicationFlow
+            onSuccess={handleClose}
+            onOpenTerms={onOpenTerms}
+            onSwitchToLogin={() => switchMode("login")}
+          />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* =========================================================
@@ -270,9 +378,9 @@ export function AuthModal({
             )}
 
             {/* =========================================================
-                2. REGISTER MODE FORM
+                2. STUDENT REGISTER MODE FORM
                ========================================================= */}
-            {mode === "register" && (
+            {mode === "register" && regType === "student" && (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
@@ -401,48 +509,88 @@ export function AuthModal({
                ========================================================= */}
             {mode === "forgot-password" && (
               <>
-                <Input
-                  label="Registered Gmail Address"
-                  placeholder="yourname@gmail.com"
-                  type="email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  icon={<Mail className="h-4 w-4" />}
-                  autoComplete="email"
-                  hint="Enter the Gmail address linked to your TopVeda account"
-                  required
-                  disabled={isSubmitting}
-                />
+                {successMessage ? (
+                  <div className="py-2 text-center space-y-4">
+                    <p className="text-xs text-brand-text-muted leading-relaxed">
+                      Please check your inbox and click the reset password link to create a new password. If you don&apos;t see the email, check your Spam or Promotions folder.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      onClick={() => switchMode("login")}
+                      className="w-full text-xs font-semibold"
+                    >
+                      Back to Sign In
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      label="Email Address"
+                      placeholder="yourname@gmail.com"
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      icon={<Mail className="h-4 w-4" />}
+                      autoComplete="email"
+                      hint="Enter your registered @gmail.com address"
+                      required
+                      disabled={isSubmitting}
+                    />
+
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      className="w-full mt-2 shadow-subtle"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Sending Reset Link...
+                        </>
+                      ) : (
+                        <>
+                          Send Reset Link
+                          <ArrowRight className="h-4 w-4 ml-1.5" />
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
               </>
             )}
 
-            {/* Submit Action Button */}
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full mt-2 shadow-subtle"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  {mode === "login" && "Sign In"}
-                  {mode === "register" && "Create Student Account"}
-                  {mode === "forgot-password" && "Send Reset Link"}
-                  <ArrowRight className="h-4 w-4 ml-1.5" />
-                </>
-              )}
-            </Button>
+            {/* Submit Action Button for Login & Student Register */}
+            {mode !== "forgot-password" && (
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                className="w-full mt-2 shadow-subtle"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    {mode === "login" && (loginType === "admin" ? "Sign In as Administrator" : "Sign In as Student")}
+                    {mode === "register" && "Create Student Account"}
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </>
+                )}
+              </Button>
+            )}
           </form>
         )}
 
         {/* Modal Switch Footer */}
-        <div className="border-t border-brand-border-subtle pt-4 text-center text-xs text-brand-text-muted">
+        <div className="border-t border-brand-border-subtle pt-3.5 text-center text-xs text-brand-text-muted">
           {mode === "login" && (
             <p>
               New to TopVeda?{" "}
@@ -489,4 +637,3 @@ export function AuthModal({
     </Modal>
   );
 }
-

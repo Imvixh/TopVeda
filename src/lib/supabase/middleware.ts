@@ -48,17 +48,7 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = "/";
       url.searchParams.set("auth", "login");
-      url.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(url);
-    }
-  }
-
-  // 2. Protected Admin Routes: /admin/*
-  if (pathname.startsWith("/admin")) {
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      url.searchParams.set("auth", "login");
+      url.searchParams.set("portal", "student");
       url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);
     }
@@ -70,12 +60,92 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile || (profile.role !== "ADMIN" && profile.role !== "SUPER_ADMIN")) {
+    if (!profile || profile.role !== "STUDENT") {
+      if (profile?.role === "SUPER_ADMIN") {
+        return NextResponse.redirect(new URL("/admin", request.url));
+      }
+
+      if (profile?.role === "ADMIN") {
+        // Check if admin is approved
+        const { data: app } = await supabase
+          .from("admin_applications")
+          .select("status")
+          .eq("user_id", user.id)
+          .eq("status", "APPROVED")
+          .maybeSingle();
+
+        if (app) {
+          return NextResponse.redirect(new URL("/admin", request.url));
+        }
+
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        url.searchParams.set("auth", "login");
+        url.searchParams.set("portal", "admin");
+        url.searchParams.set("error", "pending");
+        return NextResponse.redirect(url);
+      }
+
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.searchParams.set("error", "unauthorized");
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // 2. Protected Admin Routes: /admin/*
+  if (pathname.startsWith("/admin")) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.searchParams.set("auth", "login");
+      url.searchParams.set("portal", "admin");
+      url.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(url);
+    }
+
+    // Verify role in public.profiles table
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.searchParams.set("auth", "login");
+      url.searchParams.set("portal", "admin");
+      url.searchParams.set("error", "unauthorized");
+      return NextResponse.redirect(url);
+    }
+
+    if (profile.role === "STUDENT") {
       const url = request.nextUrl.clone();
       url.pathname = "/student";
       url.searchParams.set("error", "unauthorized");
       return NextResponse.redirect(url);
     }
+
+    if (profile.role === "ADMIN") {
+      // Must have APPROVED admin application
+      const { data: app } = await supabase
+        .from("admin_applications")
+        .select("status")
+        .eq("user_id", user.id)
+        .eq("status", "APPROVED")
+        .maybeSingle();
+
+      if (!app) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/";
+        url.searchParams.set("auth", "login");
+        url.searchParams.set("portal", "admin");
+        url.searchParams.set("error", "pending");
+        return NextResponse.redirect(url);
+      }
+    }
+    // SUPER_ADMIN is allowed directly
   }
 
   return supabaseResponse;

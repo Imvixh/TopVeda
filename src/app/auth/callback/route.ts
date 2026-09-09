@@ -9,19 +9,32 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error) {
+    if (!error && sessionData?.user) {
       const forwardedHost = request.headers.get("x-forwarded-host");
       const isLocalEnv = process.env.NODE_ENV === "development";
+      const baseOrigin = forwardedHost && !isLocalEnv ? `https://${forwardedHost}` : origin;
 
-      if (isLocalEnv) {
-        return NextResponse.redirect(`${origin}${next}`);
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`);
-      } else {
-        return NextResponse.redirect(`${origin}${next}`);
+      let userRole = sessionData.user.user_metadata?.role;
+      if (!userRole) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", sessionData.user.id)
+          .maybeSingle();
+        userRole = profile?.role;
       }
+
+      if (searchParams.has("next")) {
+        return NextResponse.redirect(`${baseOrigin}${next}`);
+      }
+
+      if (userRole === "ADMIN") {
+        return NextResponse.redirect(`${baseOrigin}/?auth=register&type=admin&email_verified=true`);
+      }
+
+      return NextResponse.redirect(`${baseOrigin}/student`);
     }
   }
 

@@ -14,7 +14,7 @@ import { Testimonials } from "@/components/landing/testimonials";
 import { FAQ } from "@/components/landing/faq";
 import { FinalCTA } from "@/components/landing/final-cta";
 import { Footer } from "@/components/landing/footer";
-import { AuthModal, AuthMode } from "@/components/auth/auth-modal";
+import { AuthModal, AuthMode, LoginType, RegistrationType } from "@/components/auth/auth-modal";
 import { LegalModal, LegalType } from "@/components/legal/legal-modal";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ export default function LandingPage() {
   // Auth Modal State
   const [authModalOpen, setAuthModalOpen] = React.useState(false);
   const [authMode, setAuthMode] = React.useState<AuthMode>("login");
+  const [authLoginType, setAuthLoginType] = React.useState<LoginType>("student");
+  const [authRegType, setAuthRegType] = React.useState<RegistrationType>("student");
 
   // Legal Modal State
   const [legalModalOpen, setLegalModalOpen] = React.useState(false);
@@ -36,13 +38,15 @@ export default function LandingPage() {
   // Educator Interest Notice State
   const [teachModalOpen, setTeachModalOpen] = React.useState(false);
 
-  const handleOpenLogin = () => {
+  const handleOpenLogin = (portal: LoginType = "student") => {
     setAuthMode("login");
+    setAuthLoginType(portal);
     setAuthModalOpen(true);
   };
 
-  const handleOpenRegister = () => {
+  const handleOpenRegister = (type: RegistrationType = "student") => {
     setAuthMode("register");
+    setAuthRegType(type);
     setAuthModalOpen(true);
   };
 
@@ -69,14 +73,36 @@ export default function LandingPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const authParam = params.get("auth");
+      const typeParam = params.get("type") || params.get("portal") || params.get("role");
+
       if (authParam === "login") {
         setTimeout(() => {
           setAuthMode("login");
+          setAuthLoginType(typeParam === "admin" ? "admin" : "student");
+          setAuthModalOpen(true);
+        }, 0);
+      } else if (authParam === "admin-login") {
+        setTimeout(() => {
+          setAuthMode("login");
+          setAuthLoginType("admin");
           setAuthModalOpen(true);
         }, 0);
       } else if (authParam === "register") {
         setTimeout(() => {
           setAuthMode("register");
+          setAuthRegType(typeParam === "admin" ? "admin" : "student");
+          setAuthModalOpen(true);
+        }, 0);
+      } else if (authParam === "admin-register" || authParam === "admin-application") {
+        setTimeout(() => {
+          setAuthMode("register");
+          setAuthRegType("admin");
+          setAuthModalOpen(true);
+        }, 0);
+      } else if (authParam === "forgot-password" || authParam === "forgot") {
+        setTimeout(() => {
+          setAuthMode("forgot-password");
+          setAuthLoginType(typeParam === "admin" ? "admin" : "student");
           setAuthModalOpen(true);
         }, 0);
       }
@@ -141,6 +167,8 @@ export default function LandingPage() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authMode}
+        initialLoginType={authLoginType}
+        initialRegistrationType={authRegType}
         onOpenTerms={handleOpenTerms}
       />
 

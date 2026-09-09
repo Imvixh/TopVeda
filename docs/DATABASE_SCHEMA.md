@@ -271,8 +271,29 @@ CREATE TABLE public.lesson_progress (
     last_watched_second INT DEFAULT 0,
     completed_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    CONSTRAINT uq_student_lesson_progress UNIQUE (student_id, lesson_id)
+-- 16. Admin Applications (Phase 3.1 Implemented)
+CREATE TABLE public.admin_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    document_storage_path TEXT NOT NULL,
+    document_file_name VARCHAR(255) NOT NULL,
+    document_file_size INT NOT NULL,
+    document_mime_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) DEFAULT 'PENDING' NOT NULL CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    reviewed_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    rejection_reason TEXT,
+    created_at TIMESTAMPTZ DEFAULT pg_catalog.now() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT pg_catalog.now() NOT NULL,
+    CONSTRAINT chk_document_storage_path_owner CHECK (document_storage_path LIKE (user_id::text || '/%'))
 );
+
+CREATE UNIQUE INDEX idx_admin_apps_one_pending ON public.admin_applications (user_id) WHERE status = 'PENDING';
+CREATE INDEX idx_admin_apps_user_history ON public.admin_applications (user_id);
+CREATE INDEX idx_admin_apps_status ON public.admin_applications (status);
 ```
 
 ---

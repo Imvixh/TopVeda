@@ -17,7 +17,9 @@ import {
   LogOut, 
   ArrowLeft, 
   Loader2, 
-  Layers 
+  Layers,
+  FileCheck2,
+  ArrowRight
 } from "lucide-react";
 
 export default function AdminFoundationPage() {
@@ -39,6 +41,8 @@ export default function AdminFoundationPage() {
       </div>
     );
   }
+
+  const isSuperAdmin = profile?.role === "SUPER_ADMIN";
 
   return (
     <div className="min-h-screen bg-brand-bg-warm flex flex-col">
@@ -75,16 +79,44 @@ export default function AdminFoundationPage() {
               <div className="flex items-center gap-2">
                 <Badge variant="peach" size="sm">RBAC Foundation</Badge>
                 <Badge variant="primary" size="sm">
-                  {profile?.role === "SUPER_ADMIN" ? "SUPER ADMIN" : "ADMINISTRATOR"}
+                  {isSuperAdmin ? "SUPER ADMIN" : "ADMINISTRATOR"}
                 </Badge>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text-primary tracking-tight">
-                {profile?.role === "SUPER_ADMIN" ? "Super Admin Account Foundation" : "Admin Authorization Foundation"}
+                {isSuperAdmin ? "Super Admin Account Foundation" : "Admin Authorization Foundation"}
               </h1>
               <p className="text-sm text-brand-text-muted">
                 Server-side role verified. You have authorized administrative access to TopVeda.
               </p>
             </div>
+
+            {/* SUPER ADMIN QUICK ACTION: Admin Applications Review */}
+            {isSuperAdmin && (
+              <Card className="p-5 sm:p-6 bg-gradient-to-br from-brand-surface to-brand-bg-peach/30 border-2 border-brand-orange-border shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-2xl bg-brand-orange text-white flex items-center justify-center shadow-md">
+                      <FileCheck2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-brand-text-primary">
+                        Admin Applications & Review Vault
+                      </h3>
+                      <p className="text-xs text-brand-text-muted">
+                        Inspect government ID documents and approve or reject applicant admin requests.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href="/admin/applications">
+                    <Button variant="primary" size="sm" className="shadow-subtle w-full sm:w-auto">
+                      Open Review Panel
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            )}
 
             {/* Admin Profile Overview */}
             <Card className="p-6 sm:p-8 space-y-6 shadow-md">
@@ -94,7 +126,7 @@ export default function AdminFoundationPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-brand-text-primary">
-                    {profile?.fullName || (profile?.role === "SUPER_ADMIN" ? "Super Administrator" : "System Administrator")}
+                    {profile?.fullName || (isSuperAdmin ? "Super Administrator" : "System Administrator")}
                   </h2>
                   <p className="text-xs text-brand-text-muted">
                     Role: <span className="font-bold text-brand-orange">{profile?.role || "ADMIN"}</span> • Session active

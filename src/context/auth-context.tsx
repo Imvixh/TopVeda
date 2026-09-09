@@ -3,7 +3,12 @@
 import * as React from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { UserProfile, UserRole } from "@/types/auth.types";
+import {
+  UserProfile,
+  UserRole,
+  AdminApplicationSubmission,
+  DocumentUploadMetadata,
+} from "@/types/auth.types";
 import {
   validateFullName,
   validateEmail,
@@ -20,12 +25,15 @@ export interface RegisterParams {
   password: string;
   confirmPassword: string;
   termsAgreed: boolean;
+  role?: "STUDENT" | "ADMIN";
 }
 
 export interface AuthResponse {
   success: boolean;
   error?: string;
   requireVerification?: boolean;
+  metadata?: DocumentUploadMetadata;
+  role?: UserRole;
 }
 
 interface AuthContextType {
@@ -34,11 +42,13 @@ interface AuthContextType {
   role: UserRole | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string) => Promise<AuthResponse>;
+  login: (identifier: string, password: string, expectedPortal?: "student" | "admin") => Promise<AuthResponse>;
   register: (params: RegisterParams) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<AuthResponse>;
   updatePassword: (password: string) => Promise<AuthResponse>;
+  uploadAdminDocument: (file: File) => Promise<AuthResponse>;
+  submitAdminApplication: (submission: AdminApplicationSubmission) => Promise<AuthResponse>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -84,11 +94,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const refreshProfile = React.useCallback(async () => {
-    if (user?.id) {
-      const p = await fetchProfile(user.id);
-      setProfile(p);
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        setUser(currentUser);
+        const p = await fetchProfile(currentUser.id);
+        setProfile(p);
+      }
+    } catch {
+      // Ignore refresh error
     }
-  }, [user, fetchProfile]);
+  }, [supabase, fetchProfile]);
 
   // Initial session & profile hydration + auth change listener
   React.useEffect(() => {
@@ -149,8 +168,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase, fetchProfile]);
 
-  // Login with Email (Gmail) or 10-digit Phone (+91)
-  const login = async (identifier: string, password: string): Promise<AuthResponse> => {
+  // Login with Email (Gmail) or 10-digit Phone (+91), with authoritative server-side role verification
+  const login = async (
+    identifier: string,
+    password: string,
+    expectedPortal?: "student" | "admin"
+  ): Promise<AuthResponse> => {
     const trimmedId = identifier.trim();
 
     if (!trimmedId) {
@@ -162,7 +185,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Determine if identifier is an Email or Phone number
+      let authUser: User | null = null;
+
       if (trimmedId.includes("@")) {
         const emailValidation = validateEmail(trimmedId);
         if (!emailValidation.isValid) {
@@ -184,12 +208,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { success: false, error: "Invalid email or password. Please try again." };
         }
 
-        setUser(data.user);
-        const userProfile = await fetchProfile(data.user.id);
-        setProfile(userProfile);
-        return { success: true };
+        authUser = data.user;
       } else {
-        // Phone Authentication
         const phoneValidation = validateAndNormalizePhone(trimmedId);
         if (!phoneValidation.isValid) {
           return { success: false, error: phoneValidation.error };
@@ -197,14 +217,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const normalizedPhone = phoneValidation.normalizedValue!;
 
-        // Attempt Supabase native phone password authentication
         const { data, error } = await supabase.auth.signInWithPassword({
           phone: normalizedPhone,
           password,
         });
 
         if (error) {
-          // If phone auth is not natively enabled in Supabase project, provide friendly message
           return {
             success: false,
             error:
@@ -212,48 +230,129 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
-        setUser(data.user);
-        const userProfile = await fetchProfile(data.user.id);
-        setProfile(userProfile);
-        return { success: true };
+        authUser = data.user;
       }
+
+      if (!authUser) {
+        return { success: false, error: "Authentication failed. User session not found." };
+      }
+
+      // 2. Fetch authoritative database profile
+      const userProfile = await fetchProfile(authUser.id);
+      const userRole = userProfile?.role || "STUDENT";
+
+      // 3. Authoritative Portal Enforcement
+      if (expectedPortal === "student") {
+        if (userRole === "ADMIN" || userRole === "SUPER_ADMIN") {
+          // Reject Admin / Super Admin attempting Student Login
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          return {
+            success: false,
+            error: "Invalid user. Please use Admin Sign In.",
+          };
+        }
+      } else if (expectedPortal === "admin") {
+        if (userRole === "STUDENT") {
+          // Reject Student attempting Admin Login
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          return {
+            success: false,
+            error: "Invalid user. Please use Student Sign In.",
+          };
+        }
+
+        if (userRole === "ADMIN") {
+          // Verify admin application status
+          const { data: latestApp } = await supabase
+            .from("admin_applications")
+            .select("status")
+            .eq("user_id", authUser.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!latestApp) {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            return {
+              success: false,
+              error: "Your admin registration is pending approval.",
+            };
+          }
+
+          if (latestApp.status === "PENDING") {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            return {
+              success: false,
+              error: "Your admin registration is pending approval.",
+            };
+          }
+
+          if (latestApp.status === "REJECTED") {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            return {
+              success: false,
+              error: "Your admin registration was rejected.",
+            };
+          }
+
+          if (latestApp.status !== "APPROVED") {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            return {
+              success: false,
+              error: "Your admin registration is pending approval.",
+            };
+          }
+        }
+        // SUPER_ADMIN is allowed immediately
+      }
+
+      // Successful, authorized login
+      setUser(authUser);
+      setProfile(userProfile);
+      return { success: true, role: userRole };
     } catch {
       return { success: false, error: "An unexpected error occurred. Please try again." };
     }
   };
 
-  // Register a new Student Account
+  // Register a new Account (supports role STUDENT or ADMIN)
   const register = async (params: RegisterParams): Promise<AuthResponse> => {
-    // 1. Validate Full Name
     const nameVal = validateFullName(params.fullName);
     if (!nameVal.isValid) return { success: false, error: nameVal.error };
 
-    // 2. Validate Email (Strict Gmail)
     const emailVal = validateEmail(params.email);
     if (!emailVal.isValid) return { success: false, error: emailVal.error };
 
-    // 3. Validate Mobile Number (+91 10-digit)
     const phoneVal = validateAndNormalizePhone(params.phone);
     if (!phoneVal.isValid) return { success: false, error: phoneVal.error };
 
-    // 4. Validate Password Strength
     const passVal = validatePassword(params.password);
     if (!passVal.isValid) return { success: false, error: passVal.error };
 
-    // 5. Validate Password Match
     const confirmVal = validateConfirmPassword(params.password, params.confirmPassword);
     if (!confirmVal.isValid) return { success: false, error: confirmVal.error };
 
-    // 6. Validate Terms Acceptance
     const termsVal = validateTerms(params.termsAgreed);
     if (!termsVal.isValid) return { success: false, error: termsVal.error };
 
     const normalizedEmail = emailVal.normalizedValue!;
     const normalizedPhone = phoneVal.normalizedValue!;
     const normalizedName = nameVal.normalizedValue!;
+    const assignedRole = params.role === "ADMIN" ? "ADMIN" : "STUDENT";
 
     try {
-      // 7. Check if phone number is already registered in profiles
       const { data: existingPhone } = await supabase
         .from("profiles")
         .select("id")
@@ -267,7 +366,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // 8. Call Supabase Auth SignUp
       const { data, error } = await supabase.auth.signUp({
         email: normalizedEmail,
         password: params.password,
@@ -275,6 +373,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             full_name: normalizedName,
             phone: normalizedPhone,
+            role: assignedRole,
           },
           emailRedirectTo:
             typeof window !== "undefined"
@@ -296,7 +395,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      // Check if email confirmation is required (no active session yet)
       const requireVerification = !data.session;
 
       return {
@@ -318,7 +416,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Password Reset Request
+  // Password Reset Request (Native Supabase Auth with Enumeration Protection)
   const requestPasswordReset = async (email: string): Promise<AuthResponse> => {
     const emailVal = validateEmail(email);
     if (!emailVal.isValid) {
@@ -326,10 +424,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const redirectUrl =
+      const siteUrl =
         typeof window !== "undefined"
-          ? `${window.location.origin}/auth/reset-password`
-          : undefined;
+          ? window.location.origin
+          : process.env.NEXT_PUBLIC_APP_URL ||
+            process.env.NEXT_PUBLIC_SITE_URL ||
+            "http://localhost:3000";
+
+      const redirectUrl = `${siteUrl}/auth/reset-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(
         emailVal.normalizedValue!,
@@ -339,16 +441,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (error) {
-        return { success: false, error: error.message };
+        console.warn("Supabase resetPasswordForEmail notice:", error.message);
       }
 
       return { success: true };
     } catch {
-      return { success: false, error: "Failed to send reset link. Please try again." };
+      return { success: true };
     }
   };
 
-  // Update Password (when user clicks reset link or updates from session)
+  // Update Password (Only updates auth password and explicitly clears recovery session)
   const updatePassword = async (password: string): Promise<AuthResponse> => {
     const passVal = validatePassword(password);
     if (!passVal.isValid) {
@@ -364,9 +466,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: error.message };
       }
 
+      // Explicitly sign out recovery session so user must authenticate normally
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+
       return { success: true };
     } catch {
       return { success: false, error: "Failed to update password. Please try again." };
+    }
+  };
+
+  // Upload Government / Identity Document to Private 'admin-documents' Bucket
+  const uploadAdminDocument = async (file: File): Promise<AuthResponse> => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session || !session.user) {
+      return { success: false, error: "Please sign in to upload verification documents." };
+    }
+
+    const activeUser = session.user;
+
+    try {
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const storagePath = `${activeUser.id}/${Date.now()}_${sanitizedName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("admin-documents")
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        return { success: false, error: uploadError.message };
+      }
+
+      const metadata: DocumentUploadMetadata = {
+        storagePath,
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || "application/octet-stream",
+      };
+
+      return {
+        success: true,
+        metadata,
+      };
+    } catch {
+      return { success: false, error: "Document upload failed. Please try again." };
+    }
+  };
+
+  // Submit Admin Application via Server API Route
+  const submitAdminApplication = async (
+    submission: AdminApplicationSubmission
+  ): Promise<AuthResponse> => {
+    try {
+      const res = await fetch("/api/admin/applications/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(submission),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return {
+          success: false,
+          error: data.error || "Failed to submit administrator application.",
+        };
+      }
+
+      return { success: true };
+    } catch {
+      return {
+        success: false,
+        error: "Network error occurred while submitting application.",
+      };
     }
   };
 
@@ -381,6 +562,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     requestPasswordReset,
     updatePassword,
+    uploadAdminDocument,
+    submitAdminApplication,
     refreshProfile,
   };
 
