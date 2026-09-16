@@ -6,7 +6,6 @@ import { Hero } from "@/components/landing/hero";
 import { PlatformHighlights } from "@/components/landing/platform-highlights";
 import { LookingFor } from "@/components/landing/looking-for";
 import { ExamCategories } from "@/components/landing/exam-categories";
-import { FeaturedCourses } from "@/components/landing/featured-courses";
 import { WhyTopVeda } from "@/components/landing/why-topveda";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { LearningExperience } from "@/components/landing/learning-experience";
@@ -18,8 +17,6 @@ import { AuthModal, AuthMode, LoginType, RegistrationType } from "@/components/a
 import { LegalModal, LegalType } from "@/components/legal/legal-modal";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
-import { FeaturedCourseItem } from "@/config/landing.config";
-import { BookOpen, Clock, FileCheck2, CheckCircle2, ArrowRight } from "lucide-react";
 
 export default function LandingPage() {
   // Auth Modal State
@@ -31,9 +28,6 @@ export default function LandingPage() {
   // Legal Modal State
   const [legalModalOpen, setLegalModalOpen] = React.useState(false);
   const [legalType, setLegalType] = React.useState<LegalType>("terms");
-
-  // Course Details Modal State
-  const [selectedCourse, setSelectedCourse] = React.useState<FeaturedCourseItem | null>(null);
 
   // Educator Interest Notice State
   const [teachModalOpen, setTeachModalOpen] = React.useState(false);
@@ -58,10 +52,6 @@ export default function LandingPage() {
   const handleOpenPrivacy = () => {
     setLegalType("privacy");
     setLegalModalOpen(true);
-  };
-
-  const handleSelectCourse = (course: FeaturedCourseItem) => {
-    setSelectedCourse(course);
   };
 
   const handleTeachClick = () => {
@@ -134,29 +124,26 @@ export default function LandingPage() {
         {/* 5. Exam Categories (Active Only: CBSE & Bihar Board) */}
         <ExamCategories />
 
-        {/* 6. Featured Courses */}
-        <FeaturedCourses onSelectCourse={handleSelectCourse} />
-
-        {/* 7. Why TopVeda */}
+        {/* 6. Why TopVeda */}
         <WhyTopVeda />
 
-        {/* 8. How It Works */}
+        {/* 7. How It Works */}
         <HowItWorks />
 
-        {/* 9. Learning Experience Preview */}
+        {/* 8. Learning Experience Preview */}
         <LearningExperience />
 
-        {/* 10. Testimonials / Student Success Framework */}
+        {/* 9. Testimonials / Student Success Framework */}
         <Testimonials />
 
-        {/* 11. FAQ Accordion */}
+        {/* 10. FAQ Accordion */}
         <FAQ />
 
-        {/* 12. Final Call to Action */}
+        {/* 11. Final Call to Action */}
         <FinalCTA onStartLearning={handleOpenRegister} />
       </main>
 
-      {/* 13. Footer */}
+      {/* 12. Footer */}
       <Footer
         onOpenTerms={handleOpenTerms}
         onOpenPrivacy={handleOpenPrivacy}
@@ -178,80 +165,6 @@ export default function LandingPage() {
         onClose={() => setLegalModalOpen(false)}
         type={legalType}
       />
-
-      {/* Course Details Quick Modal */}
-      {selectedCourse && (
-        <Modal
-          isOpen={Boolean(selectedCourse)}
-          onClose={() => setSelectedCourse(null)}
-          title={selectedCourse.title}
-          description={`${selectedCourse.board} • ${selectedCourse.classLevel} • ${selectedCourse.subject}`}
-          maxWidth="lg"
-        >
-          <div className="space-y-4 pt-2">
-            <p className="text-sm text-brand-text-muted leading-relaxed">
-              {selectedCourse.description}
-            </p>
-
-            <div className="grid grid-cols-3 gap-3 pt-2">
-              <div className="rounded-lg bg-brand-bg-warm p-3 border border-brand-border text-center">
-                <Clock className="h-4 w-4 text-brand-orange mx-auto mb-1" />
-                <p className="text-[11px] text-brand-text-muted">Duration</p>
-                <p className="text-xs font-bold text-brand-text-primary mt-0.5">{selectedCourse.duration}</p>
-              </div>
-              <div className="rounded-lg bg-brand-bg-warm p-3 border border-brand-border text-center">
-                <BookOpen className="h-4 w-4 text-brand-orange mx-auto mb-1" />
-                <p className="text-[11px] text-brand-text-muted">Curriculum</p>
-                <p className="text-xs font-bold text-brand-text-primary mt-0.5">{selectedCourse.lessonsCount} Lessons</p>
-              </div>
-              <div className="rounded-lg bg-brand-bg-warm p-3 border border-brand-border text-center">
-                <FileCheck2 className="h-4 w-4 text-brand-orange mx-auto mb-1" />
-                <p className="text-[11px] text-brand-text-muted">Assessments</p>
-                <p className="text-xs font-bold text-brand-text-primary mt-0.5">{selectedCourse.testsCount} Tests</p>
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-brand-bg-peach p-4 border border-brand-orange-border/40 space-y-2">
-              <p className="text-xs font-bold text-brand-text-primary">Course Inclusions:</p>
-              <ul className="text-xs text-brand-text-muted space-y-1">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  Daily live interactive lectures & complete recordings
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  Comprehensive NCERT/State Board chapter notes (PDF)
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  24×7 doubt resolution support
-                </li>
-              </ul>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-brand-border-subtle">
-              <Button
-                variant="outline"
-                size="md"
-                onClick={() => setSelectedCourse(null)}
-              >
-                Close
-              </Button>
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  setSelectedCourse(null);
-                  handleOpenRegister();
-                }}
-              >
-                Enroll & Start Learning
-                <ArrowRight className="h-4 w-4 ml-1.5" />
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* Teach with TopVeda Modal Notice */}
       <Modal

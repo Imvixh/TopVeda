@@ -217,20 +217,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const normalizedPhone = phoneValidation.normalizedValue!;
 
-        const { data, error } = await supabase.auth.signInWithPassword({
-          phone: normalizedPhone,
-          password,
+        const res = await fetch("/api/auth/phone-login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phone: normalizedPhone,
+            password,
+          }),
         });
 
-        if (error) {
+        const data = await res.json();
+
+        if (!res.ok || !data.success || !data.session) {
           return {
             success: false,
-            error:
-              "Unable to sign in with mobile number. Please sign in using your registered Gmail address.",
+            error: data.error || "Invalid mobile number or password. Please try again.",
           };
         }
 
-        authUser = data.user;
+        // Hydrate the active Supabase Auth session in the browser client
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+
+        if (sessionError) {
+          return {
+            success: false,
+            error: "Failed to initialize session. Please try again.",
+          };
+        }
+
+        authUser = data.session.user;
       }
 
       if (!authUser) {

@@ -364,7 +364,7 @@ export function AuthModal({
 
                 <div className="flex items-center justify-between text-xs pt-1">
                   <span className="text-[11px] text-brand-text-muted">
-                    Only <span className="font-semibold text-brand-text-primary">@gmail.com</span> addresses supported
+                    Use registered <span className="font-semibold text-brand-text-primary">Gmail</span> or <span className="font-semibold text-brand-text-primary">Mobile</span>
                   </span>
                   <button
                     type="button"
