@@ -10,5 +10,11 @@
     "directory": "dist/client",
     "not_found_handling": "none",
     "binding": "ASSETS"
+  },
+  "vars": {
+    "NEXT_PUBLIC_SUPABASE_URL": "https://uxkvwuavidufnqliauuj.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_",
+    "NEXT_PUBLIC_APP_URL": "https://topveda.in"
   }
 }
