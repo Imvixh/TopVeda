@@ -405,12 +405,58 @@ export class CmsService {
     return (data as CmsLecture[]) || [];
   }
 
+  static async upsertLecture(
+    supabase: SupabaseClient,
+    lecture: Partial<CmsLecture>
+  ): Promise<{ data: CmsLecture | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...lecture,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (lecture.id) {
+        res = await supabase.from("cms_lectures").update(payload).eq("id", lecture.id).select().single();
+      } else {
+        res = await supabase.from("cms_lectures").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsLecture, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
   static async getLiveClasses(supabase: SupabaseClient): Promise<CmsLiveClass[]> {
     const { data } = await supabase
       .from("cms_live_classes")
       .select("*")
       .order("scheduled_start", { ascending: true });
     return (data as CmsLiveClass[]) || [];
+  }
+
+  static async upsertLiveClass(
+    supabase: SupabaseClient,
+    liveClass: Partial<CmsLiveClass>
+  ): Promise<{ data: CmsLiveClass | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...liveClass,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (liveClass.id) {
+        res = await supabase.from("cms_live_classes").update(payload).eq("id", liveClass.id).select().single();
+      } else {
+        res = await supabase.from("cms_live_classes").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsLiveClass, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
   }
 
   static async getStudyMaterials(
@@ -425,6 +471,29 @@ export class CmsService {
 
     const { data } = await query.order("display_order", { ascending: true });
     return (data as CmsStudyMaterial[]) || [];
+  }
+
+  static async upsertStudyMaterial(
+    supabase: SupabaseClient,
+    material: Partial<CmsStudyMaterial>
+  ): Promise<{ data: CmsStudyMaterial | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...material,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (material.id) {
+        res = await supabase.from("cms_study_materials").update(payload).eq("id", material.id).select().single();
+      } else {
+        res = await supabase.from("cms_study_materials").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsStudyMaterial, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
   }
 
   // --------------------------------------------------------------------------

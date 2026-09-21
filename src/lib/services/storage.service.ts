@@ -65,4 +65,48 @@ export class StorageService {
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
     return data.publicUrl;
   }
+
+  /**
+   * Uploads a file/blob to a specified CMS bucket with deterministic path and content type.
+   */
+  static async uploadFile(
+    supabase: SupabaseClient,
+    bucket: CmsBucketId,
+    path: string,
+    file: File | Blob,
+    options?: { contentType?: string; upsert?: boolean }
+  ): Promise<{ path: string | null; error: Error | null }> {
+    try {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, {
+          contentType: options?.contentType,
+          upsert: options?.upsert ?? true,
+        });
+
+      if (error) throw new Error(error.message);
+      return { path: data?.path || path, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { path: null, error };
+    }
+  }
+
+  /**
+   * Deletes a file from a specified CMS bucket.
+   */
+  static async deleteFile(
+    supabase: SupabaseClient,
+    bucket: CmsBucketId,
+    path: string
+  ): Promise<{ error: Error | null }> {
+    try {
+      const { error } = await supabase.storage.from(bucket).remove([path]);
+      if (error) throw new Error(error.message);
+      return { error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { error };
+    }
+  }
 }
