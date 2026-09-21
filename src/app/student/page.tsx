@@ -1,163 +1,111 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Container } from "@/components/ui/container";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Wordmark } from "@/components/brand/wordmark";
-import { BrandGlyph } from "@/components/brand/glyph";
 import { useAuth } from "@/hooks/use-auth";
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  ShieldCheck, 
-  LogOut, 
-  BookOpen, 
-  ArrowLeft, 
-  Loader2 
-} from "lucide-react";
+import { StudentSidebar } from "@/components/student/student-sidebar";
+import { StudentHeader } from "@/components/student/student-header";
+import { StudentHeroBanner } from "@/components/student/student-hero-banner";
+import { FeaturedBatchesSection } from "@/components/student/featured-batches-section";
+import { OngoingBatchesSection } from "@/components/student/ongoing-batches-section";
+import { LiveClassesSection } from "@/components/student/live-classes-section";
+import { LatestLecturesSection } from "@/components/student/latest-lectures-section";
+import { ExploreCoursesSection } from "@/components/student/explore-courses-section";
+import { StudentPortalHub } from "@/components/student/student-portal-hub";
+import { FloatingChatbot } from "@/components/student/floating-chatbot";
+import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export default function StudentFoundationPage() {
-  const router = useRouter();
-  const { user, profile, role, isLoading, logout } = useAuth();
+export default function StudentHomePage() {
+  const { profile, isLoading } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  // Default to expanded on Home page as per specifications
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
 
-  const handleLogout = async () => {
-    await logout();
-    router.push("/");
-  };
+  // Dynamic greeting based on time of day
+  const greetingTime = React.useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  }, []);
+
+  const studentFirstName = profile?.fullName
+    ? profile.fullName.trim().split(" ")[0]
+    : "Abhay";
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-brand-bg-warm flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-          <p className="text-xs font-semibold text-brand-text-muted">Loading Student Account...</p>
+          <p className="text-xs font-semibold text-brand-text-muted">Loading TopVeda Student Portal...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-brand-bg-warm flex flex-col">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-30 w-full bg-brand-surface border-b border-brand-border/80">
-        <Container size="xl">
-          <div className="flex h-16 items-center justify-between">
-            <Link href="/" className="flex items-center gap-2">
-              <BrandGlyph size={26} />
-              <Wordmark size="sm" />
-            </Link>
+    <div className="min-h-screen bg-[#FDFDFC] text-brand-text-primary flex flex-col font-sans antialiased">
+      {/* Sidebar Navigation */}
+      <StudentSidebar
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
+      />
 
-            <div className="flex items-center gap-3">
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-1.5" />
-                  Homepage
-                </Button>
-              </Link>
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                <LogOut className="h-4 w-4 mr-1.5" />
-                Sign Out
-              </Button>
-            </div>
+      {/* Main Canvas Area */}
+      <div
+        className={cn(
+          "flex-1 flex flex-col min-w-0 transition-all duration-300",
+          isCollapsed ? "lg:pl-20" : "lg:pl-64"
+        )}
+      >
+        {/* Top Header */}
+        <StudentHeader
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          onToggleSidebar={() => setIsCollapsed((prev) => !prev)}
+          isSidebarCollapsed={isCollapsed}
+        />
+
+        {/* Page Content Canvas */}
+        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1440px] w-full mx-auto space-y-7 sm:space-y-8">
+          {/* Welcome Area */}
+          <div className="space-y-1">
+            <h1 className="text-xl sm:text-2xl font-black text-brand-charcoal tracking-tight flex items-center gap-2">
+              <span>{greetingTime}, {studentFirstName}!</span>
+              <span className="text-xl animate-bounce">👋</span>
+            </h1>
+            <p className="text-xs sm:text-sm font-medium text-brand-text-muted">
+              Ready to continue your learning journey?
+            </p>
           </div>
-        </Container>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 py-10">
-        <Container size="md">
-          <div className="space-y-6">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge variant="peach" size="sm">Phase 3 Authentication Checkpoint</Badge>
-                <Badge variant="primary" size="sm">{role || "STUDENT"}</Badge>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text-primary tracking-tight">
-                Student Account Foundation
-              </h1>
-              <p className="text-sm text-brand-text-muted">
-                Your TopVeda session has been verified and authenticated via Supabase.
-              </p>
-            </div>
+          {/* Hero Banner Carousel */}
+          <StudentHeroBanner />
 
-            {/* Profile Overview Card */}
-            <Card className="p-6 sm:p-8 space-y-6 shadow-md">
-              <div className="flex items-center gap-4 pb-4 border-b border-brand-border">
-                <div className="h-14 w-14 rounded-2xl bg-brand-bg-peach border border-brand-orange-border flex items-center justify-center text-brand-orange font-bold text-xl">
-                  {profile?.fullName ? profile.fullName.charAt(0).toUpperCase() : "S"}
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-brand-text-primary">
-                    {profile?.fullName || "Authenticated Student"}
-                  </h2>
-                  <p className="text-xs text-brand-text-muted">
-                    Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString("en-IN") : "Recent"}
-                  </p>
-                </div>
-              </div>
+          {/* Section 1: New & Featured Batches */}
+          <FeaturedBatchesSection />
 
-              {/* Profile Details Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 p-4 space-y-1.5">
-                  <div className="flex items-center gap-2 text-brand-text-muted font-medium">
-                    <User className="h-4 w-4 text-brand-orange" />
-                    <span>Full Name</span>
-                  </div>
-                  <p className="font-bold text-brand-text-primary text-sm">
-                    {profile?.fullName || "Not provided"}
-                  </p>
-                </div>
+          {/* Section 2: Ongoing Batches */}
+          <OngoingBatchesSection />
 
-                <div className="rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 p-4 space-y-1.5">
-                  <div className="flex items-center gap-2 text-brand-text-muted font-medium">
-                    <Mail className="h-4 w-4 text-brand-orange" />
-                    <span>Registered Gmail</span>
-                  </div>
-                  <p className="font-bold text-brand-text-primary text-sm truncate">
-                    {user?.email || profile?.email || "Not provided"}
-                  </p>
-                </div>
+          {/* Section 3: Live Classes (Today) */}
+          <LiveClassesSection />
 
-                <div className="rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 p-4 space-y-1.5">
-                  <div className="flex items-center gap-2 text-brand-text-muted font-medium">
-                    <Phone className="h-4 w-4 text-brand-orange" />
-                    <span>Mobile Number</span>
-                  </div>
-                  <p className="font-bold text-brand-text-primary text-sm">
-                    {profile?.phone || "Not provided"}
-                  </p>
-                </div>
+          {/* Section 4: Latest Lectures (Redesigned with larger cards & prominent thumbnails) */}
+          <LatestLecturesSection />
 
-                <div className="rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 p-4 space-y-1.5">
-                  <div className="flex items-center gap-2 text-brand-text-muted font-medium">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                    <span>Account Status</span>
-                  </div>
-                  <p className="font-bold text-emerald-700 text-sm flex items-center gap-1.5">
-                    ● Active & Verified
-                  </p>
-                </div>
-              </div>
+          {/* Section 5: Explore Courses */}
+          <ExploreCoursesSection />
 
-              {/* Upcoming Phase Notice */}
-              <div className="rounded-xl bg-brand-bg-peach/60 border border-brand-orange-border/70 p-4 text-xs space-y-1.5">
-                <div className="flex items-center gap-2 text-brand-orange font-bold">
-                  <BookOpen className="h-4 w-4" />
-                  <span>Phase 4 Roadmap Notice</span>
-                </div>
-                <p className="text-brand-text-muted leading-relaxed">
-                  The complete interactive Student Learning Dashboard (enrolled courses, ongoing chapter progress, live class schedules, and test results) will be developed in Phase 4.
-                </p>
-              </div>
-            </Card>
-          </div>
-        </Container>
-      </main>
+          {/* Section 6: What's Happening on TopVeda? (Student Portal Quick Hub) */}
+          <StudentPortalHub />
+        </main>
+      </div>
+
+      {/* Floating AI Chatbot Assistant Button (Fixed to Viewport) */}
+      <FloatingChatbot />
     </div>
   );
 }
