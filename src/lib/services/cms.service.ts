@@ -191,6 +191,29 @@ export class CmsService {
     return (data as CmsBoard[]) || [];
   }
 
+  static async upsertBoard(
+    supabase: SupabaseClient,
+    board: Partial<CmsBoard>
+  ): Promise<{ data: CmsBoard | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...board,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (board.id) {
+        res = await supabase.from("cms_boards").update(payload).eq("id", board.id).select().single();
+      } else {
+        res = await supabase.from("cms_boards").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsBoard, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
   static async getClassLevels(supabase: SupabaseClient): Promise<CmsClassLevel[]> {
     const { data } = await supabase
       .from("cms_class_levels")
@@ -199,12 +222,58 @@ export class CmsService {
     return (data as CmsClassLevel[]) || [];
   }
 
+  static async upsertClassLevel(
+    supabase: SupabaseClient,
+    classLevel: Partial<CmsClassLevel>
+  ): Promise<{ data: CmsClassLevel | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...classLevel,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (classLevel.id) {
+        res = await supabase.from("cms_class_levels").update(payload).eq("id", classLevel.id).select().single();
+      } else {
+        res = await supabase.from("cms_class_levels").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsClassLevel, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
   static async getSubjects(supabase: SupabaseClient): Promise<CmsSubject[]> {
     const { data } = await supabase
       .from("cms_subjects")
       .select("*")
       .order("display_order", { ascending: true });
     return (data as CmsSubject[]) || [];
+  }
+
+  static async upsertSubject(
+    supabase: SupabaseClient,
+    subject: Partial<CmsSubject>
+  ): Promise<{ data: CmsSubject | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...subject,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (subject.id) {
+        res = await supabase.from("cms_subjects").update(payload).eq("id", subject.id).select().single();
+      } else {
+        res = await supabase.from("cms_subjects").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsSubject, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
   }
 
   static async getCourses(
@@ -221,6 +290,32 @@ export class CmsService {
     return (data as CmsCourse[]) || [];
   }
 
+  static async upsertCourse(
+    supabase: SupabaseClient,
+    course: Partial<CmsCourse>
+  ): Promise<{ data: CmsCourse | null; error: Error | null }> {
+    try {
+      // Remove relation objects before persisting to DB
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { board, class_level, subject, ...cleanCourse } = course;
+      const payload = {
+        ...cleanCourse,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (cleanCourse.id) {
+        res = await supabase.from("cms_courses").update(payload).eq("id", cleanCourse.id).select().single();
+      } else {
+        res = await supabase.from("cms_courses").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsCourse, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
   static async getChapters(
     supabase: SupabaseClient,
     courseId?: string
@@ -230,6 +325,29 @@ export class CmsService {
 
     const { data } = await query.order("chapter_number", { ascending: true });
     return (data as CmsChapter[]) || [];
+  }
+
+  static async upsertChapter(
+    supabase: SupabaseClient,
+    chapter: Partial<CmsChapter>
+  ): Promise<{ data: CmsChapter | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...chapter,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (chapter.id) {
+        res = await supabase.from("cms_chapters").update(payload).eq("id", chapter.id).select().single();
+      } else {
+        res = await supabase.from("cms_chapters").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsChapter, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -248,6 +366,29 @@ export class CmsService {
 
     const { data } = await query.order("display_order", { ascending: true });
     return (data as CmsBatch[]) || [];
+  }
+
+  static async upsertBatch(
+    supabase: SupabaseClient,
+    batch: Partial<CmsBatch>
+  ): Promise<{ data: CmsBatch | null; error: Error | null }> {
+    try {
+      const payload = {
+        ...batch,
+        updated_at: new Date().toISOString(),
+      };
+      let res;
+      if (batch.id) {
+        res = await supabase.from("cms_batches").update(payload).eq("id", batch.id).select().single();
+      } else {
+        res = await supabase.from("cms_batches").insert(payload).select().single();
+      }
+      if (res.error) throw new Error(res.error.message);
+      return { data: res.data as CmsBatch, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
   }
 
   static async getLectures(
