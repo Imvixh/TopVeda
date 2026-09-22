@@ -179,6 +179,78 @@ export class CmsService {
     }
   }
 
+  /**
+   * Super Admin unpublish action: Transitions PUBLISHED content back to DRAFT or APPROVED.
+   */
+  static async unpublishContent(
+    supabase: SupabaseClient,
+    entityType: "HERO" | "BATCH" | "LECTURE" | "LIVE_CLASS" | "COURSE" | "CHAPTER" | "STUDY_MATERIAL" | "QUOTE" | "HUB" | "CHATBOT_PROMPT" | "CHATBOT_FAQ",
+    entityId: string,
+    targetStatus: "DRAFT" | "APPROVED" = "DRAFT"
+  ): Promise<{ success: boolean; error: Error | null }> {
+    const tableMap: Record<string, string> = {
+      HERO: "cms_hero_banners",
+      BATCH: "cms_batches",
+      LECTURE: "cms_lectures",
+      LIVE_CLASS: "cms_live_classes",
+      COURSE: "cms_courses",
+      CHAPTER: "cms_chapters",
+      STUDY_MATERIAL: "cms_study_materials",
+      QUOTE: "cms_daily_quotes",
+      HUB: "cms_hub_items",
+      CHATBOT_PROMPT: "cms_chatbot_prompts",
+      CHATBOT_FAQ: "cms_chatbot_faqs",
+    };
+
+    const targetTable = tableMap[entityType];
+    if (!targetTable) {
+      return { success: false, error: new Error(`Invalid entity type: ${entityType}`) };
+    }
+
+    try {
+      const { error } = await supabase
+        .from(targetTable)
+        .update({
+          status: targetStatus,
+          is_visible: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entityId);
+
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
+  /**
+   * Quick toggle visibility for any CMS content item.
+   */
+  static async toggleVisibility(
+    supabase: SupabaseClient,
+    table: string,
+    entityId: string,
+    isVisible: boolean
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase
+        .from(table)
+        .update({
+          is_visible: isVisible,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entityId);
+
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
   // --------------------------------------------------------------------------
   // 2. Taxonomies & Courses
   // --------------------------------------------------------------------------

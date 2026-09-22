@@ -16,6 +16,16 @@ import {
   CmsChapter,
   ContentStatus,
 } from "@/types/cms.types";
+import { ContentStatusBadge } from "@/components/admin/cms/content-status-badge";
+import { ScheduleStatusBadge } from "@/components/admin/cms/schedule-status-badge";
+import {
+  PublishConfirmationDialog,
+  PublishDialogTarget,
+} from "@/components/admin/cms/publish-confirmation-dialog";
+import {
+  ContentPreviewModal,
+  PreviewContentItem,
+} from "@/components/admin/cms/content-preview-modal";
 import {
   FileText,
   Plus,
@@ -32,6 +42,8 @@ import {
   FileCheck,
   HardDrive,
   FileSpreadsheet,
+  Globe2,
+  FileEdit,
 } from "lucide-react";
 
 export default function StudyMaterialsCmsPage() {
@@ -77,6 +89,13 @@ function StudyMaterialsCmsContent() {
   const [archiveTarget, setArchiveTarget] = React.useState<CmsStudyMaterial | null>(null);
   const [isArchiving, setIsArchiving] = React.useState(false);
 
+  // Publishing & Governance Dialog State
+  const [publishTarget, setPublishTarget] = React.useState<PublishDialogTarget | null>(null);
+  const [isPublishProcessing, setIsPublishProcessing] = React.useState(false);
+
+  // Simulation Preview Modal State
+  const [previewItem, setPreviewItem] = React.useState<PreviewContentItem | null>(null);
+
   // Form State
   const [formCourseId, setFormCourseId] = React.useState("");
   const [formChapterId, setFormChapterId] = React.useState("");
@@ -88,6 +107,8 @@ function StudyMaterialsCmsContent() {
   const [formDisplayOrder, setFormDisplayOrder] = React.useState(0);
   const [formIsVisible, setFormIsVisible] = React.useState(true);
   const [formStatus, setFormStatus] = React.useState<ContentStatus>("PUBLISHED");
+  const [formStartsAt, setFormStartsAt] = React.useState("");
+  const [formEndsAt, setFormEndsAt] = React.useState("");
   const [formErrors, setFormErrors] = React.useState<Record<string, string>>({});
 
   // PDF Upload & Signed Preview States
@@ -166,6 +187,8 @@ function StudyMaterialsCmsContent() {
     setFormDisplayOrder(studyMaterials.length + 1);
     setFormIsVisible(true);
     setFormStatus("PUBLISHED");
+    setFormStartsAt("");
+    setFormEndsAt("");
     setFormErrors({});
     setSignedDocPreview(null);
     setIsModalOpen(true);
@@ -189,6 +212,28 @@ function StudyMaterialsCmsContent() {
     setFormDisplayOrder(sm.display_order);
     setFormIsVisible(sm.is_visible);
     setFormStatus(sm.status);
+    if (sm.starts_at) {
+      try {
+        const d = new Date(sm.starts_at);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        setFormStartsAt(new Date(d.getTime() - tzOffset).toISOString().slice(0, 16));
+      } catch {
+        setFormStartsAt("");
+      }
+    } else {
+      setFormStartsAt("");
+    }
+    if (sm.ends_at) {
+      try {
+        const d = new Date(sm.ends_at);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        setFormEndsAt(new Date(d.getTime() - tzOffset).toISOString().slice(0, 16));
+      } catch {
+        setFormEndsAt("");
+      }
+    } else {
+      setFormEndsAt("");
+    }
     setFormErrors({});
 
     // If PDF is in private storage, generate signed download preview URL
@@ -285,6 +330,8 @@ function StudyMaterialsCmsContent() {
       display_order: Number(formDisplayOrder) || 0,
       is_visible: formIsVisible,
       status: formStatus,
+      starts_at: formStartsAt ? new Date(formStartsAt).toISOString() : null,
+      ends_at: formEndsAt ? new Date(formEndsAt).toISOString() : null,
     };
 
     const { data, error } = await CmsService.upsertStudyMaterial(supabase, payload);
@@ -315,6 +362,78 @@ function StudyMaterialsCmsContent() {
       setFeedback({ type: "success", message: `Study material "${archiveTarget.title}" archived successfully.` });
       handleManualRefresh();
     }
+  };
+
+  const handleToggleVisibility = async (sm: CmsStudyMaterial) => {
+    const nextVal = !sm.is_visible;
+    const { error } = await CmsService.toggleVisibility(supabase, "cms_study_materials", sm.id, nextVal);
+    if (error) {
+      setFeedback({ type: "error", message: error.message || "Failed to update visibility." });
+    } else {
+      setFeedback({
+        type: "success",
+        message: `Document "${sm.title}" visibility is now ${nextVal ? "Visible" : "Hidden"}.`,
+      });
+      handleManualRefresh();
+    }
+  };
+
+  const handlePublishConfirm = async (options: {
+    displayOrder?: number;
+    startsAt?: string | null;
+    endsAt?: string | null;
+  }) => {
+    if (!publishTarget) return;
+    setIsPublishProcessing(true);
+
+    if (publishTarget.action === "PUBLISH") {
+      try {
+        const res = await fetch("/api/admin/cms/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entityType: "STUDY_MATERIAL",
+            entityId: publishTarget.entityId,
+            displayOrder: options.displayOrder,
+            startsAt: options.startsAt,
+            endsAt: options.endsAt,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || result.error) {
+          setFeedback({ type: "error", message: result.error || "Failed to publish study material." });
+        } else {
+          setFeedback({ type: "success", message: `Study material "${publishTarget.title}" published successfully.` });
+          setPublishTarget(null);
+          handleManualRefresh();
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setFeedback({ type: "error", message: error.message || "Failed to publish study material." });
+      } finally {
+        setIsPublishProcessing(false);
+      }
+    } else {
+      // Unpublish action
+      const { error } = await CmsService.unpublishContent(supabase, "STUDY_MATERIAL", publishTarget.entityId);
+      setIsPublishProcessing(false);
+      if (error) {
+        setFeedback({ type: "error", message: error.message || "Failed to unpublish study material." });
+      } else {
+        setFeedback({ type: "success", message: `Study material "${publishTarget.title}" unpublished and returned to draft.` });
+        setPublishTarget(null);
+        handleManualRefresh();
+      }
+    }
+  };
+
+  const handleOpenPreview = async (sm: CmsStudyMaterial) => {
+    let signedPdf: string | null = null;
+    if (sm.file_url && sm.file_url.includes("/")) {
+      const { signedUrl } = await StorageService.getSignedUrl(supabase, "study-materials", sm.file_url, 3600);
+      signedPdf = signedUrl;
+    }
+    setPreviewItem({ type: "STUDY_MATERIAL", data: sm, signedPdf });
   };
 
   // Helper to format bytes to KB / MB
@@ -518,6 +637,7 @@ function StudyMaterialsCmsContent() {
                 <th className="py-3 px-4">Document Title</th>
                 <th className="py-3 px-4">Type</th>
                 <th className="py-3 px-4">Curriculum Path</th>
+                <th className="py-3 px-4 text-center">Schedule</th>
                 <th className="py-3 px-4 text-center">File Metrics</th>
                 <th className="py-3 px-4 text-center">Downloads</th>
                 <th className="py-3 px-4 text-center">Order</th>
@@ -529,14 +649,14 @@ function StudyMaterialsCmsContent() {
             <tbody className="divide-y divide-brand-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-brand-text-muted">
+                  <td colSpan={10} className="py-12 text-center text-brand-text-muted">
                     <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-brand-orange" />
                     Loading study materials...
                   </td>
                 </tr>
               ) : filteredMaterials.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-brand-text-muted">
+                  <td colSpan={10} className="py-12 text-center text-brand-text-muted">
                     <div className="max-w-xs mx-auto space-y-2">
                       <div className="h-10 w-10 mx-auto rounded-full bg-brand-bg-peach flex items-center justify-center text-brand-orange">
                         <FileText className="h-5 w-5" />
@@ -584,6 +704,9 @@ function StudyMaterialsCmsContent() {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-center">
+                        <ScheduleStatusBadge startsAt={sm.starts_at} endsAt={sm.ends_at} />
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
                         <div className="flex flex-col items-center gap-0.5 text-[11px]">
                           <span className="font-semibold text-brand-text-primary">{formatBytes(sm.file_size_bytes)}</span>
                           <span className="text-brand-text-muted">{sm.page_count ? `${sm.page_count} pages` : "PDF"}</span>
@@ -596,33 +719,86 @@ function StudyMaterialsCmsContent() {
                       </td>
                       <td className="py-3.5 px-4 text-center font-semibold text-brand-text-muted">{sm.display_order}</td>
                       <td className="py-3.5 px-4 text-center">
-                        {sm.is_visible ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            <Eye className="h-3 w-3" /> Visible
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
-                            <EyeOff className="h-3 w-3" /> Hidden
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleVisibility(sm)}
+                          title="Click to toggle visibility"
+                          className="cursor-pointer focus:outline-none"
+                        >
+                          {sm.is_visible ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 transition-colors">
+                              <Eye className="h-3 w-3" /> Visible
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-full border border-gray-200 transition-colors">
+                              <EyeOff className="h-3 w-3" /> Hidden
+                            </span>
+                          )}
+                        </button>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <Badge
-                          variant={
-                            sm.status === "PUBLISHED"
-                              ? "success"
-                              : sm.status === "DRAFT"
-                              ? "neutral"
-                              : "peach"
-                          }
-                          size="sm"
-                          className="font-bold text-[10px]"
-                        >
-                          {sm.status}
-                        </Badge>
+                        <ContentStatusBadge status={sm.status} />
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenPreview(sm)}
+                            className="h-7 w-7 text-brand-text-muted hover:text-brand-orange"
+                            title="Preview Student Experience"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+
+                          {sm.status !== "PUBLISHED" ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setPublishTarget({
+                                  entityType: "STUDY_MATERIAL",
+                                  entityId: sm.id,
+                                  title: sm.title,
+                                  currentStatus: sm.status,
+                                  isVisible: sm.is_visible,
+                                  startsAt: sm.starts_at,
+                                  endsAt: sm.ends_at,
+                                  displayOrder: sm.display_order,
+                                  featuredNote: sm.material_type.replace(/_/g, " ").toUpperCase(),
+                                  action: "PUBLISH",
+                                })
+                              }
+                              className="h-7 w-7 text-brand-text-muted hover:text-emerald-600"
+                              title="Publish Study Material"
+                            >
+                              <Globe2 className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setPublishTarget({
+                                  entityType: "STUDY_MATERIAL",
+                                  entityId: sm.id,
+                                  title: sm.title,
+                                  currentStatus: sm.status,
+                                  isVisible: sm.is_visible,
+                                  startsAt: sm.starts_at,
+                                  endsAt: sm.ends_at,
+                                  displayOrder: sm.display_order,
+                                  featuredNote: sm.material_type.replace(/_/g, " ").toUpperCase(),
+                                  action: "UNPUBLISH",
+                                })
+                              }
+                              className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
+                              title="Unpublish Study Material"
+                            >
+                              <FileEdit className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+
                           <Button
                             variant="ghost"
                             size="icon"
@@ -822,6 +998,34 @@ function StudyMaterialsCmsContent() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-brand-text-primary">
+                Starts At (Activation Window)
+              </label>
+              <input
+                type="datetime-local"
+                value={formStartsAt}
+                onChange={(e) => setFormStartsAt(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-brand-text-primary">
+                Ends At (Expiry Window)
+              </label>
+              <input
+                type="datetime-local"
+                value={formEndsAt}
+                onChange={(e) => setFormEndsAt(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+          </div>
+
           <div className="p-3 rounded-xl bg-brand-bg-warm/40 border border-brand-border flex items-center gap-2">
             <input
               type="checkbox"
@@ -893,6 +1097,22 @@ function StudyMaterialsCmsContent() {
           </div>
         </div>
       </Modal>
+
+      {/* 6. Step 5D Publishing Confirmation Dialog */}
+      <PublishConfirmationDialog
+        target={publishTarget}
+        isOpen={!!publishTarget}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={handlePublishConfirm}
+        isProcessing={isPublishProcessing}
+      />
+
+      {/* 7. Step 5D Student Experience Simulation Preview */}
+      <ContentPreviewModal
+        item={previewItem}
+        isOpen={!!previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }

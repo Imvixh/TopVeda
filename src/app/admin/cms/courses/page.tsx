@@ -9,7 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
 import { CmsService } from "@/lib/services/cms.service";
-import { CmsCourse, CmsBoard, CmsClassLevel, CmsSubject, ContentStatus } from "@/types/cms.types";
+import {
+  CmsCourse,
+  CmsBoard,
+  CmsClassLevel,
+  CmsSubject,
+  ContentStatus,
+} from "@/types/cms.types";
+import { ContentStatusBadge } from "@/components/admin/cms/content-status-badge";
+import { ScheduleStatusBadge } from "@/components/admin/cms/schedule-status-badge";
+import {
+  PublishConfirmationDialog,
+  PublishDialogTarget,
+} from "@/components/admin/cms/publish-confirmation-dialog";
+import {
+  ContentPreviewModal,
+  PreviewContentItem,
+} from "@/components/admin/cms/content-preview-modal";
 import {
   GraduationCap,
   Plus,
@@ -23,6 +39,8 @@ import {
   AlertCircle,
   Star,
   ListOrdered,
+  Globe2,
+  FileEdit,
 } from "lucide-react";
 
 export default function CoursesCmsPage() {
@@ -51,6 +69,13 @@ export default function CoursesCmsPage() {
   const [archiveTarget, setArchiveTarget] = React.useState<CmsCourse | null>(null);
   const [isArchiving, setIsArchiving] = React.useState(false);
 
+  // Publishing & Governance Dialog State
+  const [publishTarget, setPublishTarget] = React.useState<PublishDialogTarget | null>(null);
+  const [isPublishProcessing, setIsPublishProcessing] = React.useState(false);
+
+  // Simulation Preview Modal State
+  const [previewItem, setPreviewItem] = React.useState<PreviewContentItem | null>(null);
+
   // Form State (Academic Dependent Selectors)
   const [formBoardId, setFormBoardId] = React.useState("");
   const [formClassId, setFormClassId] = React.useState("");
@@ -67,6 +92,8 @@ export default function CoursesCmsPage() {
   const [formDisplayOrder, setFormDisplayOrder] = React.useState(0);
   const [formIsVisible, setFormIsVisible] = React.useState(true);
   const [formStatus, setFormStatus] = React.useState<ContentStatus>("PUBLISHED");
+  const [formStartsAt, setFormStartsAt] = React.useState("");
+  const [formEndsAt, setFormEndsAt] = React.useState("");
   const [formErrors, setFormErrors] = React.useState<Record<string, string>>({});
 
   const handleManualRefresh = () => {
@@ -136,6 +163,8 @@ export default function CoursesCmsPage() {
     setFormDisplayOrder(courses.length + 1);
     setFormIsVisible(true);
     setFormStatus("PUBLISHED");
+    setFormStartsAt("");
+    setFormEndsAt("");
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -157,6 +186,28 @@ export default function CoursesCmsPage() {
     setFormDisplayOrder(course.display_order);
     setFormIsVisible(course.is_visible);
     setFormStatus(course.status);
+    if (course.starts_at) {
+      try {
+        const d = new Date(course.starts_at);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        setFormStartsAt(new Date(d.getTime() - tzOffset).toISOString().slice(0, 16));
+      } catch {
+        setFormStartsAt("");
+      }
+    } else {
+      setFormStartsAt("");
+    }
+    if (course.ends_at) {
+      try {
+        const d = new Date(course.ends_at);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        setFormEndsAt(new Date(d.getTime() - tzOffset).toISOString().slice(0, 16));
+      } catch {
+        setFormEndsAt("");
+      }
+    } else {
+      setFormEndsAt("");
+    }
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -197,6 +248,8 @@ export default function CoursesCmsPage() {
       display_order: Number(formDisplayOrder) || 0,
       is_visible: formIsVisible,
       status: formStatus,
+      starts_at: formStartsAt ? new Date(formStartsAt).toISOString() : null,
+      ends_at: formEndsAt ? new Date(formEndsAt).toISOString() : null,
     };
 
     const { data, error } = await CmsService.upsertCourse(supabase, payload);
@@ -226,6 +279,69 @@ export default function CoursesCmsPage() {
     } else {
       setFeedback({ type: "success", message: `Course "${archiveTarget.title}" archived successfully.` });
       handleManualRefresh();
+    }
+  };
+
+  const handleToggleVisibility = async (course: CmsCourse) => {
+    const nextVal = !course.is_visible;
+    const { error } = await CmsService.toggleVisibility(supabase, "cms_courses", course.id, nextVal);
+    if (error) {
+      setFeedback({ type: "error", message: error.message || "Failed to update visibility." });
+    } else {
+      setFeedback({
+        type: "success",
+        message: `Course "${course.title}" visibility is now ${nextVal ? "Visible" : "Hidden"}.`,
+      });
+      handleManualRefresh();
+    }
+  };
+
+  const handlePublishConfirm = async (options: {
+    displayOrder?: number;
+    startsAt?: string | null;
+    endsAt?: string | null;
+  }) => {
+    if (!publishTarget) return;
+    setIsPublishProcessing(true);
+
+    if (publishTarget.action === "PUBLISH") {
+      try {
+        const res = await fetch("/api/admin/cms/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entityType: "COURSE",
+            entityId: publishTarget.entityId,
+            displayOrder: options.displayOrder,
+            startsAt: options.startsAt,
+            endsAt: options.endsAt,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || result.error) {
+          setFeedback({ type: "error", message: result.error || "Failed to publish course." });
+        } else {
+          setFeedback({ type: "success", message: `Course "${publishTarget.title}" published successfully.` });
+          setPublishTarget(null);
+          handleManualRefresh();
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setFeedback({ type: "error", message: error.message || "Failed to publish course." });
+      } finally {
+        setIsPublishProcessing(false);
+      }
+    } else {
+      // Unpublish action
+      const { error } = await CmsService.unpublishContent(supabase, "COURSE", publishTarget.entityId);
+      setIsPublishProcessing(false);
+      if (error) {
+        setFeedback({ type: "error", message: error.message || "Failed to unpublish course." });
+      } else {
+        setFeedback({ type: "success", message: `Course "${publishTarget.title}" unpublished and returned to draft.` });
+        setPublishTarget(null);
+        handleManualRefresh();
+      }
     }
   };
 
@@ -393,6 +509,7 @@ export default function CoursesCmsPage() {
               <tr className="bg-brand-bg-warm/80 border-b border-brand-border text-brand-text-muted font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-4">Course Title & Category</th>
                 <th className="py-3 px-4">Hierarchy (Board / Class / Subject)</th>
+                <th className="py-3 px-4 text-center">Schedule</th>
                 <th className="py-3 px-4 text-center">Featured</th>
                 <th className="py-3 px-4 text-center">Order</th>
                 <th className="py-3 px-4 text-center">Visibility</th>
@@ -403,7 +520,7 @@ export default function CoursesCmsPage() {
             <tbody className="divide-y divide-brand-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-brand-text-muted">
+                  <td colSpan={8} className="py-12 text-center text-brand-text-muted">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="h-4 w-4 animate-spin text-brand-orange" />
                       <span>Loading courses catalog...</span>
@@ -412,7 +529,7 @@ export default function CoursesCmsPage() {
                 </tr>
               ) : filteredCourses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-brand-text-muted">
+                  <td colSpan={8} className="py-12 text-center text-brand-text-muted">
                     <div className="space-y-2">
                       <GraduationCap className="h-8 w-8 text-brand-text-muted/50 mx-auto" />
                       <p className="font-bold text-brand-text-primary">No courses found</p>
@@ -449,6 +566,9 @@ export default function CoursesCmsPage() {
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-center">
+                      <ScheduleStatusBadge startsAt={c.starts_at} endsAt={c.ends_at} />
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
                       {c.is_featured ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                           <Star className="h-3 w-3 fill-amber-500 text-amber-500" /> Featured
@@ -459,33 +579,86 @@ export default function CoursesCmsPage() {
                     </td>
                     <td className="py-3.5 px-4 text-center font-semibold text-brand-text-muted">{c.display_order}</td>
                     <td className="py-3.5 px-4 text-center">
-                      {c.is_visible ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <Eye className="h-3 w-3" /> Visible
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
-                          <EyeOff className="h-3 w-3" /> Hidden
-                        </span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleVisibility(c)}
+                        title="Click to toggle visibility"
+                        className="cursor-pointer focus:outline-none"
+                      >
+                        {c.is_visible ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 transition-colors">
+                            <Eye className="h-3 w-3" /> Visible
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-full border border-gray-200 transition-colors">
+                            <EyeOff className="h-3 w-3" /> Hidden
+                          </span>
+                        )}
+                      </button>
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <Badge
-                        variant={
-                          c.status === "PUBLISHED"
-                            ? "success"
-                            : c.status === "DRAFT"
-                            ? "neutral"
-                            : "peach"
-                        }
-                        size="sm"
-                        className="font-bold text-[10px]"
-                      >
-                        {c.status}
-                      </Badge>
+                      <ContentStatusBadge status={c.status} />
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setPreviewItem({ type: "COURSE", data: c })}
+                          className="h-7 w-7 text-brand-text-muted hover:text-brand-orange"
+                          title="Preview Student Experience"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {c.status !== "PUBLISHED" ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setPublishTarget({
+                                entityType: "COURSE",
+                                entityId: c.id,
+                                title: c.title,
+                                currentStatus: c.status,
+                                isVisible: c.is_visible,
+                                startsAt: c.starts_at,
+                                endsAt: c.ends_at,
+                                displayOrder: c.display_order,
+                                featuredNote: c.is_featured ? "Featured Course" : undefined,
+                                action: "PUBLISH",
+                              })
+                            }
+                            className="h-7 w-7 text-brand-text-muted hover:text-emerald-600"
+                            title="Publish Course"
+                          >
+                            <Globe2 className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setPublishTarget({
+                                entityType: "COURSE",
+                                entityId: c.id,
+                                title: c.title,
+                                currentStatus: c.status,
+                                isVisible: c.is_visible,
+                                startsAt: c.starts_at,
+                                endsAt: c.ends_at,
+                                displayOrder: c.display_order,
+                                featuredNote: c.is_featured ? "Featured Course" : undefined,
+                                action: "UNPUBLISH",
+                              })
+                            }
+                            className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
+                            title="Unpublish Course"
+                          >
+                            <FileEdit className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+
                         <Link href={`/admin/cms/chapters?courseId=${c.id}`}>
                           <Button
                             variant="ghost"
@@ -665,6 +838,34 @@ export default function CoursesCmsPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-brand-text-primary">
+                Starts At (Activation Window)
+              </label>
+              <input
+                type="datetime-local"
+                value={formStartsAt}
+                onChange={(e) => setFormStartsAt(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-brand-text-primary">
+                Ends At (Expiry Window)
+              </label>
+              <input
+                type="datetime-local"
+                value={formEndsAt}
+                onChange={(e) => setFormEndsAt(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4 pt-1">
             <div className="flex items-center gap-2">
               <input
@@ -751,6 +952,22 @@ export default function CoursesCmsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* 6. Step 5D Publishing Confirmation Dialog */}
+      <PublishConfirmationDialog
+        target={publishTarget}
+        isOpen={!!publishTarget}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={handlePublishConfirm}
+        isProcessing={isPublishProcessing}
+      />
+
+      {/* 7. Step 5D Student Experience Simulation Preview */}
+      <ContentPreviewModal
+        item={previewItem}
+        isOpen={!!previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }

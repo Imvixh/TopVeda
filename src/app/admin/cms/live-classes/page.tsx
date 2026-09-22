@@ -14,6 +14,16 @@ import {
   ContentStatus,
   LiveClassStatus,
 } from "@/types/cms.types";
+import { ContentStatusBadge } from "@/components/admin/cms/content-status-badge";
+import { ScheduleStatusBadge } from "@/components/admin/cms/schedule-status-badge";
+import {
+  PublishConfirmationDialog,
+  PublishDialogTarget,
+} from "@/components/admin/cms/publish-confirmation-dialog";
+import {
+  ContentPreviewModal,
+  PreviewContentItem,
+} from "@/components/admin/cms/content-preview-modal";
 import {
   Radio,
   Plus,
@@ -30,6 +40,8 @@ import {
   Layers,
   Calendar,
   ExternalLink,
+  Globe2,
+  FileEdit,
 } from "lucide-react";
 
 export default function LiveClassesCmsPage() {
@@ -54,6 +66,13 @@ export default function LiveClassesCmsPage() {
   // Archive Confirm Modal State
   const [archiveTarget, setArchiveTarget] = React.useState<CmsLiveClass | null>(null);
   const [isArchiving, setIsArchiving] = React.useState(false);
+
+  // Publishing & Governance Dialog State
+  const [publishTarget, setPublishTarget] = React.useState<PublishDialogTarget | null>(null);
+  const [isPublishProcessing, setIsPublishProcessing] = React.useState(false);
+
+  // Simulation Preview Modal State
+  const [previewItem, setPreviewItem] = React.useState<PreviewContentItem | null>(null);
 
   // Form State
   const [formBatchId, setFormBatchId] = React.useState("");
@@ -298,6 +317,69 @@ export default function LiveClassesCmsPage() {
     }
   };
 
+  const handleToggleVisibility = async (lc: CmsLiveClass) => {
+    const nextVal = !lc.is_visible;
+    const { error } = await CmsService.toggleVisibility(supabase, "cms_live_classes", lc.id, nextVal);
+    if (error) {
+      setFeedback({ type: "error", message: error.message || "Failed to update visibility." });
+    } else {
+      setFeedback({
+        type: "success",
+        message: `Live class "${lc.topic}" visibility is now ${nextVal ? "Visible" : "Hidden"}.`,
+      });
+      handleManualRefresh();
+    }
+  };
+
+  const handlePublishConfirm = async (options: {
+    displayOrder?: number;
+    startsAt?: string | null;
+    endsAt?: string | null;
+  }) => {
+    if (!publishTarget) return;
+    setIsPublishProcessing(true);
+
+    if (publishTarget.action === "PUBLISH") {
+      try {
+        const res = await fetch("/api/admin/cms/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entityType: "LIVE_CLASS",
+            entityId: publishTarget.entityId,
+            displayOrder: options.displayOrder,
+            startsAt: options.startsAt,
+            endsAt: options.endsAt,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || result.error) {
+          setFeedback({ type: "error", message: result.error || "Failed to publish live class." });
+        } else {
+          setFeedback({ type: "success", message: `Live class "${publishTarget.title}" published successfully.` });
+          setPublishTarget(null);
+          handleManualRefresh();
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setFeedback({ type: "error", message: error.message || "Failed to publish live class." });
+      } finally {
+        setIsPublishProcessing(false);
+      }
+    } else {
+      // Unpublish action
+      const { error } = await CmsService.unpublishContent(supabase, "LIVE_CLASS", publishTarget.entityId);
+      setIsPublishProcessing(false);
+      if (error) {
+        setFeedback({ type: "error", message: error.message || "Failed to unpublish live class." });
+      } else {
+        setFeedback({ type: "success", message: `Live class "${publishTarget.title}" unpublished and returned to draft.` });
+        setPublishTarget(null);
+        handleManualRefresh();
+      }
+    }
+  };
+
   // Batch Map for quick title lookup
   const batchMap = React.useMemo(() => {
     const map = new Map<string, CmsBatch>();
@@ -453,7 +535,7 @@ export default function LiveClassesCmsPage() {
               <tr className="border-b border-brand-border bg-brand-bg-warm/80 font-bold text-brand-text-muted uppercase text-[10px] tracking-wider">
                 <th className="py-3 px-4">Live Session / Topic</th>
                 <th className="py-3 px-4">Educator & Cohort</th>
-                <th className="py-3 px-4">Schedule & Timing</th>
+                <th className="py-3 px-4">Timing & Schedule</th>
                 <th className="py-3 px-4 text-center">Broadcast State</th>
                 <th className="py-3 px-4 text-center">Order</th>
                 <th className="py-3 px-4 text-center">Visibility</th>
@@ -522,15 +604,15 @@ export default function LiveClassesCmsPage() {
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
+                        <div className="space-y-1">
                           <div className="flex items-center gap-1.5 font-medium text-brand-text-primary">
-                            <Calendar className="h-3.5 w-3.5 text-brand-orange" />
+                            <Calendar className="h-3.5 w-3.5 text-brand-orange shrink-0" />
                             <span>{lc.time_display}</span>
                           </div>
-                          <div className="flex items-center gap-1 text-[11px] text-brand-text-muted">
-                            <Clock className="h-3 w-3" />
-                            <span>CTA: {lc.cta_text}</span>
-                          </div>
+                          <ScheduleStatusBadge
+                            startsAt={lc.starts_at || lc.scheduled_start}
+                            endsAt={lc.ends_at || lc.scheduled_end}
+                          />
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-center">
@@ -554,33 +636,86 @@ export default function LiveClassesCmsPage() {
                       </td>
                       <td className="py-3.5 px-4 text-center font-semibold text-brand-text-muted">{lc.display_order}</td>
                       <td className="py-3.5 px-4 text-center">
-                        {lc.is_visible ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            <Eye className="h-3 w-3" /> Visible
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
-                            <EyeOff className="h-3 w-3" /> Hidden
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleVisibility(lc)}
+                          title="Click to toggle visibility"
+                          className="cursor-pointer focus:outline-none"
+                        >
+                          {lc.is_visible ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 transition-colors">
+                              <Eye className="h-3 w-3" /> Visible
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-full border border-gray-200 transition-colors">
+                              <EyeOff className="h-3 w-3" /> Hidden
+                            </span>
+                          )}
+                        </button>
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <Badge
-                          variant={
-                            lc.status === "PUBLISHED"
-                              ? "success"
-                              : lc.status === "DRAFT"
-                              ? "neutral"
-                              : "peach"
-                          }
-                          size="sm"
-                          className="font-bold text-[10px]"
-                        >
-                          {lc.status}
-                        </Badge>
+                        <ContentStatusBadge status={lc.status} />
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setPreviewItem({ type: "LIVE_CLASS", data: lc })}
+                            className="h-7 w-7 text-brand-text-muted hover:text-brand-orange"
+                            title="Preview Student Experience"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+
+                          {lc.status !== "PUBLISHED" ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setPublishTarget({
+                                  entityType: "LIVE_CLASS",
+                                  entityId: lc.id,
+                                  title: lc.topic,
+                                  currentStatus: lc.status,
+                                  isVisible: lc.is_visible,
+                                  startsAt: lc.starts_at || lc.scheduled_start,
+                                  endsAt: lc.ends_at || lc.scheduled_end,
+                                  displayOrder: lc.display_order,
+                                  featuredNote: lc.live_status === "LIVE" ? "Live Broadcast" : undefined,
+                                  action: "PUBLISH",
+                                })
+                              }
+                              className="h-7 w-7 text-brand-text-muted hover:text-emerald-600"
+                              title="Publish Live Class"
+                            >
+                              <Globe2 className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() =>
+                                setPublishTarget({
+                                  entityType: "LIVE_CLASS",
+                                  entityId: lc.id,
+                                  title: lc.topic,
+                                  currentStatus: lc.status,
+                                  isVisible: lc.is_visible,
+                                  startsAt: lc.starts_at || lc.scheduled_start,
+                                  endsAt: lc.ends_at || lc.scheduled_end,
+                                  displayOrder: lc.display_order,
+                                  featuredNote: lc.live_status === "LIVE" ? "Live Broadcast" : undefined,
+                                  action: "UNPUBLISH",
+                                })
+                              }
+                              className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
+                              title="Unpublish Live Class"
+                            >
+                              <FileEdit className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+
                           <Button
                             variant="ghost"
                             size="icon"
@@ -851,6 +986,22 @@ export default function LiveClassesCmsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* 6. Step 5D Publishing Confirmation Dialog */}
+      <PublishConfirmationDialog
+        target={publishTarget}
+        isOpen={!!publishTarget}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={handlePublishConfirm}
+        isProcessing={isPublishProcessing}
+      />
+
+      {/* 7. Step 5D Student Experience Simulation Preview */}
+      <ContentPreviewModal
+        item={previewItem}
+        isOpen={!!previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }

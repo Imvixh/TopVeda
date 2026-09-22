@@ -9,6 +9,16 @@ import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
 import { CmsService } from "@/lib/services/cms.service";
 import { CmsBatch, CmsCourse, CmsBoard, CmsClassLevel, ContentStatus, BatchBadgeVariant } from "@/types/cms.types";
+import { ContentStatusBadge } from "@/components/admin/cms/content-status-badge";
+import { ScheduleStatusBadge } from "@/components/admin/cms/schedule-status-badge";
+import {
+  PublishConfirmationDialog,
+  PublishDialogTarget,
+} from "@/components/admin/cms/publish-confirmation-dialog";
+import {
+  ContentPreviewModal,
+  PreviewContentItem,
+} from "@/components/admin/cms/content-preview-modal";
 import {
   Layers,
   Plus,
@@ -23,6 +33,8 @@ import {
   Star,
   Radio,
   User,
+  Globe2,
+  FileEdit,
 } from "lucide-react";
 
 export default function BatchesCmsPage() {
@@ -50,6 +62,13 @@ export default function BatchesCmsPage() {
   const [archiveTarget, setArchiveTarget] = React.useState<CmsBatch | null>(null);
   const [isArchiving, setIsArchiving] = React.useState(false);
 
+  // Publishing & Governance Dialog State
+  const [publishTarget, setPublishTarget] = React.useState<PublishDialogTarget | null>(null);
+  const [isPublishProcessing, setIsPublishProcessing] = React.useState(false);
+
+  // Simulation Preview Modal State
+  const [previewItem, setPreviewItem] = React.useState<PreviewContentItem | null>(null);
+
   // Form State
   const [formTitle, setFormTitle] = React.useState("");
   const [formSlug, setFormSlug] = React.useState("");
@@ -76,6 +95,8 @@ export default function BatchesCmsPage() {
   const [formDisplayOrder, setFormDisplayOrder] = React.useState(0);
   const [formIsVisible, setFormIsVisible] = React.useState(true);
   const [formStatus, setFormStatus] = React.useState<ContentStatus>("PUBLISHED");
+  const [formStartsAt, setFormStartsAt] = React.useState("");
+  const [formEndsAt, setFormEndsAt] = React.useState("");
   const [formErrors, setFormErrors] = React.useState<Record<string, string>>({});
 
   const handleManualRefresh = () => {
@@ -155,6 +176,8 @@ export default function BatchesCmsPage() {
     setFormDisplayOrder(batches.length + 1);
     setFormIsVisible(true);
     setFormStatus("PUBLISHED");
+    setFormStartsAt("");
+    setFormEndsAt("");
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -186,6 +209,28 @@ export default function BatchesCmsPage() {
     setFormDisplayOrder(batch.display_order);
     setFormIsVisible(batch.is_visible);
     setFormStatus(batch.status);
+    if (batch.starts_at) {
+      try {
+        const d = new Date(batch.starts_at);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        setFormStartsAt(new Date(d.getTime() - tzOffset).toISOString().slice(0, 16));
+      } catch {
+        setFormStartsAt("");
+      }
+    } else {
+      setFormStartsAt("");
+    }
+    if (batch.ends_at) {
+      try {
+        const d = new Date(batch.ends_at);
+        const tzOffset = d.getTimezoneOffset() * 60000;
+        setFormEndsAt(new Date(d.getTime() - tzOffset).toISOString().slice(0, 16));
+      } catch {
+        setFormEndsAt("");
+      }
+    } else {
+      setFormEndsAt("");
+    }
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -237,6 +282,8 @@ export default function BatchesCmsPage() {
       display_order: Number(formDisplayOrder) || 0,
       is_visible: formIsVisible,
       status: formStatus,
+      starts_at: formStartsAt ? new Date(formStartsAt).toISOString() : null,
+      ends_at: formEndsAt ? new Date(formEndsAt).toISOString() : null,
     };
 
     const { data, error } = await CmsService.upsertBatch(supabase, payload);
@@ -266,6 +313,69 @@ export default function BatchesCmsPage() {
     } else {
       setFeedback({ type: "success", message: `Batch "${archiveTarget.title}" archived successfully.` });
       handleManualRefresh();
+    }
+  };
+
+  const handleToggleVisibility = async (batch: CmsBatch) => {
+    const nextVal = !batch.is_visible;
+    const { error } = await CmsService.toggleVisibility(supabase, "cms_batches", batch.id, nextVal);
+    if (error) {
+      setFeedback({ type: "error", message: error.message || "Failed to update visibility." });
+    } else {
+      setFeedback({
+        type: "success",
+        message: `Batch "${batch.title}" visibility is now ${nextVal ? "Visible" : "Hidden"}.`,
+      });
+      handleManualRefresh();
+    }
+  };
+
+  const handlePublishConfirm = async (options: {
+    displayOrder?: number;
+    startsAt?: string | null;
+    endsAt?: string | null;
+  }) => {
+    if (!publishTarget) return;
+    setIsPublishProcessing(true);
+
+    if (publishTarget.action === "PUBLISH") {
+      try {
+        const res = await fetch("/api/admin/cms/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entityType: "BATCH",
+            entityId: publishTarget.entityId,
+            displayOrder: options.displayOrder,
+            startsAt: options.startsAt,
+            endsAt: options.endsAt,
+          }),
+        });
+        const result = await res.json();
+        if (!res.ok || result.error) {
+          setFeedback({ type: "error", message: result.error || "Failed to publish batch." });
+        } else {
+          setFeedback({ type: "success", message: `Batch "${publishTarget.title}" published successfully.` });
+          setPublishTarget(null);
+          handleManualRefresh();
+        }
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setFeedback({ type: "error", message: error.message || "Failed to publish batch." });
+      } finally {
+        setIsPublishProcessing(false);
+      }
+    } else {
+      // Unpublish action
+      const { error } = await CmsService.unpublishContent(supabase, "BATCH", publishTarget.entityId);
+      setIsPublishProcessing(false);
+      if (error) {
+        setFeedback({ type: "error", message: error.message || "Failed to unpublish batch." });
+      } else {
+        setFeedback({ type: "success", message: `Batch "${publishTarget.title}" unpublished and returned to draft.` });
+        setPublishTarget(null);
+        handleManualRefresh();
+      }
     }
   };
 
@@ -414,6 +524,7 @@ export default function BatchesCmsPage() {
               <tr className="bg-brand-bg-warm/80 border-b border-brand-border text-brand-text-muted font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-4">Batch Title & Board</th>
                 <th className="py-3 px-4">Educator</th>
+                <th className="py-3 px-4 text-center">Schedule</th>
                 <th className="py-3 px-4 text-center">Badge</th>
                 <th className="py-3 px-4 text-center">Featured / Type</th>
                 <th className="py-3 px-4 text-center">Order</th>
@@ -425,7 +536,7 @@ export default function BatchesCmsPage() {
             <tbody className="divide-y divide-brand-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-brand-text-muted">
+                  <td colSpan={9} className="py-12 text-center text-brand-text-muted">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="h-4 w-4 animate-spin text-brand-orange" />
                       <span>Loading batches...</span>
@@ -434,7 +545,7 @@ export default function BatchesCmsPage() {
                 </tr>
               ) : filteredBatches.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-brand-text-muted">
+                  <td colSpan={9} className="py-12 text-center text-brand-text-muted">
                     <div className="space-y-2">
                       <Layers className="h-8 w-8 text-brand-text-muted/50 mx-auto" />
                       <p className="font-bold text-brand-text-primary">No batches found</p>
@@ -462,6 +573,9 @@ export default function BatchesCmsPage() {
                         <User className="h-3.5 w-3.5 text-brand-orange shrink-0" />
                         <span className="truncate">{b.educator_name}</span>
                       </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <ScheduleStatusBadge startsAt={b.starts_at} endsAt={b.ends_at} />
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       {b.badge_text ? (
@@ -500,33 +614,86 @@ export default function BatchesCmsPage() {
                     </td>
                     <td className="py-3.5 px-4 text-center font-semibold text-brand-text-muted">{b.display_order}</td>
                     <td className="py-3.5 px-4 text-center">
-                      {b.is_visible ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <Eye className="h-3 w-3" /> Visible
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
-                          <EyeOff className="h-3 w-3" /> Hidden
-                        </span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleVisibility(b)}
+                        title="Click to toggle visibility"
+                        className="cursor-pointer focus:outline-none"
+                      >
+                        {b.is_visible ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 transition-colors">
+                            <Eye className="h-3 w-3" /> Visible
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-full border border-gray-200 transition-colors">
+                            <EyeOff className="h-3 w-3" /> Hidden
+                          </span>
+                        )}
+                      </button>
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <Badge
-                        variant={
-                          b.status === "PUBLISHED"
-                            ? "success"
-                            : b.status === "DRAFT"
-                            ? "neutral"
-                            : "peach"
-                        }
-                        size="sm"
-                        className="font-bold text-[10px]"
-                      >
-                        {b.status}
-                      </Badge>
+                      <ContentStatusBadge status={b.status} />
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setPreviewItem({ type: "BATCH", data: b })}
+                          className="h-7 w-7 text-brand-text-muted hover:text-brand-orange"
+                          title="Preview Student Experience"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {b.status !== "PUBLISHED" ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setPublishTarget({
+                                entityType: "BATCH",
+                                entityId: b.id,
+                                title: b.title,
+                                currentStatus: b.status,
+                                isVisible: b.is_visible,
+                                startsAt: b.starts_at,
+                                endsAt: b.ends_at,
+                                displayOrder: b.display_order,
+                                featuredNote: b.is_featured ? "Featured Batch" : undefined,
+                                action: "PUBLISH",
+                              })
+                            }
+                            className="h-7 w-7 text-brand-text-muted hover:text-emerald-600"
+                            title="Publish Batch"
+                          >
+                            <Globe2 className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setPublishTarget({
+                                entityType: "BATCH",
+                                entityId: b.id,
+                                title: b.title,
+                                currentStatus: b.status,
+                                isVisible: b.is_visible,
+                                startsAt: b.starts_at,
+                                endsAt: b.ends_at,
+                                displayOrder: b.display_order,
+                                featuredNote: b.is_featured ? "Featured Batch" : undefined,
+                                action: "UNPUBLISH",
+                              })
+                            }
+                            className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
+                            title="Unpublish Batch"
+                          >
+                            <FileEdit className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+
                         <Button
                           variant="ghost"
                           size="icon"
@@ -762,6 +929,34 @@ export default function BatchesCmsPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-brand-text-primary">
+                Starts At (Activation Window)
+              </label>
+              <input
+                type="datetime-local"
+                value={formStartsAt}
+                onChange={(e) => setFormStartsAt(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-brand-text-primary">
+                Ends At (Expiry Window)
+              </label>
+              <input
+                type="datetime-local"
+                value={formEndsAt}
+                onChange={(e) => setFormEndsAt(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-4 pt-1">
             <div className="flex items-center gap-2">
               <input
@@ -862,6 +1057,22 @@ export default function BatchesCmsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* 6. Step 5D Publishing Confirmation Dialog */}
+      <PublishConfirmationDialog
+        target={publishTarget}
+        isOpen={!!publishTarget}
+        onClose={() => setPublishTarget(null)}
+        onConfirm={handlePublishConfirm}
+        isProcessing={isPublishProcessing}
+      />
+
+      {/* 7. Step 5D Student Experience Simulation Preview */}
+      <ContentPreviewModal
+        item={previewItem}
+        isOpen={!!previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }
