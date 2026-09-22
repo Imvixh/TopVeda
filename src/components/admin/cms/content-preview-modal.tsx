@@ -11,6 +11,9 @@ import {
   CmsLecture,
   CmsLiveClass,
   CmsStudyMaterial,
+  CmsHeroBanner,
+  CmsDailyQuote,
+  CmsHubItem,
 } from "@/types/cms.types";
 import {
   GraduationCap,
@@ -24,6 +27,9 @@ import {
   Sparkles,
   ShieldCheck,
   HardDrive,
+  Quote,
+  Megaphone,
+  ArrowRight,
 } from "lucide-react";
 
 export type PreviewContentItem =
@@ -31,7 +37,10 @@ export type PreviewContentItem =
   | { type: "BATCH"; data: CmsBatch }
   | { type: "LECTURE"; data: CmsLecture; signedThumb?: string | null }
   | { type: "LIVE_CLASS"; data: CmsLiveClass }
-  | { type: "STUDY_MATERIAL"; data: CmsStudyMaterial; signedPdf?: string | null };
+  | { type: "STUDY_MATERIAL"; data: CmsStudyMaterial; signedPdf?: string | null }
+  | { type: "HERO"; data: CmsHeroBanner }
+  | { type: "QUOTE"; data: CmsDailyQuote }
+  | { type: "HUB"; data: CmsHubItem };
 
 interface ContentPreviewModalProps {
   item: PreviewContentItem | null;
@@ -89,6 +98,9 @@ export function ContentPreviewModal({
             {item.type === "LECTURE" && <LectureCardPreview lecture={item.data} signedThumb={item.signedThumb} />}
             {item.type === "LIVE_CLASS" && <LiveClassCardPreview liveClass={item.data} />}
             {item.type === "STUDY_MATERIAL" && <StudyMaterialCardPreview material={item.data} signedPdf={item.signedPdf} />}
+            {item.type === "HERO" && <HeroBannerCardPreview banner={item.data} />}
+            {item.type === "QUOTE" && <DailyQuoteCardPreview quote={item.data} />}
+            {item.type === "HUB" && <HubItemCardPreview item={item.data} />}
           </div>
         </div>
 
@@ -347,6 +359,142 @@ function StudyMaterialCardPreview({
             <Download className="h-3.5 w-3.5" /> Download PDF
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// 6. Hero Banner Card Preview
+function HeroBannerCardPreview({ banner }: { banner: CmsHeroBanner }) {
+  return (
+    <div
+      className={`max-w-md w-full rounded-2xl p-6 border border-slate-700 shadow-xl space-y-4 text-left text-white bg-gradient-to-r ${
+        banner.bg_gradient || "from-[#081326] via-[#0E2044] to-[#1B3A72]"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-mono font-bold tracking-widest text-brand-orange uppercase">
+          {banner.tagline}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1.5 flex-1">
+          <h3 className="font-extrabold text-lg text-white leading-tight">
+            {banner.title}
+          </h3>
+          <p className="text-xs text-slate-300 line-clamp-2">
+            {banner.subtitle}
+          </p>
+
+          {banner.quote_text && (
+            <p className="text-[11px] text-amber-300/90 italic pt-1 border-t border-slate-700/60 flex items-center gap-1">
+              <Quote className="h-3 w-3 text-amber-400 shrink-0" />
+              <span>{banner.quote_text}</span>
+            </p>
+          )}
+
+          <div className="pt-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-orange text-white font-bold text-xs shadow-xs">
+              <span>{banner.cta_text}</span> <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </div>
+        </div>
+
+        {banner.character_image_url && (
+          <div className="h-24 w-24 rounded-xl overflow-hidden border border-white/20 shrink-0 bg-white/5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={banner.character_image_url}
+              alt={banner.title}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 7. Daily Quote Card Preview
+function DailyQuoteCardPreview({ quote }: { quote: CmsDailyQuote }) {
+  return (
+    <div className="max-w-sm w-full rounded-2xl bg-white p-5 border border-brand-border shadow-md space-y-3 text-left">
+      <div className="flex items-center justify-between">
+        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-brand-orange bg-brand-bg-peach border border-brand-orange-border/50 flex items-center gap-1">
+          <Quote className="h-3 w-3" /> Daily Motivation
+        </span>
+        {quote.is_active && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200">
+            Active Sidebar Quote
+          </span>
+        )}
+      </div>
+
+      <blockquote className="text-sm font-semibold text-brand-text-primary italic leading-relaxed pt-1">
+        &ldquo;{quote.quote}&rdquo;
+      </blockquote>
+
+      <div className="pt-2 border-t border-brand-border/60 flex items-center justify-between text-xs text-brand-text-muted">
+        <span className="font-bold text-brand-text-primary">— {quote.author}</span>
+        {quote.scheduled_for_date && (
+          <span className="text-[10px] text-brand-text-muted">
+            For: {quote.scheduled_for_date}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 8. Hub Item Card Preview
+function HubItemCardPreview({ item }: { item: CmsHubItem }) {
+  const badgeColorClass = React.useMemo(() => {
+    switch (item.badge_variant) {
+      case "emerald":
+      case "green":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "pink":
+      case "rose":
+        return "bg-pink-50 text-pink-700 border-pink-200";
+      case "purple":
+      case "indigo":
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case "orange":
+      default:
+        return "bg-orange-50 text-orange-700 border-orange-200";
+    }
+  }, [item.badge_variant]);
+
+  return (
+    <div className="max-w-sm w-full rounded-2xl bg-white p-5 border border-brand-border shadow-md space-y-3.5 text-left">
+      <div className="flex items-center justify-between">
+        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeColorClass}`}>
+          {item.badge_text || item.category}
+        </span>
+        <span className="text-[10px] font-mono uppercase text-brand-text-muted">
+          {item.category}
+        </span>
+      </div>
+
+      <div className="space-y-1">
+        <h4 className="font-extrabold text-base text-brand-text-primary leading-snug">
+          {item.title}
+        </h4>
+        <p className="text-xs text-brand-text-muted line-clamp-3 leading-relaxed">
+          {item.description}
+        </p>
+      </div>
+
+      <div className="pt-2 border-t border-brand-border/60 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-xs text-brand-orange font-bold">
+          <Megaphone className="h-4 w-4" />
+          <span>{item.icon_type}</span>
+        </div>
+
+        <span className="text-xs font-bold text-brand-orange hover:underline flex items-center gap-1">
+          {item.cta_text || "Learn More"} <ArrowRight className="h-3 w-3" />
+        </span>
       </div>
     </div>
   );

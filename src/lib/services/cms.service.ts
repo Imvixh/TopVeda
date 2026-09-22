@@ -702,20 +702,169 @@ export class CmsService {
     return (data as CmsHeroBanner[]) || [];
   }
 
+  static async upsertHeroBanner(
+    supabase: SupabaseClient,
+    banner: Partial<CmsHeroBanner>
+  ): Promise<{ data: CmsHeroBanner | null; error: Error | null }> {
+    try {
+      if (banner.id) {
+        const { data, error } = await supabase
+          .from("cms_hero_banners")
+          .update(banner)
+          .eq("id", banner.id)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsHeroBanner, error: null };
+      } else {
+        const { data, error } = await supabase
+          .from("cms_hero_banners")
+          .insert(banner)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsHeroBanner, error: null };
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  static async deleteHeroBanner(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase.from("cms_hero_banners").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
   static async getDailyQuotes(supabase: SupabaseClient): Promise<CmsDailyQuote[]> {
     const { data } = await supabase
       .from("cms_daily_quotes")
       .select("*")
+      .order("display_order", { ascending: true })
       .order("created_at", { ascending: false });
     return (data as CmsDailyQuote[]) || [];
+  }
+
+  static async upsertDailyQuote(
+    supabase: SupabaseClient,
+    quote: Partial<CmsDailyQuote>
+  ): Promise<{ data: CmsDailyQuote | null; error: Error | null }> {
+    try {
+      if (quote.id) {
+        const { data, error } = await supabase
+          .from("cms_daily_quotes")
+          .update(quote)
+          .eq("id", quote.id)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsDailyQuote, error: null };
+      } else {
+        const { data, error } = await supabase
+          .from("cms_daily_quotes")
+          .insert(quote)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsDailyQuote, error: null };
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  static async toggleActiveDailyQuote(
+    supabase: SupabaseClient,
+    id: string,
+    isActive: boolean
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase
+        .from("cms_daily_quotes")
+        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
+  static async deleteDailyQuote(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase.from("cms_daily_quotes").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
   }
 
   static async getHubItems(supabase: SupabaseClient): Promise<CmsHubItem[]> {
     const { data } = await supabase
       .from("cms_hub_items")
       .select("*")
-      .order("display_order", { ascending: true });
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: false });
     return (data as CmsHubItem[]) || [];
+  }
+
+  static async upsertHubItem(
+    supabase: SupabaseClient,
+    item: Partial<CmsHubItem>
+  ): Promise<{ data: CmsHubItem | null; error: Error | null }> {
+    try {
+      if (item.id) {
+        const { data, error } = await supabase
+          .from("cms_hub_items")
+          .update(item)
+          .eq("id", item.id)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsHubItem, error: null };
+      } else {
+        const { data, error } = await supabase
+          .from("cms_hub_items")
+          .insert(item)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsHubItem, error: null };
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  static async deleteHubItem(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase.from("cms_hub_items").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
   }
 
   // --------------------------------------------------------------------------
