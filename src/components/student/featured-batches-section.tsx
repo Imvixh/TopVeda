@@ -15,8 +15,17 @@ const BADGE_STYLES: Record<string, string> = {
   purple: "bg-purple-600 text-white",
 };
 
-export function FeaturedBatchesSection() {
+export interface FeaturedBatchesSectionProps {
+  batches?: FeaturedBatch[];
+}
+
+export function FeaturedBatchesSection({ batches }: FeaturedBatchesSectionProps) {
+  const activeBatches = batches !== undefined ? batches : FEATURED_BATCHES;
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  if (activeBatches.length === 0) {
+    return null;
+  }
 
   const scrollRight = () => {
     if (scrollRef.current) {
@@ -47,7 +56,7 @@ export function FeaturedBatchesSection() {
           className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {FEATURED_BATCHES.map((batch: FeaturedBatch) => (
+          {activeBatches.map((batch: FeaturedBatch) => (
             <div
               key={batch.id}
               className={cn(

@@ -8,9 +8,18 @@ import { LIVE_CLASSES_TODAY } from "@/config/student-home.config";
 import { LiveClass } from "@/types/student-home.types";
 import { cn } from "@/lib/utils";
 
-export function LiveClassesSection() {
+export interface LiveClassesSectionProps {
+  liveClasses?: LiveClass[];
+}
+
+export function LiveClassesSection({ liveClasses }: LiveClassesSectionProps) {
+  const activeLiveClasses = liveClasses !== undefined ? liveClasses : LIVE_CLASSES_TODAY;
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [reminders, setReminders] = React.useState<Record<string, boolean>>({});
+
+  if (activeLiveClasses.length === 0) {
+    return null;
+  }
 
   const toggleReminder = (id: string) => {
     setReminders((prev) => ({
@@ -48,7 +57,7 @@ export function LiveClassesSection() {
           className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {LIVE_CLASSES_TODAY.map((item: LiveClass) => {
+          {activeLiveClasses.map((item: LiveClass) => {
             const hasReminder = !!reminders[item.id];
 
             return (

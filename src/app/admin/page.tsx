@@ -19,12 +19,30 @@ import {
   Loader2, 
   Layers,
   FileEdit,
-  ArrowRight
+  ArrowRight,
+  ClipboardCheck,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AdminFoundationPage() {
   const router = useRouter();
   const { user, profile, isLoading, logout } = useAuth();
+  const [pendingAppsCount, setPendingAppsCount] = React.useState<number>(0);
+
+  const isSuperAdmin = profile?.role === "SUPER_ADMIN";
+
+  React.useEffect(() => {
+    if (isSuperAdmin) {
+      const supabase = createClient();
+      supabase
+        .from("admin_applications")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "PENDING")
+        .then(({ count }) => {
+          if (count !== null) setPendingAppsCount(count);
+        });
+    }
+  }, [isSuperAdmin]);
 
   const handleLogout = async () => {
     await logout();
@@ -41,8 +59,6 @@ export default function AdminFoundationPage() {
       </div>
     );
   }
-
-  const isSuperAdmin = profile?.role === "SUPER_ADMIN";
 
   return (
     <div className="min-h-screen bg-brand-bg-warm flex flex-col">
@@ -116,6 +132,45 @@ export default function AdminFoundationPage() {
                   <Link href="/admin/cms">
                     <Button variant="primary" size="sm" className="shadow-subtle w-full sm:w-auto">
                       Open CMS Suite
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            )}
+
+            {/* SUPER ADMIN QUICK ACTION 2: Admin Applications Review */}
+            {isSuperAdmin && (
+              <Card className="p-5 sm:p-6 bg-gradient-to-br from-brand-surface via-sky-50/40 to-blue-50/40 border-2 border-sky-200/80 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-2xl bg-sky-600 text-white flex items-center justify-center shadow-md">
+                      <ClipboardCheck className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-brand-text-primary">
+                          Admin Applications & Verification Vault
+                        </h3>
+                        {pendingAppsCount > 0 ? (
+                          <Badge variant="peach" size="sm" className="animate-pulse text-[10px] font-bold">
+                            {pendingAppsCount} PENDING
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" size="sm" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
+                            Up to Date
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-brand-text-muted">
+                        Review verified educator credentials, inspect government ID documents, and grant administrator access.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href="/admin/applications">
+                    <Button variant="primary" size="sm" className="bg-sky-600 hover:bg-sky-700 text-white shadow-subtle w-full sm:w-auto">
+                      Review Applications
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   </Link>

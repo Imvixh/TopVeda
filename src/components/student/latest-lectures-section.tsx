@@ -8,8 +8,17 @@ import { LATEST_LECTURES } from "@/config/student-home.config";
 import { Lecture } from "@/types/student-home.types";
 import { cn } from "@/lib/utils";
 
-export function LatestLecturesSection() {
+export interface LatestLecturesSectionProps {
+  lectures?: Lecture[];
+}
+
+export function LatestLecturesSection({ lectures }: LatestLecturesSectionProps) {
+  const activeLectures = lectures !== undefined ? lectures : LATEST_LECTURES;
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  if (activeLectures.length === 0) {
+    return null;
+  }
 
   const scrollRight = () => {
     if (scrollRef.current) {
@@ -40,7 +49,7 @@ export function LatestLecturesSection() {
           className="flex items-stretch gap-4 sm:gap-5 overflow-x-auto pb-3 pt-1 scrollbar-none scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {LATEST_LECTURES.map((lecture: Lecture) => (
+          {activeLectures.map((lecture: Lecture) => (
             <Link
               key={lecture.id}
               href={`/student/lectures/${lecture.id}`}

@@ -5,21 +5,40 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { HERO_SLIDES } from "@/config/student-home.config";
+import { HeroSlide } from "@/types/student-home.types";
 import { cn } from "@/lib/utils";
 
-export function StudentHeroBanner() {
+export interface StudentHeroBannerProps {
+  slides?: HeroSlide[];
+}
+
+export function StudentHeroBanner({ slides }: StudentHeroBannerProps) {
+  const activeSlides = slides !== undefined ? slides : HERO_SLIDES;
   const [currentIndex, setCurrentIndex] = React.useState(0);
-  const totalSlides = HERO_SLIDES.length;
+  const totalSlides = activeSlides.length;
+
+  if (totalSlides === 0) {
+    return null;
+  }
+
+  const safeIndex = currentIndex < totalSlides ? currentIndex : 0;
+  const currentSlide = activeSlides[safeIndex] || activeSlides[0];
 
   const handlePrev = () => {
-    setCurrentIndex((prev) => (prev === 0 ? totalSlides - 1 : prev - 1));
+    setCurrentIndex((prev) => {
+      const cur = prev < totalSlides ? prev : 0;
+      return cur === 0 ? totalSlides - 1 : cur - 1;
+    });
   };
 
   const handleNext = () => {
-    setCurrentIndex((prev) => (prev === totalSlides - 1 ? 0 : prev + 1));
+    setCurrentIndex((prev) => {
+      const cur = prev < totalSlides ? prev : 0;
+      return (cur + 1) % totalSlides;
+    });
   };
 
-  const currentSlide = HERO_SLIDES[currentIndex];
+  if (!currentSlide) return null;
 
   return (
     <div className="relative w-full overflow-hidden rounded-3xl bg-gradient-to-r from-[#081326] via-[#0E2044] to-[#1B3A72] text-white shadow-md border border-slate-800/40">
@@ -66,49 +85,60 @@ export function StudentHeroBanner() {
             </div>
 
             {/* Motivational Tag Overlay */}
-            <div className="absolute -right-2 sm:-right-4 top-4 bg-black/40 backdrop-blur-md border border-white/15 px-3.5 py-2 rounded-xl hidden sm:flex flex-col items-start shadow-xl pointer-events-none">
-              <span className="text-amber-300 font-serif italic text-xs font-semibold leading-tight">
-                Better Students
-              </span>
-              <span className="text-white font-serif italic text-xs font-semibold leading-tight">
-                Brighter Futures
-              </span>
-            </div>
+            {currentSlide.quote && (
+              <div className="absolute -right-2 sm:-right-4 top-4 bg-black/40 backdrop-blur-md border border-white/15 px-3.5 py-2 rounded-xl hidden sm:flex flex-col items-start shadow-xl pointer-events-none">
+                {currentSlide.quote.split("\n").map((line, idx) => (
+                  <span
+                    key={idx}
+                    className={cn(
+                      "font-serif italic text-xs font-semibold leading-tight",
+                      idx === 0 ? "text-amber-300" : "text-white"
+                    )}
+                  >
+                    {line}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Prev / Next Slider Navigation Buttons */}
-      <button
-        onClick={handlePrev}
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/20 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center transition-all duration-150 z-20 shadow-md"
-        aria-label="Previous Slide"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-
-      <button
-        onClick={handleNext}
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/20 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center transition-all duration-150 z-20 shadow-md"
-        aria-label="Next Slide"
-      >
-        <ChevronRight className="h-5 w-5" />
-      </button>
-
-      {/* Slider Pagination Indicators */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20">
-        {HERO_SLIDES.map((_, idx) => (
+      {/* Prev / Next Slider Navigation Buttons (Show if multiple slides) */}
+      {totalSlides > 1 && (
+        <>
           <button
-            key={idx}
-            onClick={() => setCurrentIndex(idx)}
-            className={cn(
-              "h-2 rounded-full transition-all duration-200",
-              idx === currentIndex ? "w-6 bg-brand-orange" : "w-2 bg-white/40 hover:bg-white/60"
-            )}
-            aria-label={`Go to slide ${idx + 1}`}
-          />
-        ))}
-      </div>
+            onClick={handlePrev}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/20 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center transition-all duration-150 z-20 shadow-md"
+            aria-label="Previous Slide"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          <button
+            onClick={handleNext}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/20 hover:bg-white/35 backdrop-blur-md text-white flex items-center justify-center transition-all duration-150 z-20 shadow-md"
+            aria-label="Next Slide"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+
+          {/* Slider Pagination Indicators */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20">
+            {activeSlides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentIndex(idx)}
+                className={cn(
+                  "h-2 rounded-full transition-all duration-200",
+                  idx === currentIndex ? "w-6 bg-brand-orange" : "w-2 bg-white/40 hover:bg-white/60"
+                )}
+                aria-label={`Go to slide ${idx + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

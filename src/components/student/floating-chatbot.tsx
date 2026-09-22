@@ -3,17 +3,22 @@
 import * as React from "react";
 import { Sparkles, Bot, X, MessageSquareQuote } from "lucide-react";
 import { CHATBOT_CONFIG } from "@/config/student-home.config";
+import { ChatbotConfig } from "@/types/student-home.types";
 import { cn } from "@/lib/utils";
 
-export function FloatingChatbot() {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const config = CHATBOT_CONFIG;
+export interface FloatingChatbotProps {
+  config?: ChatbotConfig;
+}
 
-  if (!config.enabled) return null;
+export function FloatingChatbot({ config }: FloatingChatbotProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const activeConfig = config !== undefined ? config : CHATBOT_CONFIG;
+
+  if (!activeConfig.enabled) return null;
 
   const handleButtonClick = () => {
-    if (config.externalUrl) {
-      window.open(config.externalUrl, "_blank");
+    if (activeConfig.externalUrl) {
+      window.open(activeConfig.externalUrl, "_blank");
     } else {
       setIsOpen((prev) => !prev);
     }
@@ -65,7 +70,7 @@ export function FloatingChatbot() {
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-xs font-black text-white">{config.name}</h3>
+                  <h3 className="text-xs font-black text-white">{activeConfig.name}</h3>
                   <span className="px-1.5 py-0.2 rounded-full bg-brand-orange/20 text-brand-orange text-[9px] font-extrabold tracking-wide uppercase border border-brand-orange/40">
                     Coming Soon
                   </span>
@@ -89,10 +94,10 @@ export function FloatingChatbot() {
               <MessageSquareQuote className="h-5 w-5 text-brand-orange shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-bold text-brand-charcoal text-xs">
-                  {config.welcomeMessage}
+                  {activeConfig.welcomeMessage}
                 </p>
                 <p className="text-[11px] text-brand-text-muted leading-relaxed">
-                  {config.placeholderText}
+                  {activeConfig.placeholderText}
                 </p>
               </div>
             </div>

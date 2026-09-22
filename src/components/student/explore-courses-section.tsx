@@ -28,8 +28,17 @@ const ICON_MAP: Record<string, React.ElementType> = {
   stethoscope: Stethoscope,
 };
 
-export function ExploreCoursesSection() {
+export interface ExploreCoursesSectionProps {
+  courses?: CourseItem[];
+}
+
+export function ExploreCoursesSection({ courses }: ExploreCoursesSectionProps) {
+  const activeCourses = courses !== undefined ? courses : EXPLORE_COURSES;
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  if (activeCourses.length === 0) {
+    return null;
+  }
 
   const scrollRight = () => {
     if (scrollRef.current) {
@@ -53,7 +62,7 @@ export function ExploreCoursesSection() {
           className="flex items-center gap-4 sm:gap-4.5 overflow-x-auto pb-3 pt-1 scrollbar-none scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {EXPLORE_COURSES.map((course: CourseItem) => {
+          {activeCourses.map((course: CourseItem) => {
             const IconComponent = ICON_MAP[course.iconType] || School;
 
             return (

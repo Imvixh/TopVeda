@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Wordmark } from "@/components/brand/wordmark";
 import { BrandGlyph } from "@/components/brand/glyph";
 import { STUDENT_NAV_ITEMS, DAILY_MOTIVATION_QUOTE } from "@/config/student-home.config";
+import { DailyQuote } from "@/types/student-home.types";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Home,
@@ -44,6 +45,7 @@ export interface StudentSidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   className?: string;
+  dailyQuote?: DailyQuote;
 }
 
 export function StudentSidebar({
@@ -52,10 +54,12 @@ export function StudentSidebar({
   isCollapsed = false,
   onToggleCollapse,
   className,
+  dailyQuote,
 }: StudentSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile, logout } = useAuth();
+  const activeQuote = dailyQuote !== undefined ? dailyQuote : DAILY_MOTIVATION_QUOTE;
 
   const handleLogout = async () => {
     await logout();
@@ -177,32 +181,34 @@ export function StudentSidebar({
         </nav>
 
         {/* Middle/Lower Area: Daily Motivational Quote */}
-        {!isCollapsed ? (
-          <div className="px-3.5 py-2 mt-auto">
-            <div className="p-3 rounded-2xl bg-gradient-to-br from-[#FFF9F5] via-[#FFF5EE] to-[#FFF0E6] border border-orange-200/70 shadow-2xs space-y-1.5 select-none">
-              <div className="flex items-center gap-1.5 text-brand-orange">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-wider">
-                  Daily Motivation
-                </span>
+        {activeQuote.active !== false && (
+          !isCollapsed ? (
+            <div className="px-3.5 py-2 mt-auto">
+              <div className="p-3 rounded-2xl bg-gradient-to-br from-[#FFF9F5] via-[#FFF5EE] to-[#FFF0E6] border border-orange-200/70 shadow-2xs space-y-1.5 select-none">
+                <div className="flex items-center gap-1.5 text-brand-orange">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    Daily Motivation
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold text-brand-charcoal italic leading-relaxed">
+                  &ldquo;{activeQuote.quote}&rdquo;
+                </p>
+                <p className="text-[10px] font-bold text-brand-text-muted text-right">
+                  — {activeQuote.author}
+                </p>
               </div>
-              <p className="text-[11px] font-semibold text-brand-charcoal italic leading-relaxed">
-                &ldquo;{DAILY_MOTIVATION_QUOTE.quote}&rdquo;
-              </p>
-              <p className="text-[10px] font-bold text-brand-text-muted text-right">
-                — {DAILY_MOTIVATION_QUOTE.author}
-              </p>
             </div>
-          </div>
-        ) : (
-          <div
-            className="py-2 px-2 mt-auto flex justify-center"
-            title={`Daily Motivation: "${DAILY_MOTIVATION_QUOTE.quote}" — ${DAILY_MOTIVATION_QUOTE.author}`}
-          >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FFF9F5] to-[#FFF0E6] border border-orange-200/70 flex items-center justify-center text-brand-orange shadow-2xs">
-              <Sparkles className="h-4 w-4" />
+          ) : (
+            <div
+              className="py-2 px-2 mt-auto flex justify-center"
+              title={`Daily Motivation: "${activeQuote.quote}" — ${activeQuote.author}`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FFF9F5] to-[#FFF0E6] border border-orange-200/70 flex items-center justify-center text-brand-orange shadow-2xs">
+                <Sparkles className="h-4 w-4" />
+              </div>
             </div>
-          </div>
+          )
         )}
 
         {/* Bottom Area: Student Profile + Direct Logout Button */}

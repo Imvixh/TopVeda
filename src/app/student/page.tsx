@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
+import { getStudentHomeData, StudentHomeAggregatedData } from "@/lib/services/student-home.service";
 import { StudentSidebar } from "@/components/student/student-sidebar";
 import { StudentHeader } from "@/components/student/student-header";
 import { StudentHeroBanner } from "@/components/student/student-hero-banner";
@@ -17,6 +19,8 @@ import { cn } from "@/lib/utils";
 
 export default function StudentHomePage() {
   const { profile, isLoading } = useAuth();
+  const supabase = React.useMemo(() => createClient(), []);
+  const [homeData, setHomeData] = React.useState<StudentHomeAggregatedData | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   // Default to expanded on Home page as per specifications
   const [isCollapsed, setIsCollapsed] = React.useState(false);
@@ -32,6 +36,19 @@ export default function StudentHomePage() {
   const studentFirstName = profile?.fullName
     ? profile.fullName.trim().split(" ")[0]
     : "Abhay";
+
+  // Fetch live CMS data from Supabase
+  React.useEffect(() => {
+    let isMounted = true;
+    getStudentHomeData(supabase).then((data) => {
+      if (isMounted) {
+        setHomeData(data);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
 
   if (isLoading) {
     return (
@@ -52,6 +69,7 @@ export default function StudentHomePage() {
         onClose={() => setIsMobileMenuOpen(false)}
         isCollapsed={isCollapsed}
         onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
+        dailyQuote={homeData?.dailyQuote}
       />
 
       {/* Main Canvas Area */}
@@ -82,30 +100,30 @@ export default function StudentHomePage() {
           </div>
 
           {/* Hero Banner Carousel */}
-          <StudentHeroBanner />
+          <StudentHeroBanner slides={homeData ? homeData.heroSlides : undefined} />
 
           {/* Section 1: New & Featured Batches */}
-          <FeaturedBatchesSection />
+          <FeaturedBatchesSection batches={homeData ? homeData.featuredBatches : undefined} />
 
           {/* Section 2: Ongoing Batches */}
-          <OngoingBatchesSection />
+          <OngoingBatchesSection batches={homeData ? homeData.ongoingBatches : undefined} />
 
           {/* Section 3: Live Classes (Today) */}
-          <LiveClassesSection />
+          <LiveClassesSection liveClasses={homeData ? homeData.liveClassesToday : undefined} />
 
           {/* Section 4: Latest Lectures (Redesigned with larger cards & prominent thumbnails) */}
-          <LatestLecturesSection />
+          <LatestLecturesSection lectures={homeData ? homeData.latestLectures : undefined} />
 
           {/* Section 5: Explore Courses */}
-          <ExploreCoursesSection />
+          <ExploreCoursesSection courses={homeData ? homeData.exploreCourses : undefined} />
 
           {/* Section 6: What's Happening on TopVeda? (Student Portal Quick Hub) */}
-          <StudentPortalHub />
+          <StudentPortalHub items={homeData ? homeData.whatsHappening : undefined} />
         </main>
       </div>
 
       {/* Floating AI Chatbot Assistant Button (Fixed to Viewport) */}
-      <FloatingChatbot />
+      <FloatingChatbot config={homeData ? homeData.chatbotConfig : undefined} />
     </div>
   );
 }

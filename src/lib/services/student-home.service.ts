@@ -1,12 +1,5 @@
 import { createClient as createSupabaseClient, SupabaseClient } from "@supabase/supabase-js";
 import {
-  HERO_SLIDES,
-  FEATURED_BATCHES,
-  ONGOING_BATCHES,
-  LIVE_CLASSES_TODAY,
-  LATEST_LECTURES,
-  EXPLORE_COURSES,
-  WHATS_HAPPENING_ITEMS,
   DAILY_MOTIVATION_QUOTE,
   CHATBOT_CONFIG,
 } from "@/config/student-home.config";
@@ -54,7 +47,7 @@ export async function fetchPublishedHeroBanners(
   client?: SupabaseClient
 ): Promise<HeroSlide[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return HERO_SLIDES;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -64,11 +57,12 @@ export async function fetchPublishedHeroBanners(
       .eq("is_visible", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return HERO_SLIDES;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch hero banners:", error.message);
+      return [];
     }
 
-    return data.map((b) => ({
+    return (data || []).map((b) => ({
       id: b.id,
       tagline: b.tagline,
       title: b.title,
@@ -79,7 +73,7 @@ export async function fetchPublishedHeroBanners(
       characterImage: b.character_image_url,
     }));
   } catch {
-    return HERO_SLIDES;
+    return [];
   }
 }
 
@@ -90,7 +84,7 @@ export async function fetchPublishedFeaturedBatches(
   client?: SupabaseClient
 ): Promise<FeaturedBatch[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return FEATURED_BATCHES;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -101,11 +95,12 @@ export async function fetchPublishedFeaturedBatches(
       .eq("is_featured", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return FEATURED_BATCHES;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch featured batches:", error.message);
+      return [];
     }
 
-    return data.map((b) => ({
+    return (data || []).map((b) => ({
       id: b.id,
       badge: {
         text: b.badge_text || "Featured",
@@ -121,7 +116,7 @@ export async function fetchPublishedFeaturedBatches(
       iconType: (b.icon_type as "math" | "science" | "foundation" | "medical") || "math",
     }));
   } catch {
-    return FEATURED_BATCHES;
+    return [];
   }
 }
 
@@ -132,7 +127,7 @@ export async function fetchPublishedOngoingBatches(
   client?: SupabaseClient
 ): Promise<OngoingBatch[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return ONGOING_BATCHES;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -143,11 +138,12 @@ export async function fetchPublishedOngoingBatches(
       .eq("is_ongoing", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return ONGOING_BATCHES;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch ongoing batches:", error.message);
+      return [];
     }
 
-    return data.map((b) => ({
+    return (data || []).map((b) => ({
       id: b.id,
       badge: b.badge_text || b.board_label,
       batchName: b.title,
@@ -160,7 +156,7 @@ export async function fetchPublishedOngoingBatches(
       iconType: (b.icon_type as "target" | "atom" | "book" | "academy" | "medical") || "book",
     }));
   } catch {
-    return ONGOING_BATCHES;
+    return [];
   }
 }
 
@@ -171,7 +167,7 @@ export async function fetchPublishedLiveClasses(
   client?: SupabaseClient
 ): Promise<LiveClass[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return LIVE_CLASSES_TODAY;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -181,11 +177,12 @@ export async function fetchPublishedLiveClasses(
       .eq("is_visible", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return LIVE_CLASSES_TODAY;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch live classes:", error.message);
+      return [];
     }
 
-    return data.map((l) => ({
+    return (data || []).map((l) => ({
       id: l.id,
       isLive: l.is_live,
       statusText: l.status_text || (l.is_live ? "LIVE" : "UPCOMING"),
@@ -198,7 +195,7 @@ export async function fetchPublishedLiveClasses(
       ctaVariant: l.is_live ? "primary" : "reminder",
     }));
   } catch {
-    return LIVE_CLASSES_TODAY;
+    return [];
   }
 }
 
@@ -209,7 +206,7 @@ export async function fetchPublishedLatestLectures(
   client?: SupabaseClient
 ): Promise<Lecture[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return LATEST_LECTURES;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -220,11 +217,12 @@ export async function fetchPublishedLatestLectures(
       .eq("is_home_featured", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return LATEST_LECTURES;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch lectures:", error.message);
+      return [];
     }
 
-    return data.map((l) => ({
+    return (data || []).map((l) => ({
       id: l.id,
       title: l.title,
       subject: l.subject,
@@ -235,7 +233,7 @@ export async function fetchPublishedLatestLectures(
       categoryTag: l.category_tag,
     }));
   } catch {
-    return LATEST_LECTURES;
+    return [];
   }
 }
 
@@ -246,7 +244,7 @@ export async function fetchPublishedCourses(
   client?: SupabaseClient
 ): Promise<CourseItem[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return EXPLORE_COURSES;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -256,11 +254,12 @@ export async function fetchPublishedCourses(
       .eq("is_visible", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return EXPLORE_COURSES;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch courses:", error.message);
+      return [];
     }
 
-    return data.map((c) => ({
+    return (data || []).map((c) => ({
       id: c.id,
       title: c.title,
       category: c.category,
@@ -269,7 +268,7 @@ export async function fetchPublishedCourses(
       iconType: (c.icon_type as CourseItem["iconType"]) || "school",
     }));
   } catch {
-    return EXPLORE_COURSES;
+    return [];
   }
 }
 
@@ -280,7 +279,7 @@ export async function fetchPublishedHubItems(
   client?: SupabaseClient
 ): Promise<HubItem[]> {
   const supabase = client || getDefaultClient();
-  if (!supabase) return WHATS_HAPPENING_ITEMS;
+  if (!supabase) return [];
 
   try {
     const { data, error } = await supabase
@@ -290,11 +289,12 @@ export async function fetchPublishedHubItems(
       .eq("is_visible", true)
       .order("display_order", { ascending: true });
 
-    if (error || !data || data.length === 0) {
-      return WHATS_HAPPENING_ITEMS;
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch hub items:", error.message);
+      return [];
     }
 
-    return data.map((h) => ({
+    return (data || []).map((h) => ({
       id: h.id,
       category: (h.category as HubItem["category"]) || "announcement",
       badgeText: h.badge_text,
@@ -306,7 +306,7 @@ export async function fetchPublishedHubItems(
       iconType: (h.icon_type as HubItem["iconType"]) || "megaphone",
     }));
   } catch {
-    return WHATS_HAPPENING_ITEMS;
+    return [];
   }
 }
 
@@ -329,8 +329,18 @@ export async function fetchActiveDailyQuote(
       .limit(1)
       .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch daily quote:", error.message);
       return DAILY_MOTIVATION_QUOTE;
+    }
+
+    if (!data) {
+      // Super Admin deactivated or archived all quotes -> do NOT resurrect static config
+      return {
+        quote: "",
+        author: "",
+        active: false,
+      };
     }
 
     return {
@@ -361,8 +371,17 @@ export async function fetchPublicChatbotConfig(
       .limit(1)
       .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
+      console.warn("[StudentHomeService] Failed to fetch chatbot settings:", error.message);
       return CHATBOT_CONFIG;
+    }
+
+    if (!data) {
+      // Super Admin disabled chatbot or archived settings -> do NOT resurrect enabled static config
+      return {
+        ...CHATBOT_CONFIG,
+        enabled: false,
+      };
     }
 
     return {
@@ -381,7 +400,7 @@ export async function fetchPublicChatbotConfig(
 
 /**
  * Aggregated Master Retrieval Function for Student Home discovery page.
- * Uses parallel domain queries and provides automatic fallback to static configs.
+ * Uses parallel domain queries to fetch live published CMS data.
  */
 export async function getStudentHomeData(
   client?: SupabaseClient
@@ -410,53 +429,26 @@ export async function getStudentHomeData(
     ]);
 
     return {
-      heroSlides:
-        heroResult.status === "fulfilled" && heroResult.value.length > 0
-          ? heroResult.value
-          : HERO_SLIDES,
-      featuredBatches:
-        featuredBatchesResult.status === "fulfilled" && featuredBatchesResult.value.length > 0
-          ? featuredBatchesResult.value
-          : FEATURED_BATCHES,
-      ongoingBatches:
-        ongoingBatchesResult.status === "fulfilled" && ongoingBatchesResult.value.length > 0
-          ? ongoingBatchesResult.value
-          : ONGOING_BATCHES,
-      liveClassesToday:
-        liveClassesResult.status === "fulfilled" && liveClassesResult.value.length > 0
-          ? liveClassesResult.value
-          : LIVE_CLASSES_TODAY,
-      latestLectures:
-        lecturesResult.status === "fulfilled" && lecturesResult.value.length > 0
-          ? lecturesResult.value
-          : LATEST_LECTURES,
-      exploreCourses:
-        coursesResult.status === "fulfilled" && coursesResult.value.length > 0
-          ? coursesResult.value
-          : EXPLORE_COURSES,
-      whatsHappening:
-        hubResult.status === "fulfilled" && hubResult.value.length > 0
-          ? hubResult.value
-          : WHATS_HAPPENING_ITEMS,
-      dailyQuote:
-        quoteResult.status === "fulfilled" && quoteResult.value
-          ? quoteResult.value
-          : DAILY_MOTIVATION_QUOTE,
-      chatbotConfig:
-        chatbotResult.status === "fulfilled" && chatbotResult.value
-          ? chatbotResult.value
-          : CHATBOT_CONFIG,
+      heroSlides: heroResult.status === "fulfilled" ? heroResult.value : [],
+      featuredBatches: featuredBatchesResult.status === "fulfilled" ? featuredBatchesResult.value : [],
+      ongoingBatches: ongoingBatchesResult.status === "fulfilled" ? ongoingBatchesResult.value : [],
+      liveClassesToday: liveClassesResult.status === "fulfilled" ? liveClassesResult.value : [],
+      latestLectures: lecturesResult.status === "fulfilled" ? lecturesResult.value : [],
+      exploreCourses: coursesResult.status === "fulfilled" ? coursesResult.value : [],
+      whatsHappening: hubResult.status === "fulfilled" ? hubResult.value : [],
+      dailyQuote: quoteResult.status === "fulfilled" ? quoteResult.value : DAILY_MOTIVATION_QUOTE,
+      chatbotConfig: chatbotResult.status === "fulfilled" ? chatbotResult.value : CHATBOT_CONFIG,
     };
   } catch (error) {
-    console.error("[StudentHomeService] Aggregated retrieval fallback:", error);
+    console.error("[StudentHomeService] Aggregated retrieval failed:", error);
     return {
-      heroSlides: HERO_SLIDES,
-      featuredBatches: FEATURED_BATCHES,
-      ongoingBatches: ONGOING_BATCHES,
-      liveClassesToday: LIVE_CLASSES_TODAY,
-      latestLectures: LATEST_LECTURES,
-      exploreCourses: EXPLORE_COURSES,
-      whatsHappening: WHATS_HAPPENING_ITEMS,
+      heroSlides: [],
+      featuredBatches: [],
+      ongoingBatches: [],
+      liveClassesToday: [],
+      latestLectures: [],
+      exploreCourses: [],
+      whatsHappening: [],
       dailyQuote: DAILY_MOTIVATION_QUOTE,
       chatbotConfig: CHATBOT_CONFIG,
     };

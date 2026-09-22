@@ -17,6 +17,7 @@ import {
   Terminal,
   HelpCircle,
   Database,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -165,6 +166,17 @@ export const CMS_NAV_SECTIONS: CmsNavSection[] = [
         href: "/admin/cms/chatbot/knowledge",
         icon: Database,
         description: "Curriculum specifications, courses, and verified knowledge sync.",
+      },
+    ],
+  },
+  {
+    section: "ADMINISTRATION",
+    items: [
+      {
+        title: "Admin Applications",
+        href: "/admin/applications",
+        icon: ClipboardCheck,
+        description: "Review educator verification credentials and grant admin privileges.",
       },
     ],
   },

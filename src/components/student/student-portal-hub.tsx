@@ -21,7 +21,17 @@ const BADGE_THEMES: Record<string, { bg: string; text: string; border: string }>
   emerald: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
 };
 
-export function StudentPortalHub() {
+export interface StudentPortalHubProps {
+  items?: HubItem[];
+}
+
+export function StudentPortalHub({ items }: StudentPortalHubProps) {
+  const activeItems = items !== undefined ? items : WHATS_HAPPENING_ITEMS;
+
+  if (activeItems.length === 0) {
+    return null;
+  }
+
   return (
     <section className="mt-10 pt-8 pb-10 border-t border-brand-border/70 space-y-5" id="student-hub">
       {/* Section Header */}
@@ -43,7 +53,7 @@ export function StudentPortalHub() {
 
       {/* Grid of Interactive Hub Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {WHATS_HAPPENING_ITEMS.map((item: HubItem) => {
+        {activeItems.map((item: HubItem) => {
           const IconComponent = ICON_MAP[item.iconType] || Megaphone;
           const theme = BADGE_THEMES[item.badgeVariant] || BADGE_THEMES.orange;
 

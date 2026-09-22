@@ -15,8 +15,17 @@ const ICON_MAP: Record<string, React.ElementType> = {
   medical: Stethoscope,
 };
 
-export function OngoingBatchesSection() {
+export interface OngoingBatchesSectionProps {
+  batches?: OngoingBatch[];
+}
+
+export function OngoingBatchesSection({ batches }: OngoingBatchesSectionProps) {
+  const activeBatches = batches !== undefined ? batches : ONGOING_BATCHES;
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  if (activeBatches.length === 0) {
+    return null;
+  }
 
   const scrollRight = () => {
     if (scrollRef.current) {
@@ -47,7 +56,7 @@ export function OngoingBatchesSection() {
           className="flex items-stretch gap-3.5 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {ONGOING_BATCHES.map((item: OngoingBatch) => {
+          {activeBatches.map((item: OngoingBatch) => {
             const IconComponent = ICON_MAP[item.iconType] || Target;
             const isLive = item.statusType === "live";
 
