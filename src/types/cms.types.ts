@@ -300,7 +300,7 @@ export interface CmsChatbotKnowledgeSource {
 
 // 17. Review Queue Item
 export interface CmsPendingReviewItem {
-  entity_type: "LECTURE" | "STUDY_MATERIAL" | "BATCH";
+  entity_type: "LECTURE" | "STUDY_MATERIAL" | "BATCH" | "CHAPTER" | "COURSE";
   entity_id: string;
   title: string;
   subject: string;
@@ -310,6 +310,10 @@ export interface CmsPendingReviewItem {
   status: ContentStatus;
   submitted_by?: string | null;
   submitted_at: string;
+  updated_at?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  reviewer_name?: string | null;
   review_note?: string | null;
 }
 

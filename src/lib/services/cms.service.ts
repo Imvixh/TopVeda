@@ -17,6 +17,7 @@ import {
   CmsChatbotFaq,
   CmsChatbotKnowledgeSource,
   CmsPendingReviewItem,
+  ContentStatus,
   ReviewDecisionRequest,
 } from "@/types/cms.types";
 
@@ -44,6 +45,115 @@ export class CmsService {
 
       if (error) throw new Error(error.message);
       return { data: (data as CmsPendingReviewItem[]) || [], error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  /**
+   * Fetch review items filtered by status ('PENDING_REVIEW', 'APPROVED', 'REJECTED', 'ALL').
+   */
+  static async getReviewQueueItems(
+    supabase: SupabaseClient,
+    statusFilter: ContentStatus | "ALL" = "PENDING_REVIEW"
+  ): Promise<{ data: CmsPendingReviewItem[] | null; error: Error | null }> {
+    try {
+      if (statusFilter === "PENDING_REVIEW") {
+        return await this.getPendingReviews(supabase);
+      }
+
+      const statusList =
+        statusFilter === "ALL"
+          ? ["PENDING_REVIEW", "APPROVED", "REJECTED"]
+          : [statusFilter];
+
+      const [lecturesRes, materialsRes, batchesRes] = await Promise.all([
+        supabase
+          .from("cms_lectures")
+          .select("id, title, subject, teacher_name, thumbnail_url, video_playback_url, status, submitted_by, reviewed_by, reviewed_at, review_note, created_at, updated_at")
+          .in("status", statusList)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("cms_study_materials")
+          .select("id, title, material_type, file_url, status, submitted_by, reviewed_by, reviewed_at, review_note, created_at, updated_at")
+          .in("status", statusList)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("cms_batches")
+          .select("id, title, board_label, educator_name, educator_avatar_url, status, submitted_by, reviewed_by, reviewed_at, review_note, created_at, updated_at")
+          .in("status", statusList)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      const items: CmsPendingReviewItem[] = [];
+
+      if (lecturesRes.data) {
+        for (const l of lecturesRes.data) {
+          items.push({
+            entity_type: "LECTURE",
+            entity_id: l.id,
+            title: l.title,
+            subject: l.subject,
+            author_name: l.teacher_name || "Educator",
+            media_preview_url: l.thumbnail_url,
+            video_stream_url: l.video_playback_url,
+            status: l.status,
+            submitted_by: l.submitted_by,
+            submitted_at: l.created_at,
+            updated_at: l.updated_at,
+            reviewed_by: l.reviewed_by,
+            reviewed_at: l.reviewed_at,
+            review_note: l.review_note,
+          });
+        }
+      }
+
+      if (materialsRes.data) {
+        for (const m of materialsRes.data) {
+          items.push({
+            entity_type: "STUDY_MATERIAL",
+            entity_id: m.id,
+            title: m.title,
+            subject: m.material_type,
+            author_name: "Content Author",
+            media_preview_url: m.file_url,
+            status: m.status,
+            submitted_by: m.submitted_by,
+            submitted_at: m.created_at,
+            updated_at: m.updated_at,
+            reviewed_by: m.reviewed_by,
+            reviewed_at: m.reviewed_at,
+            review_note: m.review_note,
+          });
+        }
+      }
+
+      if (batchesRes.data) {
+        for (const b of batchesRes.data) {
+          items.push({
+            entity_type: "BATCH",
+            entity_id: b.id,
+            title: b.title,
+            subject: b.board_label,
+            author_name: b.educator_name || "Lead Educator",
+            media_preview_url: b.educator_avatar_url,
+            status: b.status,
+            submitted_by: b.submitted_by,
+            submitted_at: b.created_at,
+            updated_at: b.updated_at,
+            reviewed_by: b.reviewed_by,
+            reviewed_at: b.reviewed_at,
+            review_note: b.review_note,
+          });
+        }
+      }
+
+      items.sort(
+        (a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()
+      );
+
+      return { data: items, error: null };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       return { data: null, error };
@@ -85,7 +195,7 @@ export class CmsService {
     }
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from(targetTable)
         .update({
           status: decision,
@@ -93,9 +203,21 @@ export class CmsService {
           reviewed_at: new Date().toISOString(),
           review_note: reviewNote || null,
         })
-        .eq("id", entityId);
+        .eq("id", entityId)
+        .eq("status", "PENDING_REVIEW")
+        .select("id");
 
       if (error) throw new Error(error.message);
+
+      if (!data || data.length === 0) {
+        return {
+          success: false,
+          error: new Error(
+            "Invalid transition: Only content in PENDING_REVIEW status can be approved or rejected."
+          ),
+        };
+      }
+
       return { success: true, error: null };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
