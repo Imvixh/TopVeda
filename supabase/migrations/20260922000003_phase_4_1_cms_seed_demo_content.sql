@@ -267,14 +267,16 @@ BEGIN
         is_visible = EXCLUDED.is_visible,
         status = EXCLUDED.status;
 
-    -- 12. Study Materials
+    -- 12. Study Materials (Draft demo templates awaiting actual PDF upload via CMS)
     INSERT INTO public.cms_study_materials (id, course_id, chapter_id, title, material_type, file_url, page_count, download_count, display_order, is_visible, status)
     VALUES
-        ('c0000000-0000-0000-0000-000000000001'::uuid, v_crs_math10_id, v_ch1_id, 'Class 10 Trigonometry Formula Sheet', 'formula_sheet', NULL, 4, 142, 1, TRUE, 'PUBLISHED'),
-        ('c0000000-0000-0000-0000-000000000002'::uuid, v_crs_sci10_id,  v_ch2_id, 'Class 10 Chemical Reactions Quick Notes', 'notes', NULL, 8, 98, 2, TRUE, 'PUBLISHED'),
-        ('c0000000-0000-0000-0000-000000000003'::uuid, v_crs_sci10_id,  v_ch3_id, 'Class 10 Life Processes NCERT Solutions', 'ncert_solution', NULL, 12, 210, 3, TRUE, 'PUBLISHED'),
-        ('c0000000-0000-0000-0000-000000000004'::uuid, v_crs_math10_id, v_ch1_id, 'CBSE Class 10 Mathematics 2025 Solved PYQ', 'pyq_paper', NULL, 16, 320, 4, TRUE, 'PUBLISHED')
+        ('c0000000-0000-0000-0000-000000000001'::uuid, v_crs_math10_id, v_ch1_id, 'Class 10 Trigonometry Formula Sheet', 'formula_sheet', '', 4, 0, 1, FALSE, 'DRAFT'),
+        ('c0000000-0000-0000-0000-000000000002'::uuid, v_crs_sci10_id,  v_ch2_id, 'Class 10 Chemical Reactions Quick Notes', 'notes', '', 8, 0, 2, FALSE, 'DRAFT'),
+        ('c0000000-0000-0000-0000-000000000003'::uuid, v_crs_sci10_id,  v_ch3_id, 'Class 10 Life Processes NCERT Solutions', 'ncert_solution', '', 12, 0, 3, FALSE, 'DRAFT'),
+        ('c0000000-0000-0000-0000-000000000004'::uuid, v_crs_math10_id, v_ch1_id, 'CBSE Class 10 Mathematics 2025 Solved PYQ', 'pyq_paper', '', 16, 0, 4, FALSE, 'DRAFT')
     ON CONFLICT (id) DO UPDATE SET
+        course_id = EXCLUDED.course_id,
+        chapter_id = EXCLUDED.chapter_id,
         title = EXCLUDED.title,
         material_type = EXCLUDED.material_type,
         file_url = EXCLUDED.file_url,

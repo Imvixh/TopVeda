@@ -186,12 +186,12 @@ async function seed() {
     else stats.created++;
   }
 
-  // 12. Study Materials
+  // 12. Study Materials (Draft demo templates awaiting actual PDF upload via CMS)
   const materials = [
-    { id: "c0000000-0000-0000-0000-000000000001", course_id: "40000000-0000-0000-0000-000000000001", chapter_id: "60000000-0000-0000-0000-000000000001", title: "Class 10 Trigonometry Formula Sheet", material_type: "formula_sheet", file_url: null, page_count: 4, download_count: 142, display_order: 1, is_visible: true, status: "PUBLISHED" },
-    { id: "c0000000-0000-0000-0000-000000000002", course_id: "40000000-0000-0000-0000-000000000002", chapter_id: "60000000-0000-0000-0000-000000000002", title: "Class 10 Chemical Reactions Quick Notes", material_type: "notes", file_url: null, page_count: 8, download_count: 98, display_order: 2, is_visible: true, status: "PUBLISHED" },
-    { id: "c0000000-0000-0000-0000-000000000003", course_id: "40000000-0000-0000-0000-000000000002", chapter_id: "60000000-0000-0000-0000-000000000002", title: "Class 10 Life Processes NCERT Solutions", material_type: "ncert_solution", file_url: null, page_count: 12, download_count: 210, display_order: 3, is_visible: true, status: "PUBLISHED" },
-    { id: "c0000000-0000-0000-0000-000000000004", course_id: "40000000-0000-0000-0000-000000000001", chapter_id: "60000000-0000-0000-0000-000000000001", title: "CBSE Class 10 Mathematics 2025 Solved PYQ", material_type: "pyq_paper", file_url: null, page_count: 16, download_count: 320, display_order: 4, is_visible: true, status: "PUBLISHED" },
+    { id: "c0000000-0000-0000-0000-000000000001", course_id: "40000000-0000-0000-0000-000000000001", chapter_id: "60000000-0000-0000-0000-000000000001", title: "Class 10 Trigonometry Formula Sheet", material_type: "formula_sheet", file_url: "", page_count: 4, download_count: 0, display_order: 1, is_visible: false, status: "DRAFT" },
+    { id: "c0000000-0000-0000-0000-000000000002", course_id: "40000000-0000-0000-0000-000000000002", chapter_id: "60000000-0000-0000-0000-000000000002", title: "Class 10 Chemical Reactions Quick Notes", material_type: "notes", file_url: "", page_count: 8, download_count: 0, display_order: 2, is_visible: false, status: "DRAFT" },
+    { id: "c0000000-0000-0000-0000-000000000003", course_id: "40000000-0000-0000-0000-000000000002", chapter_id: "60000000-0000-0000-0000-000000000002", title: "Class 10 Life Processes NCERT Solutions", material_type: "ncert_solution", file_url: "", page_count: 12, download_count: 0, display_order: 3, is_visible: false, status: "DRAFT" },
+    { id: "c0000000-0000-0000-0000-000000000004", course_id: "40000000-0000-0000-0000-000000000001", chapter_id: "60000000-0000-0000-0000-000000000001", title: "CBSE Class 10 Mathematics 2025 Solved PYQ", material_type: "pyq_paper", file_url: "", page_count: 16, download_count: 0, display_order: 4, is_visible: false, status: "DRAFT" },
   ];
   for (const m of materials) {
     const { error } = await client.from("cms_study_materials").upsert(m, { onConflict: "id" });
