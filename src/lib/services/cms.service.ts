@@ -19,6 +19,7 @@ import {
   CmsPendingReviewItem,
   ContentStatus,
   ReviewDecisionRequest,
+  EducatorContentItem,
 } from "@/types/cms.types";
 
 /**
@@ -873,46 +874,37 @@ export class CmsService {
 
   /**
    * Super Admin full chatbot settings (contains system instructions & model config)
+   * Fetched via server-side API proxy to respect column-level database security.
    */
-  static async getChatbotAdminSettings(
-    supabase: SupabaseClient
-  ): Promise<CmsChatbotSettings | null> {
-    const { data } = await supabase
-      .from("cms_chatbot_settings")
-      .select("*")
-      .limit(1)
-      .maybeSingle();
-
-    return (data as CmsChatbotSettings) || null;
+  static async getChatbotAdminSettings(): Promise<CmsChatbotSettings | null> {
+    try {
+      const res = await fetch("/api/admin/cms/chatbot/settings", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        return null;
+      }
+      const json = await res.json();
+      return (json.data as CmsChatbotSettings) || null;
+    } catch {
+      return null;
+    }
   }
 
   static async updateChatbotSettings(
-    supabase: SupabaseClient,
     settings: Partial<CmsChatbotSettings>
   ): Promise<{ success: boolean; error: Error | null }> {
     try {
-      // If a settings row exists, update it. If not, insert initial singleton row.
-      const { data: existing } = await supabase
-        .from("cms_chatbot_settings")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-
-      let error;
-      if (existing) {
-        const res = await supabase
-          .from("cms_chatbot_settings")
-          .update(settings)
-          .eq("id", existing.id);
-        error = res.error;
-      } else {
-        const res = await supabase
-          .from("cms_chatbot_settings")
-          .insert(settings);
-        error = res.error;
+      const res = await fetch("/api/admin/cms/chatbot/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || "Failed to update chatbot settings.");
       }
-
-      if (error) throw new Error(error.message);
       return { success: true, error: null };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -928,12 +920,98 @@ export class CmsService {
     return (data as CmsChatbotPrompt[]) || [];
   }
 
+  static async upsertChatbotPrompt(
+    supabase: SupabaseClient,
+    prompt: Partial<CmsChatbotPrompt>
+  ): Promise<{ data: CmsChatbotPrompt | null; error: Error | null }> {
+    try {
+      if (prompt.id) {
+        const { data, error } = await supabase
+          .from("cms_chatbot_prompts")
+          .update(prompt)
+          .eq("id", prompt.id)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsChatbotPrompt, error: null };
+      } else {
+        const { data, error } = await supabase
+          .from("cms_chatbot_prompts")
+          .insert(prompt)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsChatbotPrompt, error: null };
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  static async deleteChatbotPrompt(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase.from("cms_chatbot_prompts").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
   static async getChatbotFaqs(supabase: SupabaseClient): Promise<CmsChatbotFaq[]> {
     const { data } = await supabase
       .from("cms_chatbot_faqs")
       .select("*")
       .order("display_order", { ascending: true });
     return (data as CmsChatbotFaq[]) || [];
+  }
+
+  static async upsertChatbotFaq(
+    supabase: SupabaseClient,
+    faq: Partial<CmsChatbotFaq>
+  ): Promise<{ data: CmsChatbotFaq | null; error: Error | null }> {
+    try {
+      if (faq.id) {
+        const { data, error } = await supabase
+          .from("cms_chatbot_faqs")
+          .update(faq)
+          .eq("id", faq.id)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsChatbotFaq, error: null };
+      } else {
+        const { data, error } = await supabase
+          .from("cms_chatbot_faqs")
+          .insert(faq)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsChatbotFaq, error: null };
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  static async deleteChatbotFaq(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase.from("cms_chatbot_faqs").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
   }
 
   static async getChatbotKnowledgeSources(
@@ -945,4 +1023,254 @@ export class CmsService {
       .order("created_at", { ascending: false });
     return (data as CmsChatbotKnowledgeSource[]) || [];
   }
+
+  static async upsertChatbotKnowledgeSource(
+    supabase: SupabaseClient,
+    source: Partial<CmsChatbotKnowledgeSource>
+  ): Promise<{ data: CmsChatbotKnowledgeSource | null; error: Error | null }> {
+    try {
+      if (source.id) {
+        const { data, error } = await supabase
+          .from("cms_chatbot_knowledge_sources")
+          .update(source)
+          .eq("id", source.id)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsChatbotKnowledgeSource, error: null };
+      } else {
+        const { data, error } = await supabase
+          .from("cms_chatbot_knowledge_sources")
+          .insert(source)
+          .select("*")
+          .single();
+        if (error) throw new Error(error.message);
+        return { data: data as CmsChatbotKnowledgeSource, error: null };
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  static async toggleKnowledgeSourceActive(
+    supabase: SupabaseClient,
+    id: string,
+    isActive: boolean
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase
+        .from("cms_chatbot_knowledge_sources")
+        .update({
+          is_active: isActive,
+          sync_status: isActive ? "PENDING" : "EXCLUDED",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
+  static async retryKnowledgeSync(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase
+        .from("cms_chatbot_knowledge_sources")
+        .update({
+          sync_status: "PENDING",
+          sync_error_message: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
+  static async deleteChatbotKnowledgeSource(
+    supabase: SupabaseClient,
+    id: string
+  ): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { error } = await supabase
+        .from("cms_chatbot_knowledge_sources")
+        .delete()
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+      return { success: true, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error };
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 6. Admin / Teacher Educator Content Studio & Submissions
+  // --------------------------------------------------------------------------
+
+  static async getEducatorContent(
+    supabase: SupabaseClient,
+    userId: string
+  ): Promise<{ data: EducatorContentItem[]; error: Error | null }> {
+    try {
+      const items: EducatorContentItem[] = [];
+
+      // 1. Batches
+      const { data: batches } = await supabase
+        .from("cms_batches")
+        .select("*")
+        .or(`created_by.eq.${userId},submitted_by.eq.${userId},lead_educator_id.eq.${userId}`);
+      if (batches) {
+        for (const b of batches) {
+          items.push({
+            id: b.id,
+            entityType: "BATCH",
+            title: b.title,
+            subtitle: b.subtitle,
+            status: b.status,
+            is_visible: b.is_visible,
+            display_order: b.display_order,
+            created_at: b.created_at,
+            updated_at: b.updated_at,
+            submitted_at: b.created_at,
+            reviewed_at: b.reviewed_at,
+            reviewed_by: b.reviewed_by,
+            review_note: b.review_note,
+            starts_at: b.starts_at,
+            ends_at: b.ends_at,
+            details: b,
+          });
+        }
+      }
+
+      // 2. Chapters
+      const { data: chapters } = await supabase
+        .from("cms_chapters")
+        .select("*")
+        .or(`created_by.eq.${userId},submitted_by.eq.${userId}`);
+      if (chapters) {
+        for (const c of chapters) {
+          items.push({
+            id: c.id,
+            entityType: "CHAPTER",
+            title: c.title,
+            subtitle: `Chapter ${c.chapter_number}`,
+            status: c.status,
+            is_visible: c.is_visible,
+            display_order: c.display_order,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+            submitted_at: c.created_at,
+            reviewed_at: c.reviewed_at,
+            reviewed_by: c.reviewed_by,
+            review_note: c.review_note,
+            starts_at: c.starts_at,
+            ends_at: c.ends_at,
+            details: c,
+          });
+        }
+      }
+
+      // 3. Lectures
+      const { data: lectures } = await supabase
+        .from("cms_lectures")
+        .select("*")
+        .or(`created_by.eq.${userId},submitted_by.eq.${userId},educator_id.eq.${userId}`);
+      if (lectures) {
+        for (const l of lectures) {
+          items.push({
+            id: l.id,
+            entityType: "LECTURE",
+            title: l.title,
+            subtitle: `${l.subject} • ${l.duration_human || l.duration_formatted}`,
+            status: l.status,
+            is_visible: l.is_visible,
+            display_order: l.display_order,
+            created_at: l.created_at,
+            updated_at: l.updated_at,
+            submitted_at: l.created_at,
+            reviewed_at: l.reviewed_at,
+            reviewed_by: l.reviewed_by,
+            review_note: l.review_note,
+            starts_at: l.starts_at,
+            ends_at: l.ends_at,
+            details: l,
+          });
+        }
+      }
+
+      // 4. Live Classes
+      const { data: liveClasses } = await supabase
+        .from("cms_live_classes")
+        .select("*")
+        .or(`created_by.eq.${userId},submitted_by.eq.${userId},educator_id.eq.${userId}`);
+      if (liveClasses) {
+        for (const lc of liveClasses) {
+          items.push({
+            id: lc.id,
+            entityType: "LIVE_CLASS",
+            title: lc.topic,
+            subtitle: `${lc.subject} • ${lc.time_display}`,
+            status: lc.status,
+            is_visible: lc.is_visible,
+            display_order: lc.display_order,
+            created_at: lc.created_at,
+            updated_at: lc.updated_at,
+            submitted_at: lc.created_at,
+            reviewed_at: lc.reviewed_at,
+            reviewed_by: lc.reviewed_by,
+            review_note: lc.review_note,
+            starts_at: lc.starts_at,
+            ends_at: lc.ends_at,
+            details: lc,
+          });
+        }
+      }
+
+      // 5. Study Materials
+      const { data: materials } = await supabase
+        .from("cms_study_materials")
+        .select("*")
+        .or(`created_by.eq.${userId},submitted_by.eq.${userId}`);
+      if (materials) {
+        for (const m of materials) {
+          items.push({
+            id: m.id,
+            entityType: "STUDY_MATERIAL",
+            title: m.title,
+            subtitle: `Material Type: ${m.material_type.replace(/_/g, " ")}`,
+            status: m.status,
+            is_visible: m.is_visible,
+            display_order: m.display_order,
+            created_at: m.created_at,
+            updated_at: m.updated_at,
+            submitted_at: m.created_at,
+            reviewed_at: m.reviewed_at,
+            reviewed_by: m.reviewed_by,
+            review_note: m.review_note,
+            starts_at: m.starts_at,
+            ends_at: m.ends_at,
+            details: m,
+          });
+        }
+      }
+
+      // Sort by updated_at desc
+      items.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      return { data: items, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: [], error };
+    }
+  }
 }
+

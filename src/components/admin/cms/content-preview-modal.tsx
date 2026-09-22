@@ -14,6 +14,8 @@ import {
   CmsHeroBanner,
   CmsDailyQuote,
   CmsHubItem,
+  CmsChatbotPrompt,
+  CmsChatbotFaq,
 } from "@/types/cms.types";
 import {
   GraduationCap,
@@ -30,6 +32,8 @@ import {
   Quote,
   Megaphone,
   ArrowRight,
+  Terminal,
+  HelpCircle,
 } from "lucide-react";
 
 export type PreviewContentItem =
@@ -40,7 +44,9 @@ export type PreviewContentItem =
   | { type: "STUDY_MATERIAL"; data: CmsStudyMaterial; signedPdf?: string | null }
   | { type: "HERO"; data: CmsHeroBanner }
   | { type: "QUOTE"; data: CmsDailyQuote }
-  | { type: "HUB"; data: CmsHubItem };
+  | { type: "HUB"; data: CmsHubItem }
+  | { type: "CHATBOT_PROMPT"; data: CmsChatbotPrompt }
+  | { type: "CHATBOT_FAQ"; data: CmsChatbotFaq };
 
 interface ContentPreviewModalProps {
   item: PreviewContentItem | null;
@@ -101,6 +107,8 @@ export function ContentPreviewModal({
             {item.type === "HERO" && <HeroBannerCardPreview banner={item.data} />}
             {item.type === "QUOTE" && <DailyQuoteCardPreview quote={item.data} />}
             {item.type === "HUB" && <HubItemCardPreview item={item.data} />}
+            {item.type === "CHATBOT_PROMPT" && <ChatbotPromptCardPreview prompt={item.data} />}
+            {item.type === "CHATBOT_FAQ" && <ChatbotFaqCardPreview faq={item.data} />}
           </div>
         </div>
 
@@ -496,6 +504,69 @@ function HubItemCardPreview({ item }: { item: CmsHubItem }) {
           {item.cta_text || "Learn More"} <ArrowRight className="h-3 w-3" />
         </span>
       </div>
+    </div>
+  );
+}
+
+// 9. Chatbot Prompt Card Preview
+function ChatbotPromptCardPreview({ prompt }: { prompt: CmsChatbotPrompt }) {
+  return (
+    <div className="max-w-sm w-full rounded-2xl bg-white p-5 border border-brand-border shadow-md space-y-3 text-left">
+      <div className="flex items-center justify-between">
+        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-brand-orange border border-orange-200 flex items-center gap-1">
+          <Terminal className="h-3 w-3" /> Starter Query Chip
+        </span>
+        <span className="text-[10px] font-mono text-brand-text-muted">
+          {prompt.category_tag}
+        </span>
+      </div>
+
+      <div className="p-3.5 rounded-xl bg-brand-bg-warm/70 border border-brand-border flex items-center gap-2.5">
+        <div className="h-8 w-8 rounded-lg bg-orange-100 text-brand-orange shrink-0 flex items-center justify-center">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <p className="font-bold text-xs text-brand-text-primary leading-snug">
+          {prompt.prompt_text}
+        </p>
+      </div>
+
+      <p className="text-[11px] text-brand-text-muted italic">
+        Rendered as an interactive query chip in the student TopVeda AI chat widget.
+      </p>
+    </div>
+  );
+}
+
+// 10. Chatbot FAQ Card Preview
+function ChatbotFaqCardPreview({ faq }: { faq: CmsChatbotFaq }) {
+  return (
+    <div className="max-w-md w-full rounded-2xl bg-white p-5 border border-brand-border shadow-md space-y-3.5 text-left">
+      <div className="flex items-center justify-between">
+        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1">
+          <HelpCircle className="h-3 w-3" /> {faq.category}
+        </span>
+        <span className="text-[10px] font-mono text-brand-text-muted">Authoritative Knowledge</span>
+      </div>
+
+      <div className="space-y-1">
+        <h4 className="font-extrabold text-sm text-brand-text-primary leading-snug">
+          Q: {faq.question}
+        </h4>
+        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-brand-text-primary leading-relaxed">
+          {faq.answer}
+        </div>
+      </div>
+
+      {faq.search_tags && faq.search_tags.length > 0 && (
+        <div className="pt-2 border-t border-brand-border/60 flex items-center gap-1 flex-wrap">
+          <span className="text-[10px] font-bold text-brand-text-muted">Tags:</span>
+          {faq.search_tags.map((t) => (
+            <span key={t} className="text-[9px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded">
+              #{t}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

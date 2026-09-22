@@ -25,7 +25,9 @@ export type PublishableEntityType =
   | "CHAPTER"
   | "STUDY_MATERIAL"
   | "QUOTE"
-  | "HUB";
+  | "HUB"
+  | "CHATBOT_PROMPT"
+  | "CHATBOT_FAQ";
 
 export interface PublishDialogTarget {
   entityType: PublishableEntityType;

@@ -332,3 +332,29 @@ export interface PublishContentRequest {
   startsAt?: string | null;
   endsAt?: string | null;
 }
+
+export interface SubmitForReviewRequest {
+  entityType: "BATCH" | "CHAPTER" | "LECTURE" | "LIVE_CLASS" | "STUDY_MATERIAL";
+  entityId: string;
+}
+
+export interface EducatorContentItem {
+  id: string;
+  entityType: "BATCH" | "CHAPTER" | "LECTURE" | "LIVE_CLASS" | "STUDY_MATERIAL";
+  title: string;
+  subtitle?: string | null;
+  status: ContentStatus;
+  is_visible: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  reviewer_name?: string | null;
+  review_note?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  details?: Record<string, unknown>;
+}
+
