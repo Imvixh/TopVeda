@@ -225,11 +225,13 @@ export async function fetchPublishedLatestLectures(
   try {
     const { data, error } = await supabase
       .from("cms_lectures")
-      .select("id, title, subject, teacher_name, duration_human, duration_formatted, thumbnail_bg, category_tag, display_order")
+      .select("id, title, subject, teacher_name, duration_human, duration_formatted, thumbnail_bg, category_tag, display_order, is_home_featured, created_at")
       .eq("status", "PUBLISHED")
       .eq("is_visible", true)
-      .eq("is_home_featured", true)
-      .order("display_order", { ascending: true });
+      .order("is_home_featured", { ascending: false })
+      .order("display_order", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(12);
 
     if (error) {
       console.warn("[StudentHomeService] Failed to fetch lectures:", error.message);
