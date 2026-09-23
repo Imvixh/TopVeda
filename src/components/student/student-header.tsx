@@ -35,6 +35,28 @@ export function StudentHeader({
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
 
+  const [unreadCount, setUnreadCount] = React.useState<number>(0);
+
+  // Fetch unread count for badge
+  React.useEffect(() => {
+    let isMounted = true;
+    async function fetchUnread() {
+      try {
+        const res = await fetch("/api/student/notifications?category=ALL");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) setUnreadCount(data.unreadCount || 0);
+        }
+      } catch {
+        // silent
+      }
+    }
+    fetchUnread();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Close dropdown on click outside
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -119,6 +141,9 @@ export function StudentHeader({
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-brand-orange ring-2 ring-white animate-pulse" />
+              )}
             </Link>
           </div>
 
@@ -134,7 +159,7 @@ export function StudentHeader({
             >
               <div className="relative w-9 h-9 rounded-full overflow-hidden border border-brand-orange-border/60 bg-brand-bg-peach flex items-center justify-center shrink-0">
                 <Image
-                  src="/assets/student/student-avatar.jpg"
+                  src={profile?.avatarUrl || "/assets/student/student-avatar.jpg"}
                   alt={displayName}
                   width={36}
                   height={36}

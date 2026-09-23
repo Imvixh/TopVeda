@@ -390,19 +390,29 @@ export interface EducatorContentItem {
 }
 
 // 18. Notifications
+export type NotificationCategory =
+  | "CLASSES"
+  | "TESTS"
+  | "ANNOUNCEMENTS"
+  | "STUDY_MATERIAL"
+  | "LEARNING"
+  | "SYSTEM";
+
+export type NotificationFilterCategory = "ALL" | NotificationCategory;
+
 export interface CmsNotification {
   id: string;
   recipient_id?: string | null;
   recipient_role?: "SUPER_ADMIN" | "ADMIN" | "STUDENT" | null;
   sender_id?: string | null;
   type: string;
+  category?: NotificationCategory;
   title: string;
   message: string;
-  entity_type?: "LIVE_CLASS" | "LECTURE" | "BATCH" | "STUDY_MATERIAL" | "SYSTEM" | null;
+  entity_type?: "LIVE_CLASS" | "LECTURE" | "BATCH" | "STUDY_MATERIAL" | "TEST" | "ANNOUNCEMENT" | "COURSE" | "SYSTEM" | null;
   entity_id?: string | null;
   is_read: boolean;
   metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
-
