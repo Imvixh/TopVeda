@@ -17,6 +17,9 @@ import {
   Filter,
 } from "lucide-react";
 import { CmsNotification, NotificationFilterCategory } from "@/types/cms.types";
+import { StudentSidebar } from "@/components/student/student-sidebar";
+import { StudentHeader } from "@/components/student/student-header";
+import { FloatingChatbot } from "@/components/student/floating-chatbot";
 import { cn } from "@/lib/utils";
 
 const TABS: { id: NotificationFilterCategory; label: string }[] = [
@@ -95,6 +98,9 @@ export default function StudentNotificationsPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isMarkingAll, setIsMarkingAll] = React.useState(false);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+
   const fetchNotifications = React.useCallback(async (category: NotificationFilterCategory) => {
     try {
       setIsLoading(true);
@@ -160,182 +166,211 @@ export default function StudentNotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg-warm/30 py-6 sm:py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
-      {/* Header Container */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center text-brand-orange">
-              <Bell className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-brand-charcoal tracking-tight flex items-center gap-2.5">
-                Notifications
-                {unreadCount > 0 && (
-                  <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold bg-brand-orange text-white rounded-full">
-                    {unreadCount} unread
-                  </span>
-                )}
-              </h1>
-              <p className="text-xs sm:text-sm text-brand-text-muted mt-0.5">
-                Stay updated with your live schedules, lecture releases, test alerts, and announcements.
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#FDFDFC] text-brand-text-primary flex flex-col font-sans antialiased">
+      {/* Student Left Sidebar */}
+      <StudentSidebar
+        isOpen={isMobileMenuOpen}
+        onClose={() => setIsMobileMenuOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+      />
 
-        {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllAsRead}
-            disabled={isMarkingAll}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-brand-charcoal bg-white hover:bg-brand-bg-peach border border-brand-border rounded-xl shadow-2xs transition-all disabled:opacity-50"
-          >
-            <CheckCheck className="h-4 w-4 text-brand-orange" />
-            {isMarkingAll ? "Marking..." : "Mark all as read"}
-          </button>
+      {/* Main Canvas Area */}
+      <div
+        className={cn(
+          "flex-1 flex flex-col min-w-0 transition-all duration-300",
+          isSidebarCollapsed ? "lg:pl-20" : "lg:pl-64"
         )}
-      </div>
+      >
+        {/* Top Header */}
+        <StudentHeader
+          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
+          onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+          isSidebarCollapsed={isSidebarCollapsed}
+        />
 
-      {/* Category Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-6 scrollbar-none">
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 border",
-                isActive
-                  ? "bg-brand-charcoal text-white border-brand-charcoal shadow-xs"
-                  : "bg-white text-brand-text-muted hover:text-brand-text-primary hover:bg-brand-bg-warm border-brand-border/70"
-              )}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+        {/* Notifications Canvas */}
+        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1200px] w-full mx-auto space-y-6">
+          {/* Header Container */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center text-brand-orange">
+                  <Bell className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black text-brand-charcoal tracking-tight flex items-center gap-2.5">
+                    Notifications
+                    {unreadCount > 0 && (
+                      <span className="inline-flex items-center justify-center px-2.5 py-0.5 text-xs font-bold bg-brand-orange text-white rounded-full">
+                        {unreadCount} unread
+                      </span>
+                    )}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-brand-text-muted mt-0.5">
+                    Stay updated with your live schedules, lecture releases, test alerts, and announcements.
+                  </p>
+                </div>
+              </div>
+            </div>
 
-      {/* Notifications List */}
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3, 4].map((n) => (
-            <div
-              key={n}
-              className="h-20 rounded-2xl bg-white border border-brand-border/60 animate-pulse"
-            />
-          ))}
-        </div>
-      ) : notifications.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-brand-border/70 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-2xs my-8">
-          <div className="h-14 w-14 rounded-2xl bg-brand-bg-warm border border-brand-border/80 flex items-center justify-center mx-auto mb-4 text-brand-text-muted">
-            <Bell className="h-7 w-7 text-brand-text-subtle" />
-          </div>
-          <h3 className="text-base font-bold text-brand-charcoal mb-1">
-            No notifications in this category
-          </h3>
-          <p className="text-xs text-brand-text-muted mb-6">
-            When your teachers schedule live classes, release lectures, or publish test results, they will show up here.
-          </p>
-          {activeTab !== "ALL" && (
-            <button
-              onClick={() => setActiveTab("ALL")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-orange text-white text-xs font-bold rounded-xl shadow-xs hover:bg-brand-orange-hover transition-colors"
-            >
-              <Filter className="h-3.5 w-3.5" />
-              View all notifications
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {notifications.map((notif) => {
-            const { icon: Icon, color, bg } = getNotificationIcon(notif.type, notif.entity_type);
-            const target = getTargetUrl(notif);
-
-            return (
-              <div
-                key={notif.id}
-                onClick={() => handleNotificationClick(notif)}
-                className={cn(
-                  "group relative rounded-2xl border p-4 sm:p-5 transition-all cursor-pointer flex items-start gap-3.5 sm:gap-4",
-                  notif.is_read
-                    ? "bg-white/80 border-brand-border/60 hover:bg-white hover:border-brand-border hover:shadow-2xs"
-                    : "bg-brand-orange/5 border-brand-orange/30 shadow-2xs hover:bg-brand-orange/10 hover:border-brand-orange/40"
-                )}
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllAsRead}
+                disabled={isMarkingAll}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-brand-charcoal bg-white hover:bg-brand-bg-peach border border-brand-border rounded-xl shadow-2xs transition-all disabled:opacity-50"
               >
-                {/* Notification Icon */}
-                <div
+                <CheckCheck className="h-4 w-4 text-brand-orange" />
+                {isMarkingAll ? "Marking..." : "Mark all as read"}
+              </button>
+            )}
+          </div>
+
+          {/* Category Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+            {TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "h-10 w-10 sm:h-11 sm:w-11 rounded-xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
-                    bg
+                    "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 border",
+                    isActive
+                      ? "bg-brand-charcoal text-white border-brand-charcoal shadow-xs"
+                      : "bg-white text-brand-text-muted hover:text-brand-text-primary hover:bg-brand-bg-warm border-brand-border/70"
                   )}
                 >
-                  <Icon className={cn("h-5 w-5", color)} />
-                </div>
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
-                {/* Content Body */}
-                <div className="flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4
+          {/* Notifications List */}
+          {isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((n) => (
+                <div
+                  key={n}
+                  className="h-20 rounded-2xl bg-white border border-brand-border/60 animate-pulse"
+                />
+              ))}
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-brand-border/70 p-10 sm:p-14 text-center max-w-lg mx-auto shadow-2xs my-8">
+              <div className="h-14 w-14 rounded-2xl bg-brand-bg-warm border border-brand-border/80 flex items-center justify-center mx-auto mb-4 text-brand-text-muted">
+                <Bell className="h-7 w-7 text-brand-text-subtle" />
+              </div>
+              <h3 className="text-base font-bold text-brand-charcoal mb-1">
+                No notifications in this category
+              </h3>
+              <p className="text-xs text-brand-text-muted mb-6">
+                When your teachers schedule live classes, release lectures, or publish test results, they will show up here.
+              </p>
+              {activeTab !== "ALL" && (
+                <button
+                  onClick={() => setActiveTab("ALL")}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-orange text-white text-xs font-bold rounded-xl shadow-xs hover:bg-brand-orange-hover transition-colors"
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  View all notifications
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {notifications.map((notif) => {
+                const { icon: Icon, color, bg } = getNotificationIcon(notif.type, notif.entity_type);
+                const target = getTargetUrl(notif);
+
+                return (
+                  <div
+                    key={notif.id}
+                    onClick={() => handleNotificationClick(notif)}
+                    className={cn(
+                      "group relative rounded-2xl border p-4 sm:p-5 transition-all cursor-pointer flex items-start gap-3.5 sm:gap-4",
+                      notif.is_read
+                        ? "bg-white/80 border-brand-border/60 hover:bg-white hover:border-brand-border hover:shadow-2xs"
+                        : "bg-brand-orange/5 border-brand-orange/30 shadow-2xs hover:bg-brand-orange/10 hover:border-brand-orange/40"
+                    )}
+                  >
+                    {/* Notification Icon */}
+                    <div
                       className={cn(
-                        "text-xs sm:text-sm font-bold text-brand-charcoal truncate",
-                        !notif.is_read && "font-black text-brand-charcoal"
+                        "h-10 w-10 sm:h-11 sm:w-11 rounded-xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
+                        bg
                       )}
                     >
-                      {notif.title}
-                    </h4>
+                      <Icon className={cn("h-5 w-5", color)} />
+                    </div>
+
+                    {/* Content Body */}
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4
+                          className={cn(
+                            "text-xs sm:text-sm font-bold text-brand-charcoal truncate",
+                            !notif.is_read && "font-black text-brand-charcoal"
+                          )}
+                        >
+                          {notif.title}
+                        </h4>
+                        {!notif.is_read && (
+                          <span className="h-2 w-2 rounded-full bg-brand-orange shrink-0 animate-pulse" />
+                        )}
+                      </div>
+
+                      <p className="text-xs text-brand-text-muted leading-relaxed line-clamp-2">
+                        {notif.message}
+                      </p>
+
+                      <div className="flex items-center gap-3 mt-2 text-[11px] text-brand-text-subtle font-medium">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatRelativeTime(notif.created_at)}
+                        </span>
+
+                        {notif.category && (
+                          <>
+                            <span>•</span>
+                            <span className="uppercase tracking-wider font-semibold text-[10px] text-brand-text-muted">
+                              {notif.category}
+                            </span>
+                          </>
+                        )}
+
+                        {target && (
+                          <>
+                            <span>•</span>
+                            <span className="text-brand-orange font-semibold flex items-center gap-0.5 group-hover:underline">
+                              View details <ChevronRight className="h-3 w-3" />
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Mark as read single button */}
                     {!notif.is_read && (
-                      <span className="h-2 w-2 rounded-full bg-brand-orange shrink-0 animate-pulse" />
+                      <button
+                        onClick={(e) => handleMarkAsRead(notif.id, e)}
+                        className="p-1.5 rounded-lg text-brand-text-muted hover:text-brand-orange hover:bg-brand-orange/10 transition-colors shrink-0"
+                        title="Mark as read"
+                      >
+                        <CheckCheck className="h-4 w-4" />
+                      </button>
                     )}
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </main>
+      </div>
 
-                  <p className="text-xs text-brand-text-muted leading-relaxed line-clamp-2">
-                    {notif.message}
-                  </p>
-
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-brand-text-subtle font-medium">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {formatRelativeTime(notif.created_at)}
-                    </span>
-
-                    {notif.category && (
-                      <>
-                        <span>•</span>
-                        <span className="uppercase tracking-wider font-semibold text-[10px] text-brand-text-muted">
-                          {notif.category}
-                        </span>
-                      </>
-                    )}
-
-                    {target && (
-                      <>
-                        <span>•</span>
-                        <span className="text-brand-orange font-semibold flex items-center gap-0.5 group-hover:underline">
-                          View details <ChevronRight className="h-3 w-3" />
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Mark as read single button */}
-                {!notif.is_read && (
-                  <button
-                    onClick={(e) => handleMarkAsRead(notif.id, e)}
-                    className="p-1.5 rounded-lg text-brand-text-muted hover:text-brand-orange hover:bg-brand-orange/10 transition-colors shrink-0"
-                    title="Mark as read"
-                  >
-                    <CheckCheck className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {/* Floating Chatbot Assistant */}
+      <FloatingChatbot />
     </div>
   );
 }
