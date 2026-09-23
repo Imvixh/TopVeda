@@ -14,6 +14,7 @@ import {
   ContentStatus,
   LiveClassStatus,
 } from "@/types/cms.types";
+import { SuperAdminLiveControlData, LiveControlSessionItem } from "@/types/teacher.types";
 import { ContentStatusBadge } from "@/components/admin/cms/content-status-badge";
 import { ScheduleStatusBadge } from "@/components/admin/cms/schedule-status-badge";
 import {
@@ -40,39 +41,43 @@ import {
   Layers,
   Calendar,
   ExternalLink,
-  Globe2,
-  FileEdit,
+  ShieldAlert,
+  Loader2,
+  Users,
+  Video,
+  Info,
+  Download,
 } from "lucide-react";
 
 export default function LiveClassesCmsPage() {
   const supabase = React.useMemo(() => createClient(), []);
 
+  // View Mode: "CONTROL_ROOM" | "ALL_CLASSES" | "TEACHER_STATS"
+  const [viewMode, setViewMode] = React.useState<"CONTROL_ROOM" | "ALL_CLASSES" | "TEACHER_STATS">("CONTROL_ROOM");
+
+  const [liveControlData, setLiveControlData] = React.useState<SuperAdminLiveControlData | null>(null);
   const [liveClasses, setLiveClasses] = React.useState<CmsLiveClass[]>([]);
   const [batches, setBatches] = React.useState<CmsBatch[]>([]);
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [refreshTrigger, setRefreshTrigger] = React.useState(0);
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedBatchFilter, setSelectedBatchFilter] = React.useState<string>("ALL");
   const [liveStatusFilter, setLiveStatusFilter] = React.useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
   const [feedback, setFeedback] = React.useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Modal State
+  // Terminate Modal State
+  const [terminateTarget, setTerminateTarget] = React.useState<CmsLiveClass | null>(null);
+  const [terminationReason, setTerminationReason] = React.useState("");
+  const [isTerminating, setIsTerminating] = React.useState(false);
+  const [terminateError, setTerminateError] = React.useState("");
+
+  // Inspect Live Class Details Modal
+  const [inspectTarget, setInspectTarget] = React.useState<CmsLiveClass | null>(null);
+
+  // Edit / Create Modal State
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [editingLiveClass, setEditingLiveClass] = React.useState<CmsLiveClass | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
-
-  // Archive Confirm Modal State
-  const [archiveTarget, setArchiveTarget] = React.useState<CmsLiveClass | null>(null);
-  const [isArchiving, setIsArchiving] = React.useState(false);
-
-  // Publishing & Governance Dialog State
-  const [publishTarget, setPublishTarget] = React.useState<PublishDialogTarget | null>(null);
-  const [isPublishProcessing, setIsPublishProcessing] = React.useState(false);
-
-  // Simulation Preview Modal State
-  const [previewItem, setPreviewItem] = React.useState<PreviewContentItem | null>(null);
 
   // Form State
   const [formBatchId, setFormBatchId] = React.useState("");
@@ -90,7 +95,6 @@ export default function LiveClassesCmsPage() {
   const [formDisplayOrder, setFormDisplayOrder] = React.useState(0);
   const [formIsVisible, setFormIsVisible] = React.useState(true);
   const [formStatus, setFormStatus] = React.useState<ContentStatus>("PUBLISHED");
-  const [formErrors, setFormErrors] = React.useState<Record<string, string>>({});
 
   const handleManualRefresh = () => {
     setIsLoading(true);
@@ -102,16 +106,18 @@ export default function LiveClassesCmsPage() {
 
     async function loadData() {
       try {
-        const [bData, lcData] = await Promise.all([
+        const [controlData, bData, lcData] = await Promise.all([
+          CmsService.getSuperAdminLiveControlData(supabase),
           CmsService.getBatches(supabase),
           CmsService.getLiveClasses(supabase),
         ]);
         if (!isMounted) return;
+        setLiveControlData(controlData);
         setBatches(bData);
         setLiveClasses(lcData);
       } catch {
         if (!isMounted) return;
-        setFeedback({ type: "error", message: "Failed to load live classes and cohort dependencies." });
+        setFeedback({ type: "error", message: "Failed to load Live Control Center data." });
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -126,882 +132,598 @@ export default function LiveClassesCmsPage() {
     };
   }, [supabase, refreshTrigger]);
 
-  // Helper to format ISO timestamp for datetime-local input
-  const formatForDateTimeInput = (isoString?: string | null) => {
-    if (!isoString) return "";
+  // Handle Emergency Terminate Live Class
+  const handleConfirmTerminate = async () => {
+    if (!terminateTarget) return;
+
+    if (!terminationReason.trim() || terminationReason.trim().length < 5) {
+      setTerminateError("A valid termination reason (minimum 5 characters) is required for admin audit logs.");
+      return;
+    }
+
     try {
-      const d = new Date(isoString);
-      const tzOffset = d.getTimezoneOffset() * 60000;
-      const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
-      return localISOTime;
-    } catch {
-      return "";
-    }
-  };
+      setIsTerminating(true);
+      setTerminateError("");
+      setFeedback(null);
 
-  // Helper to automatically generate human-readable time display
-  const generateTimeDisplay = (startStr: string, endStr?: string) => {
-    if (!startStr) return "";
-    try {
-      const start = new Date(startStr);
-      const startFormatted = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      const dateFormatted = start.toLocaleDateString([], { month: "short", day: "numeric" });
-
-      if (endStr) {
-        const end = new Date(endStr);
-        const endFormatted = end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        return `${dateFormatted}, ${startFormatted} - ${endFormatted}`;
-      }
-      return `${dateFormatted}, ${startFormatted}`;
-    } catch {
-      return "";
-    }
-  };
-
-  const handleScheduledStartChange = (val: string) => {
-    setFormScheduledStart(val);
-    const autoDisplay = generateTimeDisplay(val, formScheduledEnd);
-    if (autoDisplay) setFormTimeDisplay(autoDisplay);
-  };
-
-  const handleScheduledEndChange = (val: string) => {
-    setFormScheduledEnd(val);
-    const autoDisplay = generateTimeDisplay(formScheduledStart, val);
-    if (autoDisplay) setFormTimeDisplay(autoDisplay);
-  };
-
-  const handleLiveStatusChange = (val: LiveClassStatus) => {
-    setFormLiveStatus(val);
-    if (val === "LIVE") {
-      setFormStatusText("LIVE NOW");
-      setFormCtaText("Join Live");
-    } else if (val === "SCHEDULED") {
-      setFormStatusText("UPCOMING");
-      setFormCtaText("Reminder");
-    } else if (val === "COMPLETED") {
-      setFormStatusText("COMPLETED");
-      setFormCtaText("View Recording");
-    } else if (val === "CANCELLED") {
-      setFormStatusText("CANCELLED");
-      setFormCtaText("Cancelled");
-    }
-  };
-
-  const handleOpenCreateModal = () => {
-    setEditingLiveClass(null);
-    setFormBatchId(batches[0]?.id || "");
-    setFormSubject("Mathematics");
-    setFormTopic("");
-    setFormEducatorName("Dr. Vandana Sharma");
-    setFormEducatorAvatarUrl("/avatars/doctor_female.jpg");
-
-    const now = new Date();
-    now.setHours(now.getHours() + 2);
-    now.setMinutes(0);
-    const defaultStart = formatForDateTimeInput(now.toISOString());
-
-    const later = new Date(now);
-    later.setHours(later.getHours() + 1);
-    later.setMinutes(30);
-    const defaultEnd = formatForDateTimeInput(later.toISOString());
-
-    setFormScheduledStart(defaultStart);
-    setFormScheduledEnd(defaultEnd);
-    setFormTimeDisplay(generateTimeDisplay(defaultStart, defaultEnd));
-    setFormLiveStatus("SCHEDULED");
-    setFormStatusText("UPCOMING");
-    setFormCtaText("Reminder");
-    setFormStreamRoomUrl("https://meet.topveda.com/live/class-room");
-    setFormDisplayOrder(liveClasses.length + 1);
-    setFormIsVisible(true);
-    setFormStatus("PUBLISHED");
-    setFormErrors({});
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEditModal = (lc: CmsLiveClass) => {
-    setEditingLiveClass(lc);
-    setFormBatchId(lc.batch_id || "");
-    setFormSubject(lc.subject);
-    setFormTopic(lc.topic);
-    setFormEducatorName(lc.educator_name);
-    setFormEducatorAvatarUrl(lc.educator_avatar_url || "/avatars/doctor_female.jpg");
-    setFormScheduledStart(formatForDateTimeInput(lc.scheduled_start));
-    setFormScheduledEnd(formatForDateTimeInput(lc.scheduled_end));
-    setFormTimeDisplay(lc.time_display);
-    setFormLiveStatus(lc.live_status);
-    setFormStatusText(lc.status_text);
-    setFormCtaText(lc.cta_text);
-    setFormStreamRoomUrl(lc.stream_room_url || "");
-    setFormDisplayOrder(lc.display_order);
-    setFormIsVisible(lc.is_visible);
-    setFormStatus(lc.status);
-    setFormErrors({});
-    setIsModalOpen(true);
-  };
-
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-    if (!formTopic.trim()) errors.topic = "Class topic title is required";
-    if (!formSubject.trim()) errors.subject = "Subject is required";
-    if (!formEducatorName.trim()) errors.educatorName = "Educator name is required";
-    if (!formScheduledStart) errors.scheduledStart = "Scheduled start time is required";
-    if (!formTimeDisplay.trim()) errors.timeDisplay = "Display time string is required";
-
-    if (formScheduledStart && formScheduledEnd) {
-      const startDate = new Date(formScheduledStart);
-      const endDate = new Date(formScheduledEnd);
-      if (endDate < startDate) {
-        errors.scheduledEnd = "Scheduled end time must be after the start time";
-      }
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSaveLiveClass = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-
-    setIsSaving(true);
-    setFeedback(null);
-
-    const payload: Partial<CmsLiveClass> = {
-      ...(editingLiveClass ? { id: editingLiveClass.id } : {}),
-      batch_id: formBatchId || null,
-      subject: formSubject.trim(),
-      topic: formTopic.trim(),
-      educator_name: formEducatorName.trim(),
-      educator_avatar_url: formEducatorAvatarUrl.trim() || "/avatars/doctor_female.jpg",
-      scheduled_start: new Date(formScheduledStart).toISOString(),
-      scheduled_end: formScheduledEnd ? new Date(formScheduledEnd).toISOString() : null,
-      time_display: formTimeDisplay.trim(),
-      is_live: formLiveStatus === "LIVE",
-      status_text: formStatusText.trim() || "UPCOMING",
-      live_status: formLiveStatus,
-      cta_text: formCtaText.trim() || "Reminder",
-      stream_room_url: formStreamRoomUrl.trim() || null,
-      display_order: Number(formDisplayOrder) || 0,
-      is_visible: formIsVisible,
-      status: formStatus,
-    };
-
-    const { data, error } = await CmsService.upsertLiveClass(supabase, payload);
-
-    setIsSaving(false);
-    if (error || !data) {
-      setFeedback({ type: "error", message: error?.message || "Failed to save live class." });
-    } else {
-      setFeedback({
-        type: "success",
-        message: editingLiveClass ? "Live class session updated successfully." : "Live class session scheduled successfully.",
+      const res = await fetch("/api/admin/live/terminate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          liveClassId: terminateTarget.id,
+          terminationReason: terminationReason.trim(),
+        }),
       });
-      setIsModalOpen(false);
-      handleManualRefresh();
-    }
-  };
 
-  const handleArchiveConfirm = async () => {
-    if (!archiveTarget) return;
-    setIsArchiving(true);
-    const { error } = await CmsService.archiveContent(supabase, "cms_live_classes", archiveTarget.id);
-    setIsArchiving(false);
-    setArchiveTarget(null);
+      const data = await res.json();
 
-    if (error) {
-      setFeedback({ type: "error", message: error.message || "Failed to archive live class." });
-    } else {
-      setFeedback({ type: "success", message: `Live class "${archiveTarget.topic}" archived successfully.` });
-      handleManualRefresh();
-    }
-  };
-
-  const handleToggleVisibility = async (lc: CmsLiveClass) => {
-    const nextVal = !lc.is_visible;
-    const { error } = await CmsService.toggleVisibility(supabase, "cms_live_classes", lc.id, nextVal);
-    if (error) {
-      setFeedback({ type: "error", message: error.message || "Failed to update visibility." });
-    } else {
-      setFeedback({
-        type: "success",
-        message: `Live class "${lc.topic}" visibility is now ${nextVal ? "Visible" : "Hidden"}.`,
-      });
-      handleManualRefresh();
-    }
-  };
-
-  const handlePublishConfirm = async (options: {
-    displayOrder?: number;
-    startsAt?: string | null;
-    endsAt?: string | null;
-  }) => {
-    if (!publishTarget) return;
-    setIsPublishProcessing(true);
-
-    if (publishTarget.action === "PUBLISH") {
-      try {
-        const res = await fetch("/api/admin/cms/publish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            entityType: "LIVE_CLASS",
-            entityId: publishTarget.entityId,
-            displayOrder: options.displayOrder,
-            startsAt: options.startsAt,
-            endsAt: options.endsAt,
-          }),
-        });
-        const result = await res.json();
-        if (!res.ok || result.error) {
-          setFeedback({ type: "error", message: result.error || "Failed to publish live class." });
-        } else {
-          setFeedback({ type: "success", message: `Live class "${publishTarget.title}" published successfully.` });
-          setPublishTarget(null);
-          handleManualRefresh();
-        }
-      } catch (err: unknown) {
-        const error = err instanceof Error ? err : new Error(String(err));
-        setFeedback({ type: "error", message: error.message || "Failed to publish live class." });
-      } finally {
-        setIsPublishProcessing(false);
-      }
-    } else {
-      // Unpublish action
-      const { error } = await CmsService.unpublishContent(supabase, "LIVE_CLASS", publishTarget.entityId);
-      setIsPublishProcessing(false);
-      if (error) {
-        setFeedback({ type: "error", message: error.message || "Failed to unpublish live class." });
+      if (!res.ok || data.error) {
+        setTerminateError(data.error || "Failed to terminate live class.");
       } else {
-        setFeedback({ type: "success", message: `Live class "${publishTarget.title}" unpublished and returned to draft.` });
-        setPublishTarget(null);
+        setFeedback({
+          type: "success",
+          message: `Live class "${terminateTarget.topic}" has been terminated and access severed. Teacher notified.`,
+        });
+        setTerminateTarget(null);
+        setTerminationReason("");
         handleManualRefresh();
       }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setTerminateError(error.message);
+    } finally {
+      setIsTerminating(false);
     }
   };
 
-  // Batch Map for quick title lookup
-  const batchMap = React.useMemo(() => {
-    const map = new Map<string, CmsBatch>();
-    for (const b of batches) {
-      map.set(b.id, b);
-    }
-    return map;
-  }, [batches]);
-
-  // Filtered Live Classes
-  const filteredLiveClasses = React.useMemo(() => {
+  const filteredAllClasses = React.useMemo(() => {
     return liveClasses.filter((lc) => {
       const matchesSearch =
-        searchQuery === "" ||
         lc.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lc.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lc.educator_name.toLowerCase().includes(searchQuery.toLowerCase());
+        lc.educator_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        lc.subject.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesBatch = selectedBatchFilter === "ALL" || lc.batch_id === selectedBatchFilter;
-      const matchesLiveStatus = liveStatusFilter === "ALL" || lc.live_status === liveStatusFilter;
-      const matchesStatus = statusFilter === "ALL" || lc.status === statusFilter;
-
-      return matchesSearch && matchesBatch && matchesLiveStatus && matchesStatus;
+      if (!matchesSearch) return false;
+      if (liveStatusFilter === "ALL") return true;
+      return lc.live_status === liveStatusFilter;
     });
-  }, [liveClasses, searchQuery, selectedBatchFilter, liveStatusFilter, statusFilter]);
+  }, [liveClasses, searchQuery, liveStatusFilter]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* 1. Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-brand-border">
-        <div className="space-y-1">
+    <div className="space-y-6">
+      {/* Top Header & View Switcher */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
           <div className="flex items-center gap-2">
-            <Badge variant="peach" size="sm" className="font-bold text-[10px] uppercase tracking-wider">
-              REAL-TIME BROADCASTS
-            </Badge>
-            <Badge variant="outline" size="sm" className="text-[10px] font-mono text-brand-text-muted">
-              cms_live_classes
+            <h1 className="text-xl sm:text-2xl font-black text-brand-charcoal tracking-tight flex items-center gap-2">
+              <Radio className="h-6 w-6 text-brand-orange animate-pulse" />
+              Live Control Center
+            </h1>
+            <Badge variant="peach" size="sm" className="text-[10px] font-bold uppercase">
+              Super Admin Control
             </Badge>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text-primary tracking-tight flex items-center gap-2.5">
-            <Radio className="h-7 w-7 text-brand-orange" />
-            <span>Live Interactive Classes</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-brand-text-muted">
-            Schedule interactive live classes, assign educator hosts, configure stream rooms, and govern broadcast status.
+          <p className="text-xs text-brand-text-muted mt-0.5">
+            Monitor real-time broadcasts, inspect stream health, observe active classes, and execute emergency terminations.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <Button variant="outline" size="sm" onClick={handleManualRefresh} disabled={isLoading} className="text-xs">
-            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isLoading ? "animate-spin text-brand-orange" : ""}`} />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleManualRefresh}
+            className="text-xs text-brand-text-muted hover:text-brand-charcoal"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
             Refresh
           </Button>
-          <Button variant="primary" size="sm" onClick={handleOpenCreateModal} className="text-xs shadow-2xs">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Schedule Live Class
-          </Button>
+
+          {/* View Mode Switcher */}
+          <div className="flex items-center bg-brand-bg-warm/80 p-1 rounded-2xl border border-brand-border/80 text-xs">
+            <button
+              onClick={() => setViewMode("CONTROL_ROOM")}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                viewMode === "CONTROL_ROOM"
+                  ? "bg-brand-charcoal text-white shadow-xs"
+                  : "text-brand-text-muted hover:text-brand-charcoal"
+              }`}
+            >
+              Live Control
+            </button>
+            <button
+              onClick={() => setViewMode("ALL_CLASSES")}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                viewMode === "ALL_CLASSES"
+                  ? "bg-brand-charcoal text-white shadow-xs"
+                  : "text-brand-text-muted hover:text-brand-charcoal"
+              }`}
+            >
+              All Classes ({liveClasses.length})
+            </button>
+            <button
+              onClick={() => setViewMode("TEACHER_STATS")}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                viewMode === "TEACHER_STATS"
+                  ? "bg-brand-charcoal text-white shadow-xs"
+                  : "text-brand-text-muted hover:text-brand-charcoal"
+              }`}
+            >
+              Teacher Stats
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Feedback Toast Banner */}
+      {/* Real-time Metric Indicators Strip */}
+      {liveControlData && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-1">
+            <span className="text-[11px] font-bold text-red-600 uppercase tracking-wide flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-ping" />
+              Live Now
+            </span>
+            <p className="text-2xl font-black text-red-600">{liveControlData.liveNow.length}</p>
+            <span className="text-[10px] text-brand-text-subtle font-medium">Active Broadcasts</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-1">
+            <span className="text-[11px] font-bold text-brand-orange uppercase tracking-wide">Upcoming</span>
+            <p className="text-2xl font-black text-brand-charcoal">{liveControlData.upcoming.length}</p>
+            <span className="text-[10px] text-brand-text-subtle font-medium">Scheduled Sessions</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-1">
+            <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide">Completed</span>
+            <p className="text-2xl font-black text-emerald-600">{liveControlData.completed.length}</p>
+            <span className="text-[10px] text-brand-text-subtle font-medium">Concluded Normally</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-1">
+            <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wide">Terminated</span>
+            <p className="text-2xl font-black text-rose-600">{liveControlData.terminated.length}</p>
+            <span className="text-[10px] text-brand-text-subtle font-medium">Emergency Severed</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-1">
+            <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wide">Processing</span>
+            <p className="text-2xl font-black text-amber-600">{liveControlData.recordingsProcessing.length}</p>
+            <span className="text-[10px] text-brand-text-subtle font-medium">Recording Encoding</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-1">
+            <span className="text-[11px] font-bold text-sky-600 uppercase tracking-wide">Review Queue</span>
+            <p className="text-2xl font-black text-sky-600">{liveControlData.recordingsAwaitingReview.length}</p>
+            <span className="text-[10px] text-brand-text-subtle font-medium">Awaiting Publishing</span>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Alert */}
       {feedback && (
         <div
-          className={`p-4 rounded-xl text-xs flex items-center justify-between gap-3 shadow-2xs border ${
+          className={`p-4 rounded-2xl border text-xs flex items-center justify-between gap-3 shadow-2xs ${
             feedback.type === "success"
-              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : "bg-red-50 text-red-800 border-red-200"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+              : "bg-rose-50 border-rose-200 text-rose-900"
           }`}
         >
-          <div className="flex items-center gap-2 font-medium">
+          <div className="flex items-center gap-2">
             {feedback.type === "success" ? (
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
             ) : (
-              <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
             )}
-            <span>{feedback.message}</span>
+            <span className="font-medium">{feedback.message}</span>
           </div>
-          <button
-            onClick={() => setFeedback(null)}
-            className="text-xs font-bold hover:underline opacity-80 cursor-pointer"
-          >
-            Dismiss
+          <button onClick={() => setFeedback(null)} className="text-xs font-bold opacity-60 hover:opacity-100">
+            ✕
           </button>
         </div>
       )}
 
-      {/* 2. Search & Filter Toolbar */}
-      <Card className="p-4 shadow-2xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="lg:col-span-2">
-            <Input
-              placeholder="Search by topic, subject, or educator..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              icon={<Search className="h-4 w-4" />}
-              className="h-9 text-xs"
-            />
+      {/* VIEW MODE 1: CONTROL ROOM (Live Now & Critical Oversight) */}
+      {viewMode === "CONTROL_ROOM" && liveControlData && (
+        <div className="space-y-6">
+          {/* Active Broadcasts Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-brand-charcoal flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping" />
+                Live Broadcasts in Progress ({liveControlData.liveNow.length})
+              </h2>
+            </div>
+
+            {liveControlData.liveNow.length === 0 ? (
+              <Card className="p-8 text-center bg-white border border-brand-border/80 rounded-2xl space-y-2">
+                <Radio className="h-8 w-8 text-brand-text-muted mx-auto" />
+                <p className="text-xs font-bold text-brand-charcoal">No live classes are currently in session.</p>
+                <p className="text-[11px] text-brand-text-muted">
+                  When teachers start a live class, it will automatically appear here with real-time stream status.
+                </p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {liveControlData.liveNow.map((item) => (
+                  <Card
+                    key={item.id}
+                    className="p-5 rounded-2xl bg-white border-2 border-red-200 shadow-md space-y-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black uppercase shadow-xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                          BROADCASTING LIVE
+                        </span>
+                        <h3 className="text-base font-black text-brand-charcoal">{item.topic}</h3>
+                        <p className="text-xs text-brand-orange font-bold">{item.subject}</p>
+                      </div>
+
+                      <div className="text-right space-y-0.5">
+                        <p className="text-xs font-bold text-brand-charcoal">{item.educator_name}</p>
+                        <p className="text-[10px] text-brand-text-muted">{item.teacherEmail || "Educator"}</p>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 text-xs flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-brand-charcoal font-semibold">
+                        <Clock className="h-3.5 w-3.5 text-brand-orange" />
+                        <span>Started at: {item.started_at ? new Date(item.started_at).toLocaleTimeString() : item.time_display}</span>
+                      </div>
+                      <Badge variant="outline" size="sm" className="bg-white text-emerald-700 border-emerald-200 text-[10px] font-bold">
+                        Stream Active
+                      </Badge>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-brand-border/60">
+                      <Button
+                        size="sm"
+                        onClick={() => window.open(item.stream_room_url || `/student/live/${item.id}`, "_blank")}
+                        className="flex-1 bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-xs shadow-xs"
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-1.5" />
+                        Join Live (Observer)
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setInspectTarget(item)}
+                        className="bg-white text-brand-charcoal text-xs font-bold"
+                      >
+                        Details
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setTerminateTarget(item);
+                          setTerminationReason("");
+                          setTerminateError("");
+                        }}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5 mr-1" />
+                        Terminate Live
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div>
-            <select
-              aria-label="Filter by batch"
-              value={selectedBatchFilter}
-              onChange={(e) => setSelectedBatchFilter(e.target.value)}
-              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            >
-              <option value="ALL">All Cohorts / Batches</option>
-              {batches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.title} ({b.board_label})
-                </option>
+          {/* Upcoming Live Sessions Section */}
+          <div className="space-y-3">
+            <h2 className="text-base font-bold text-brand-charcoal flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-brand-orange" />
+              Scheduled Upcoming Live Classes ({liveControlData.upcoming.length})
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {liveControlData.upcoming.map((item) => (
+                <Card key={item.id} className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-brand-orange">{item.subject}</span>
+                    <Badge variant="peach" size="sm" className="text-[10px] font-bold uppercase">
+                      SCHEDULED
+                    </Badge>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-brand-charcoal line-clamp-1">{item.topic}</h4>
+                    <p className="text-[11px] text-brand-text-muted mt-0.5">Teacher: {item.educator_name}</p>
+                  </div>
+                  <div className="p-2 rounded-xl bg-brand-bg-warm/60 border border-brand-border/40 text-[11px] flex items-center justify-between text-brand-charcoal">
+                    <span>{new Date(item.scheduled_start).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                    <span className="font-bold">{new Date(item.scheduled_start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setInspectTarget(item)}
+                      className="text-xs font-bold text-brand-orange hover:text-brand-orange-hover"
+                    >
+                      Inspect Details
+                    </Button>
+                  </div>
+                </Card>
               ))}
-            </select>
-          </div>
-
-          <div>
-            <select
-              aria-label="Filter by live status"
-              value={liveStatusFilter}
-              onChange={(e) => setLiveStatusFilter(e.target.value)}
-              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            >
-              <option value="ALL">All Broadcast States</option>
-              <option value="SCHEDULED">Scheduled</option>
-              <option value="LIVE">Live Now</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </div>
-
-          <div>
-            <select
-              aria-label="Filter by publication status"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            >
-              <option value="ALL">All Content Statuses</option>
-              <option value="PUBLISHED">Published</option>
-              <option value="DRAFT">Draft</option>
-              <option value="PENDING_REVIEW">Pending Review</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
+            </div>
           </div>
         </div>
-      </Card>
+      )}
 
-      {/* 3. Data Table */}
-      <Card className="p-0 overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-brand-border bg-brand-bg-warm/80 font-bold text-brand-text-muted uppercase text-[10px] tracking-wider">
-                <th className="py-3 px-4">Live Session / Topic</th>
-                <th className="py-3 px-4">Educator & Cohort</th>
-                <th className="py-3 px-4">Timing & Schedule</th>
-                <th className="py-3 px-4 text-center">Broadcast State</th>
-                <th className="py-3 px-4 text-center">Order</th>
-                <th className="py-3 px-4 text-center">Visibility</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-brand-border">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-brand-text-muted">
-                    <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-brand-orange" />
-                    Loading live class schedules...
-                  </td>
-                </tr>
-              ) : filteredLiveClasses.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-brand-text-muted">
-                    <div className="max-w-xs mx-auto space-y-2">
-                      <div className="h-10 w-10 mx-auto rounded-full bg-brand-bg-peach flex items-center justify-center text-brand-orange">
-                        <Radio className="h-5 w-5" />
-                      </div>
-                      <p className="font-bold text-brand-text-primary">No live classes found</p>
-                      <p className="text-xs text-brand-text-muted">
-                        {searchQuery ? "Try refining your search filter." : "Click '+ Schedule Live Class' to create a session."}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredLiveClasses.map((lc) => {
-                  const linkedBatch = lc.batch_id ? batchMap.get(lc.batch_id) : null;
+      {/* VIEW MODE 2: ALL CLASSES TABLE CRUD */}
+      {viewMode === "ALL_CLASSES" && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-brand-border/80 shadow-2xs">
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+              {(["ALL", "SCHEDULED", "LIVE", "COMPLETED", "TERMINATED"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setLiveStatusFilter(s)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    liveStatusFilter === s
+                      ? "bg-brand-charcoal text-white shadow-xs"
+                      : "bg-brand-bg-warm text-brand-text-muted hover:text-brand-charcoal"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
 
-                  return (
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-brand-text-muted" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search classes or teachers..."
+                className="pl-8 h-8 text-xs rounded-xl bg-brand-bg-warm/50 border-brand-border/80"
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          <Card className="rounded-2xl border border-brand-border/80 overflow-hidden bg-white shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-brand-border/80 bg-brand-bg-warm/80 text-brand-text-muted font-bold">
+                    <th className="py-3 px-4">Topic / Title</th>
+                    <th className="py-3 px-4">Subject</th>
+                    <th className="py-3 px-4">Teacher</th>
+                    <th className="py-3 px-4">Scheduled Start</th>
+                    <th className="py-3 px-4">Live Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border/40">
+                  {filteredAllClasses.map((lc) => (
                     <tr key={lc.id} className="hover:bg-brand-bg-warm/40 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-brand-text-primary max-w-sm">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-brand-orange">{lc.subject}</span>
-                            <span>•</span>
-                            <span className="font-extrabold text-brand-text-primary line-clamp-1">{lc.topic}</span>
-                          </div>
-                          {lc.stream_room_url && (
-                            <a
-                              href={lc.stream_room_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[11px] text-sky-600 hover:underline flex items-center gap-1 truncate"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              <span className="truncate">{lc.stream_room_url}</span>
-                            </a>
-                          )}
-                        </div>
+                      <td className="py-3 px-4 font-bold text-brand-charcoal">{lc.topic}</td>
+                      <td className="py-3 px-4 text-brand-orange font-semibold">{lc.subject}</td>
+                      <td className="py-3 px-4 text-brand-charcoal">{lc.educator_name}</td>
+                      <td className="py-3 px-4 text-brand-text-muted">
+                        {new Date(lc.scheduled_start).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 font-semibold text-brand-text-primary">
-                            <User className="h-3.5 w-3.5 text-brand-orange" />
-                            <span>{lc.educator_name}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-[11px] text-brand-text-muted">
-                            <Layers className="h-3 w-3" />
-                            <span>{linkedBatch ? linkedBatch.title : "Open Broadcast"}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 font-medium text-brand-text-primary">
-                            <Calendar className="h-3.5 w-3.5 text-brand-orange shrink-0" />
-                            <span>{lc.time_display}</span>
-                          </div>
-                          <ScheduleStatusBadge
-                            startsAt={lc.starts_at || lc.scheduled_start}
-                            endsAt={lc.ends_at || lc.scheduled_end}
-                          />
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        {lc.live_status === "LIVE" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200 animate-pulse">
-                            <Radio className="h-3 w-3" /> LIVE NOW
-                          </span>
-                        ) : lc.live_status === "SCHEDULED" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
-                            <Clock className="h-3 w-3" /> Scheduled
-                          </span>
-                        ) : lc.live_status === "COMPLETED" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
-                            <CheckCircle2 className="h-3 w-3" /> Completed
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
-                            Cancelled
-                          </span>
+                      <td className="py-3 px-4">
+                        {lc.live_status === "LIVE" && (
+                          <Badge variant="primary" size="sm" className="bg-red-500 text-white font-bold animate-pulse">
+                            LIVE NOW
+                          </Badge>
+                        )}
+                        {lc.live_status === "SCHEDULED" && (
+                          <Badge variant="peach" size="sm" className="font-bold">
+                            SCHEDULED
+                          </Badge>
+                        )}
+                        {lc.live_status === "COMPLETED" && (
+                          <Badge variant="outline" size="sm" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold">
+                            COMPLETED
+                          </Badge>
+                        )}
+                        {lc.live_status === "TERMINATED" && (
+                          <Badge variant="outline" size="sm" className="bg-rose-50 text-rose-700 border-rose-200 font-bold">
+                            TERMINATED
+                          </Badge>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-center font-semibold text-brand-text-muted">{lc.display_order}</td>
-                      <td className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleVisibility(lc)}
-                          title="Click to toggle visibility"
-                          className="cursor-pointer focus:outline-none"
+                      <td className="py-3 px-4 text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setInspectTarget(lc)}
+                          className="text-xs font-bold text-brand-orange hover:text-brand-orange-hover"
                         >
-                          {lc.is_visible ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 transition-colors">
-                              <Eye className="h-3 w-3" /> Visible
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-full border border-gray-200 transition-colors">
-                              <EyeOff className="h-3 w-3" /> Hidden
-                            </span>
-                          )}
-                        </button>
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <ContentStatusBadge status={lc.status} />
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                          Inspect
+                        </Button>
+                        {lc.live_status === "LIVE" && (
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setPreviewItem({ type: "LIVE_CLASS", data: lc })}
-                            className="h-7 w-7 text-brand-text-muted hover:text-brand-orange"
-                            title="Preview Student Experience"
+                            size="sm"
+                            onClick={() => {
+                              setTerminateTarget(lc);
+                              setTerminationReason("");
+                              setTerminateError("");
+                            }}
+                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            Terminate
                           </Button>
-
-                          {lc.status !== "PUBLISHED" ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setPublishTarget({
-                                  entityType: "LIVE_CLASS",
-                                  entityId: lc.id,
-                                  title: lc.topic,
-                                  currentStatus: lc.status,
-                                  isVisible: lc.is_visible,
-                                  startsAt: lc.starts_at || lc.scheduled_start,
-                                  endsAt: lc.ends_at || lc.scheduled_end,
-                                  displayOrder: lc.display_order,
-                                  featuredNote: lc.live_status === "LIVE" ? "Live Broadcast" : undefined,
-                                  action: "PUBLISH",
-                                })
-                              }
-                              className="h-7 w-7 text-brand-text-muted hover:text-emerald-600"
-                              title="Publish Live Class"
-                            >
-                              <Globe2 className="h-3.5 w-3.5" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setPublishTarget({
-                                  entityType: "LIVE_CLASS",
-                                  entityId: lc.id,
-                                  title: lc.topic,
-                                  currentStatus: lc.status,
-                                  isVisible: lc.is_visible,
-                                  startsAt: lc.starts_at || lc.scheduled_start,
-                                  endsAt: lc.ends_at || lc.scheduled_end,
-                                  displayOrder: lc.display_order,
-                                  featuredNote: lc.live_status === "LIVE" ? "Live Broadcast" : undefined,
-                                  action: "UNPUBLISH",
-                                })
-                              }
-                              className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
-                              title="Unpublish Live Class"
-                            >
-                              <FileEdit className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenEditModal(lc)}
-                            className="h-7 w-7 text-brand-text-muted hover:text-brand-orange"
-                            title="Edit Live Class"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
-                          {lc.status !== "ARCHIVED" && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setArchiveTarget(lc)}
-                              className="h-7 w-7 text-brand-text-muted hover:text-red-600"
-                              title="Archive Live Class"
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
+                        )}
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
-      </Card>
+      )}
 
-      {/* 4. Create / Edit Live Class Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => !isSaving && setIsModalOpen(false)}
-        title={editingLiveClass ? "Edit Live Class Session" : "Schedule Live Class Session"}
-        description="Configure class topic, scheduled start/end timing, educator assignment, and broadcast status."
-        maxWidth="lg"
-      >
-        <form onSubmit={handleSaveLiveClass} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1 sm:col-span-2">
-              <Input
-                label="Class Topic / Title *"
-                placeholder="e.g. Masterclass: Vectors & 3D Geometry in One-Shot"
-                value={formTopic}
-                onChange={(e) => setFormTopic(e.target.value)}
-                error={formErrors.topic}
-                disabled={isSaving}
-              />
-            </div>
-
-            <Input
-              label="Academic Subject *"
-              placeholder="e.g. Mathematics"
-              value={formSubject}
-              onChange={(e) => setFormSubject(e.target.value)}
-              error={formErrors.subject}
-              disabled={isSaving}
-            />
+      {/* VIEW MODE 3: TEACHER STATISTICS OVERVIEW */}
+      {viewMode === "TEACHER_STATS" && liveControlData && (
+        <Card className="rounded-2xl border border-brand-border/80 overflow-hidden bg-white shadow-2xs">
+          <div className="p-4 border-b border-brand-border/80 bg-brand-bg-warm/60">
+            <h3 className="text-sm font-black text-brand-charcoal">Teacher Live & Recorded Lecture Breakdown</h3>
+            <p className="text-xs text-brand-text-muted">Real-time aggregate data queried directly from database.</p>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/60 border border-brand-border">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-brand-text-primary">Target Cohort / Batch (Optional)</label>
-              <select
-                aria-label="Select batch"
-                value={formBatchId}
-                onChange={(e) => setFormBatchId(e.target.value)}
-                disabled={isSaving}
-                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              >
-                <option value="">All Batches (Public Student Broadcast)</option>
-                {batches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.title} ({b.board_label})
-                  </option>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-brand-border/80 bg-brand-bg-warm/40 text-brand-text-muted font-bold">
+                  <th className="py-3 px-4">Educator Name</th>
+                  <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4 text-center">Live Conducted</th>
+                  <th className="py-3 px-4 text-center">Upcoming</th>
+                  <th className="py-3 px-4 text-center">Terminated</th>
+                  <th className="py-3 px-4 text-center">Lectures Submitted</th>
+                  <th className="py-3 px-4 text-center">Pending Review</th>
+                  <th className="py-3 px-4 text-center">Approved</th>
+                  <th className="py-3 px-4 text-center">Revisions Req.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border/40">
+                {liveControlData.teacherStats.map((ts) => (
+                  <tr key={ts.teacherId} className="hover:bg-brand-bg-warm/40 transition-colors">
+                    <td className="py-3 px-4 font-bold text-brand-charcoal">{ts.teacherName}</td>
+                    <td className="py-3 px-4 text-brand-text-muted">{ts.teacherEmail}</td>
+                    <td className="py-3 px-4 text-center font-bold text-emerald-600">{ts.liveClassesConducted}</td>
+                    <td className="py-3 px-4 text-center font-bold text-brand-orange">{ts.upcomingLiveClasses}</td>
+                    <td className="py-3 px-4 text-center font-bold text-rose-600">{ts.terminatedLiveClasses}</td>
+                    <td className="py-3 px-4 text-center font-bold text-brand-charcoal">{ts.recordedLecturesSubmitted}</td>
+                    <td className="py-3 px-4 text-center font-bold text-amber-600">{ts.pendingReviewLectures}</td>
+                    <td className="py-3 px-4 text-center font-bold text-emerald-600">{ts.approvedLectures}</td>
+                    <td className="py-3 px-4 text-center font-bold text-rose-600">{ts.revisionRequestedLectures}</td>
+                  </tr>
                 ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-brand-text-primary">Broadcast Status Lifecycle *</label>
-              <select
-                aria-label="Broadcast lifecycle status"
-                value={formLiveStatus}
-                onChange={(e) => handleLiveStatusChange(e.target.value as LiveClassStatus)}
-                disabled={isSaving}
-                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              >
-                <option value="SCHEDULED">SCHEDULED (Upcoming)</option>
-                <option value="LIVE">LIVE (Broadcasting Now)</option>
-                <option value="COMPLETED">COMPLETED (Recorded/Concluded)</option>
-                <option value="CANCELLED">CANCELLED</option>
-              </select>
-            </div>
+              </tbody>
+            </table>
           </div>
+        </Card>
+      )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Educator Name *"
-              placeholder="e.g. Dr. Vandana Sharma"
-              value={formEducatorName}
-              onChange={(e) => setFormEducatorName(e.target.value)}
-              error={formErrors.educatorName}
-              disabled={isSaving}
-            />
-
-            <Input
-              label="Educator Avatar URL"
-              placeholder="/avatars/doctor_female.jpg"
-              value={formEducatorAvatarUrl}
-              onChange={(e) => setFormEducatorAvatarUrl(e.target.value)}
-              disabled={isSaving}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Scheduled Start *</label>
-              <input
-                type="datetime-local"
-                value={formScheduledStart}
-                onChange={(e) => handleScheduledStartChange(e.target.value)}
-                disabled={isSaving}
-                className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              />
-              {formErrors.scheduledStart && <p className="text-[11px] text-red-500 font-medium">{formErrors.scheduledStart}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Scheduled End (Optional)</label>
-              <input
-                type="datetime-local"
-                value={formScheduledEnd}
-                onChange={(e) => handleScheduledEndChange(e.target.value)}
-                disabled={isSaving}
-                className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              />
-              {formErrors.scheduledEnd && <p className="text-[11px] text-red-500 font-medium">{formErrors.scheduledEnd}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Human-Friendly Time Display *"
-              placeholder="e.g. Today, 6:00 PM - 7:30 PM"
-              value={formTimeDisplay}
-              onChange={(e) => setFormTimeDisplay(e.target.value)}
-              error={formErrors.timeDisplay}
-              disabled={isSaving}
-            />
-
-            <Input
-              label="CTA Button Label"
-              placeholder="e.g. Join Live or Reminder"
-              value={formCtaText}
-              onChange={(e) => setFormCtaText(e.target.value)}
-              disabled={isSaving}
-            />
-          </div>
-
-          <Input
-            label="Stream Broadcast Room URL / Join Link"
-            placeholder="e.g. https://meet.topveda.com/live/room-123"
-            value={formStreamRoomUrl}
-            onChange={(e) => setFormStreamRoomUrl(e.target.value)}
-            disabled={isSaving}
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              label="Display Order"
-              type="number"
-              value={formDisplayOrder}
-              onChange={(e) => setFormDisplayOrder(Number(e.target.value))}
-              disabled={isSaving}
-            />
-
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Content Status</label>
-              <select
-                aria-label="Content status"
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as ContentStatus)}
-                disabled={isSaving}
-                className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              >
-                <option value="PUBLISHED">Published</option>
-                <option value="DRAFT">Draft</option>
-                <option value="PENDING_REVIEW">Pending Review</option>
-                <option value="ARCHIVED">Archived</option>
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Visibility</label>
-              <div className="flex items-center gap-2 h-10">
-                <input
-                  type="checkbox"
-                  id="formIsVisibleLive"
-                  checked={formIsVisible}
-                  onChange={(e) => setFormIsVisible(e.target.checked)}
-                  disabled={isSaving}
-                  className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
-                />
-                <label htmlFor="formIsVisibleLive" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
-                  Student Portal Visible
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Submit Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsModalOpen(false)}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={isSaving} className="shadow-2xs">
-              {isSaving ? "Saving..." : editingLiveClass ? "Update Live Class" : "Schedule Live Class"}
-            </Button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* 5. Archive Confirmation Modal */}
+      {/* EMERGENCY TERMINATE LIVE CLASS MODAL */}
       <Modal
-        isOpen={!!archiveTarget}
-        onClose={() => !isArchiving && setArchiveTarget(null)}
-        title="Archive Live Class?"
-        description="Are you sure you want to archive this live class session? It will be marked cancelled and hidden from the student live schedule."
-        maxWidth="sm"
+        isOpen={!!terminateTarget}
+        onClose={() => setTerminateTarget(null)}
+        title="Emergency Live Class Termination"
+        description="Severs stream access immediately for the educator and all participating students."
+        maxWidth="md"
       >
         <div className="space-y-4 pt-2">
-          {archiveTarget && (
-            <div className="p-3 rounded-xl bg-brand-bg-peach/50 border border-brand-orange-border/60 text-xs space-y-1">
-              <p className="font-bold text-brand-text-primary">{archiveTarget.topic}</p>
-              <p className="text-brand-text-muted">Educator: {archiveTarget.educator_name} • {archiveTarget.time_display}</p>
-            </div>
-          )}
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs space-y-1.5">
+            <p className="font-bold text-rose-900 flex items-center gap-1.5">
+              <ShieldAlert className="h-4 w-4 text-rose-600" />
+              Administrative Intervention Warning
+            </p>
+            <p className="text-rose-800 leading-relaxed">
+              Terminating will immediately end the session in the streaming provider, disconnect all participants, change status to <span className="font-bold text-rose-900">TERMINATED</span>, and record an audit log entry.
+            </p>
+          </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2">
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-brand-charcoal">
+              Termination Reason <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={terminationReason}
+              onChange={(e) => setTerminationReason(e.target.value)}
+              placeholder="e.g. Inappropriate content, technical broadcast malfunction, or scheduling conflict..."
+              rows={3}
+              className="w-full px-3 py-2 rounded-xl border border-brand-border/80 text-xs text-brand-charcoal font-medium resize-none focus:ring-2 focus:ring-rose-500/30"
+            />
+            {terminateError && <p className="text-[11px] text-red-500">{terminateError}</p>}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border/60">
             <Button
-              type="button"
               variant="outline"
               size="sm"
-              onClick={() => setArchiveTarget(null)}
-              disabled={isArchiving}
+              onClick={() => setTerminateTarget(null)}
+              disabled={isTerminating}
             >
               Cancel
             </Button>
             <Button
-              type="button"
-              variant="primary"
               size="sm"
-              onClick={handleArchiveConfirm}
-              disabled={isArchiving}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleConfirmTerminate}
+              disabled={isTerminating}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md"
             >
-              {isArchiving ? "Archiving..." : "Confirm Archive"}
+              {isTerminating && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              Confirm Terminate
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* 6. Step 5D Publishing Confirmation Dialog */}
-      <PublishConfirmationDialog
-        target={publishTarget}
-        isOpen={!!publishTarget}
-        onClose={() => setPublishTarget(null)}
-        onConfirm={handlePublishConfirm}
-        isProcessing={isPublishProcessing}
-      />
+      {/* INSPECT DETAILS MODAL */}
+      <Modal
+        isOpen={!!inspectTarget}
+        onClose={() => setInspectTarget(null)}
+        title="Live Class Audit Details"
+        description="Comprehensive technical and schedule metadata."
+        maxWidth="lg"
+      >
+        {inspectTarget && (
+          <div className="space-y-4 pt-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-brand-bg-warm/70 border border-brand-border/60 space-y-1">
+                <span className="text-brand-text-muted">Topic</span>
+                <p className="font-bold text-brand-charcoal text-sm">{inspectTarget.topic}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-brand-bg-warm/70 border border-brand-border/60 space-y-1">
+                <span className="text-brand-text-muted">Subject & Educator</span>
+                <p className="font-bold text-brand-charcoal text-sm">{inspectTarget.subject} • {inspectTarget.educator_name}</p>
+              </div>
+            </div>
 
-      {/* 7. Step 5D Student Experience Simulation Preview */}
-      <ContentPreviewModal
-        item={previewItem}
-        isOpen={!!previewItem}
-        onClose={() => setPreviewItem(null)}
-      />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                <span className="text-[10px] text-brand-text-muted">Live Status</span>
+                <p className="font-bold text-brand-charcoal uppercase">{inspectTarget.live_status}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                <span className="text-[10px] text-brand-text-muted">Recording Status</span>
+                <p className="font-bold text-brand-charcoal uppercase">{inspectTarget.recording_status || "NONE"}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                <span className="text-[10px] text-brand-text-muted">Provider</span>
+                <p className="font-bold text-brand-charcoal uppercase">{inspectTarget.stream_provider || "Cloudflare"}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                <span className="text-[10px] text-brand-text-muted">Visibility</span>
+                <p className="font-bold text-brand-charcoal uppercase">{inspectTarget.is_visible ? "Visible" : "Hidden"}</p>
+              </div>
+            </div>
+
+            {inspectTarget.termination_reason && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldAlert className="h-4 w-4 text-rose-600" />
+                  Termination Record:
+                </p>
+                <p className="text-[11px] text-rose-700 italic">&ldquo;{inspectTarget.termination_reason}&rdquo;</p>
+                <p className="text-[10px] text-rose-600 pt-0.5">Terminated At: {inspectTarget.terminated_at ? new Date(inspectTarget.terminated_at).toLocaleString() : "N/A"}</p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-brand-border/60">
+              <Button variant="outline" size="sm" onClick={() => setInspectTarget(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import {
   FileEdit,
   ArrowRight,
   ClipboardCheck,
+  Radio,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -178,31 +179,31 @@ export default function AdminFoundationPage() {
               </Card>
             )}
 
-            {/* EDUCATOR & ADMIN CONTENT STUDIO */}
+            {/* TEACHER WORKSPACE: LIVE CLASSES & RECORDED LECTURES */}
             <Card className="p-5 sm:p-6 bg-gradient-to-br from-brand-surface via-amber-50/40 to-orange-50/40 border-2 border-amber-200/80 shadow-md">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  <div className="h-12 w-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
-                    <FileEdit className="h-6 w-6" />
+                  <div className="h-12 w-12 rounded-2xl bg-brand-orange text-white flex items-center justify-center shadow-md">
+                    <Radio className="h-6 w-6" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-base font-bold text-brand-text-primary">
-                        Educator Content Studio & Submissions
+                        Teacher Workspace: Live Classes & Recorded Lectures
                       </h3>
                       <Badge variant="peach" size="sm" className="text-[10px] uppercase font-bold">
                         Workspace
                       </Badge>
                     </div>
                     <p className="text-xs text-brand-text-muted">
-                      Draft video lectures, study materials, live classes, and batches, then submit for Super Admin review.
+                      Schedule live classes, enter preparation rooms 10 minutes early, broadcast live, and upload recorded lectures for Super Admin approval.
                     </p>
                   </div>
                 </div>
 
                 <Link href="/admin/content">
                   <Button variant="primary" size="sm" className="bg-brand-orange hover:bg-brand-orange-hover text-white shadow-subtle w-full sm:w-auto">
-                    Open Content Studio
+                    Open Workspace
                     <ArrowRight className="h-4 w-4 ml-1.5" />
                   </Button>
                 </Link>

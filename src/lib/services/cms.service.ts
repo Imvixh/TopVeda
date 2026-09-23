@@ -21,6 +21,13 @@ import {
   ReviewDecisionRequest,
   EducatorContentItem,
 } from "@/types/cms.types";
+import {
+  TeacherStatistics,
+  SuperAdminLiveControlData,
+  LiveControlSessionItem,
+  TeacherSummaryStats,
+} from "@/types/teacher.types";
+import { NotificationService } from "@/lib/services/notification.service";
 
 /**
  * Super Admin & Admin CMS Domain Services
@@ -206,17 +213,47 @@ export class CmsService {
         })
         .eq("id", entityId)
         .eq("status", "PENDING_REVIEW")
-        .select("id");
+        .select("id, title, submitted_by, educator_id, created_by")
+        .single();
 
       if (error) throw new Error(error.message);
 
-      if (!data || data.length === 0) {
+      if (!data) {
         return {
           success: false,
           error: new Error(
             "Invalid transition: Only content in PENDING_REVIEW status can be approved or rejected."
           ),
         };
+      }
+
+      // Dispatch notification to educator
+      const authorId = data.submitted_by || data.educator_id || data.created_by;
+      if (authorId) {
+        const { data: reviewer } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", reviewerId)
+          .single();
+
+        const reviewerName = reviewer?.full_name || "Super Admin";
+
+        if (decision === "REJECTED") {
+          await NotificationService.notifyTeacherRevisionRequested(supabase, {
+            teacherId: authorId,
+            lectureId: entityId,
+            title: data.title || "Content Submission",
+            reviewerName,
+            reviewNote: reviewNote || "Revisions requested by reviewer.",
+          });
+        } else if (decision === "APPROVED") {
+          await NotificationService.notifyTeacherLectureApproved(supabase, {
+            teacherId: authorId,
+            lectureId: entityId,
+            title: data.title || "Content Submission",
+            status: "APPROVED",
+          });
+        }
       }
 
       return { success: true, error: null };
@@ -1270,6 +1307,266 @@ export class CmsService {
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       return { data: [], error };
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 7. Teacher Live & Recorded Lecture Workspace Domain Methods (Phase 4.1 Step 5J)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Fetches aggregate real database statistics for a specific teacher.
+   */
+  static async getTeacherStatistics(
+    supabase: SupabaseClient,
+    teacherId: string
+  ): Promise<TeacherStatistics> {
+    try {
+      const [liveRes, lecturesRes] = await Promise.all([
+        supabase
+          .from("cms_live_classes")
+          .select("id, live_status, scheduled_start")
+          .or(`educator_id.eq.${teacherId},created_by.eq.${teacherId}`),
+        supabase
+          .from("cms_lectures")
+          .select("id, status")
+          .or(`educator_id.eq.${teacherId},created_by.eq.${teacherId},submitted_by.eq.${teacherId}`),
+      ]);
+
+      const liveClasses = liveRes.data || [];
+      const lectures = lecturesRes.data || [];
+
+      const stats: TeacherStatistics = {
+        totalLiveClasses: liveClasses.length,
+        upcomingLiveClasses: liveClasses.filter((c) => c.live_status === "SCHEDULED").length,
+        liveNowClasses: liveClasses.filter((c) => c.live_status === "LIVE").length,
+        completedLiveClasses: liveClasses.filter((c) => c.live_status === "COMPLETED").length,
+        terminatedLiveClasses: liveClasses.filter((c) => c.live_status === "TERMINATED").length,
+        totalLecturesSubmitted: lectures.length,
+        draftLectures: lectures.filter((l) => l.status === "DRAFT").length,
+        pendingReviewLectures: lectures.filter((l) => l.status === "PENDING_REVIEW").length,
+        revisionRequestedLectures: lectures.filter((l) => l.status === "REJECTED").length,
+        approvedLectures: lectures.filter((l) => l.status === "APPROVED").length,
+        publishedLectures: lectures.filter((l) => l.status === "PUBLISHED").length,
+      };
+
+      return stats;
+    } catch {
+      return {
+        totalLiveClasses: 0,
+        upcomingLiveClasses: 0,
+        liveNowClasses: 0,
+        completedLiveClasses: 0,
+        terminatedLiveClasses: 0,
+        totalLecturesSubmitted: 0,
+        draftLectures: 0,
+        pendingReviewLectures: 0,
+        revisionRequestedLectures: 0,
+        approvedLectures: 0,
+        publishedLectures: 0,
+      };
+    }
+  }
+
+  /**
+   * Fetches all live classes for a specific teacher with joined taxonomy details.
+   */
+  static async getTeacherLiveClasses(
+    supabase: SupabaseClient,
+    teacherId: string
+  ): Promise<CmsLiveClass[]> {
+    try {
+      const { data, error } = await supabase
+        .from("cms_live_classes")
+        .select("*, cms_boards(name), cms_class_levels(name), cms_subjects(name), cms_courses(title)")
+        .or(`educator_id.eq.${teacherId},created_by.eq.${teacherId}`)
+        .order("scheduled_start", { ascending: true });
+
+      if (error) throw new Error(error.message);
+      return (data as CmsLiveClass[]) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Fetches all recorded lectures for a specific teacher with joined taxonomy details.
+   */
+  static async getTeacherLectures(
+    supabase: SupabaseClient,
+    teacherId: string
+  ): Promise<CmsLecture[]> {
+    try {
+      const { data, error } = await supabase
+        .from("cms_lectures")
+        .select("*, cms_boards(name), cms_class_levels(name), cms_subjects(name), cms_courses(title)")
+        .or(`educator_id.eq.${teacherId},created_by.eq.${teacherId},submitted_by.eq.${teacherId}`)
+        .order("updated_at", { ascending: false });
+
+      if (error) throw new Error(error.message);
+      return (data as CmsLecture[]) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Generates a recorded lecture draft inheriting Live Class metadata after normal completion.
+   */
+  static async inheritLiveClassToLectureDraft(
+    supabase: SupabaseClient,
+    liveClassId: string,
+    recordingUrl?: string
+  ): Promise<{ data: CmsLecture | null; error: Error | null }> {
+    try {
+      const { data: liveClass, error: fetchErr } = await supabase
+        .from("cms_live_classes")
+        .select("*")
+        .eq("id", liveClassId)
+        .single();
+
+      if (fetchErr || !liveClass) {
+        throw new Error(fetchErr?.message || "Live class not found for recording inheritance.");
+      }
+
+      const cleanSlug = `${liveClass.topic.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
+
+      const lecturePayload = {
+        title: liveClass.topic,
+        slug: cleanSlug,
+        subject: liveClass.subject,
+        teacher_name: liveClass.educator_name,
+        educator_id: liveClass.educator_id || liveClass.created_by,
+        board_id: liveClass.board_id,
+        class_id: liveClass.class_id,
+        subject_id: liveClass.subject_id,
+        course_id: liveClass.course_id,
+        chapter_id: liveClass.chapter_id,
+        batch_id: liveClass.batch_id,
+        original_live_class_id: liveClass.id,
+        lecture_number: 1,
+        description: liveClass.description || `Live recorded lecture from session on ${liveClass.time_display}`,
+        duration_formatted: "45:00",
+        duration_human: "45 min",
+        duration_seconds: 2700,
+        thumbnail_url: liveClass.thumbnail_url || liveClass.educator_avatar_url,
+        thumbnail_bg: "from-[#0F2042] via-[#162D59] to-[#0A162B]",
+        category_tag: "Recorded Live",
+        video_stream_id: liveClass.provider_session_id || `rec_${liveClass.id}`,
+        video_playback_url: recordingUrl || liveClass.recording_url || liveClass.stream_room_url,
+        video_upload_status: "ready",
+        status: "DRAFT" as ContentStatus,
+        is_visible: true,
+        is_home_featured: false,
+        is_free_preview: true,
+        created_by: liveClass.educator_id || liveClass.created_by,
+        submitted_by: liveClass.educator_id || liveClass.created_by,
+      };
+
+      const { data, error } = await supabase
+        .from("cms_lectures")
+        .insert(lecturePayload)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return { data: data as CmsLecture, error: null };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { data: null, error };
+    }
+  }
+
+  /**
+   * Fetches aggregate Live Control Center monitoring data for Super Admin.
+   */
+  static async getSuperAdminLiveControlData(
+    supabase: SupabaseClient
+  ): Promise<SuperAdminLiveControlData> {
+    try {
+      const now = new Date().getTime();
+      const tenMinutesMs = 10 * 60 * 1000;
+
+      const [liveRes, teachersRes, lecturesRes] = await Promise.all([
+        supabase
+          .from("cms_live_classes")
+          .select("*, profiles:educator_id(email, full_name, avatar_url)")
+          .order("scheduled_start", { ascending: true }),
+        supabase
+          .from("profiles")
+          .select("id, full_name, email, avatar_url")
+          .in("role", ["ADMIN", "SUPER_ADMIN"]),
+        supabase
+          .from("cms_lectures")
+          .select("id, educator_id, created_by, submitted_by, status"),
+      ]);
+
+      const rawLive = liveRes.data || [];
+      const teachers = teachersRes.data || [];
+      const lectures = lecturesRes.data || [];
+
+      const liveControlItems: LiveControlSessionItem[] = rawLive.map((lc) => {
+        const startMs = new Date(lc.scheduled_start).getTime();
+        return {
+          ...lc,
+          teacherEmail: lc.profiles?.email,
+          canStartEarly: now >= startMs - tenMinutesMs,
+          canStudentJoin: lc.live_status === "LIVE" || now >= startMs,
+        };
+      });
+
+      const liveNow = liveControlItems.filter((i) => i.live_status === "LIVE");
+      const upcoming = liveControlItems.filter((i) => i.live_status === "SCHEDULED");
+      const completed = liveControlItems.filter((i) => i.live_status === "COMPLETED");
+      const terminated = liveControlItems.filter((i) => i.live_status === "TERMINATED");
+      const recordingsProcessing = liveControlItems.filter(
+        (i) => i.live_status === "COMPLETED" && i.recording_status === "PROCESSING"
+      );
+      const recordingsAwaitingReview = liveControlItems.filter(
+        (i) => i.live_status === "COMPLETED" && (i.recording_status === "READY" || i.recording_status === "NONE")
+      );
+
+      // Aggregate stats per teacher
+      const teacherStats: TeacherSummaryStats[] = teachers.map((t) => {
+        const tLive = rawLive.filter((l) => l.educator_id === t.id || l.created_by === t.id);
+        const tLectures = lectures.filter((lec) => lec.educator_id === t.id || lec.created_by === t.id || lec.submitted_by === t.id);
+
+        return {
+          teacherId: t.id,
+          teacherName: t.full_name || "Educator",
+          teacherAvatarUrl: t.avatar_url,
+          teacherEmail: t.email,
+          liveClassesConducted: tLive.filter((l) => l.live_status === "LIVE" || l.live_status === "COMPLETED").length,
+          upcomingLiveClasses: tLive.filter((l) => l.live_status === "SCHEDULED").length,
+          completedLiveClasses: tLive.filter((l) => l.live_status === "COMPLETED").length,
+          terminatedLiveClasses: tLive.filter((l) => l.live_status === "TERMINATED").length,
+          recordedLecturesSubmitted: tLectures.length,
+          pendingReviewLectures: tLectures.filter((l) => l.status === "PENDING_REVIEW").length,
+          approvedLectures: tLectures.filter((l) => l.status === "APPROVED").length,
+          publishedLectures: tLectures.filter((l) => l.status === "PUBLISHED").length,
+          revisionRequestedLectures: tLectures.filter((l) => l.status === "REJECTED").length,
+        };
+      });
+
+      return {
+        liveNow,
+        upcoming,
+        completed,
+        terminated,
+        recordingsProcessing,
+        recordingsAwaitingReview,
+        teacherStats,
+      };
+    } catch {
+      return {
+        liveNow: [],
+        upcoming: [],
+        completed: [],
+        terminated: [],
+        recordingsProcessing: [],
+        recordingsAwaitingReview: [],
+        teacherStats: [],
+      };
     }
   }
 }

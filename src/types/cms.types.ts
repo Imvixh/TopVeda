@@ -13,7 +13,12 @@ export type ContentStatus =
 
 export type BatchBadgeVariant = "orange" | "pink" | "green" | "purple";
 
-export type LiveClassStatus = "SCHEDULED" | "LIVE" | "COMPLETED" | "CANCELLED";
+export type LiveClassStatus =
+  | "SCHEDULED"
+  | "LIVE"
+  | "COMPLETED"
+  | "TERMINATED"
+  | "CANCELLED";
 
 export type HubCategory = "announcement" | "material" | "live" | "tip";
 
@@ -143,6 +148,13 @@ export interface CmsLecture extends CmsAuditMetadata {
   id: string;
   chapter_id?: string | null;
   batch_id?: string | null;
+  board_id?: string | null;
+  class_id?: string | null;
+  subject_id?: string | null;
+  course_id?: string | null;
+  original_live_class_id?: string | null;
+  lecture_number: number;
+  description?: string | null;
   title: string;
   slug: string;
   subject: string;
@@ -157,6 +169,8 @@ export interface CmsLecture extends CmsAuditMetadata {
   video_stream_id?: string | null;
   video_playback_url?: string | null;
   video_upload_status: string;
+  recording_provider_id?: string | null;
+  material_ids?: string[];
   is_home_featured: boolean;
   is_free_preview: boolean;
 }
@@ -165,6 +179,13 @@ export interface CmsLecture extends CmsAuditMetadata {
 export interface CmsLiveClass extends CmsAuditMetadata {
   id: string;
   batch_id?: string | null;
+  board_id?: string | null;
+  class_id?: string | null;
+  subject_id?: string | null;
+  course_id?: string | null;
+  chapter_id?: string | null;
+  description?: string | null;
+  thumbnail_url?: string | null;
   subject: string;
   topic: string;
   educator_name: string;
@@ -178,6 +199,16 @@ export interface CmsLiveClass extends CmsAuditMetadata {
   live_status: LiveClassStatus;
   cta_text: string;
   stream_room_url?: string | null;
+  stream_provider?: string;
+  provider_session_id?: string | null;
+  recording_id?: string | null;
+  recording_url?: string | null;
+  recording_status?: "NONE" | "PROCESSING" | "READY" | "FAILED";
+  started_at?: string | null;
+  ended_at?: string | null;
+  terminated_at?: string | null;
+  terminated_by?: string | null;
+  termination_reason?: string | null;
 }
 
 // 9. Hero Banners
@@ -356,5 +387,22 @@ export interface EducatorContentItem {
   starts_at?: string | null;
   ends_at?: string | null;
   details?: Record<string, unknown>;
+}
+
+// 18. Notifications
+export interface CmsNotification {
+  id: string;
+  recipient_id?: string | null;
+  recipient_role?: "SUPER_ADMIN" | "ADMIN" | "STUDENT" | null;
+  sender_id?: string | null;
+  type: string;
+  title: string;
+  message: string;
+  entity_type?: "LIVE_CLASS" | "LECTURE" | "BATCH" | "STUDY_MATERIAL" | "SYSTEM" | null;
+  entity_id?: string | null;
+  is_read: boolean;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 }
 

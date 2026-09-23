@@ -93,13 +93,16 @@ export function LiveClassesSection({ liveClasses }: LiveClassesSectionProps) {
                   </div>
 
                   {/* Educator Avatar Graphic */}
-                  <div className="relative w-12 h-14 shrink-0">
-                    <Image
-                      src={item.educatorAvatar}
-                      alt={item.educatorName}
-                      width={48}
-                      height={56}
-                      className="w-full h-full object-cover rounded-xl shadow-xs border border-brand-border/60"
+                  <div className="relative w-12 h-14 shrink-0 overflow-hidden rounded-xl bg-brand-charcoal/5 border border-brand-border/60">
+                    <img
+                      src={item.educatorAvatar || "/assets/student/teacher-male-1.jpg"}
+                      alt={item.educatorName || "Educator"}
+                      className="w-full h-full object-cover rounded-xl shadow-xs"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.onerror = null;
+                        target.src = "/assets/student/teacher-male-1.jpg";
+                      }}
                     />
                   </div>
                 </div>
