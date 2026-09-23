@@ -118,3 +118,34 @@ export interface SuperAdminLiveControlData {
   recordingsAwaitingReview: LiveControlSessionItem[];
   teacherStats: TeacherSummaryStats[];
 }
+
+export interface TeacherDirectoryLiveCounts {
+  total: number;
+  upcoming: number;
+  liveNow: number;
+  completed: number;
+  terminated: number;
+  cancelled: number;
+}
+
+export interface TeacherDirectoryLectureCounts {
+  total: number;
+  draft: number;
+  pendingReview: number;
+  revisionRequested: number;
+  approved: number;
+  published: number;
+}
+
+export interface TeacherDirectoryItem {
+  id: string;
+  fullName: string;
+  email: string;
+  avatarUrl?: string;
+  role: string;
+  createdAt: string;
+  liveStats: TeacherDirectoryLiveCounts;
+  lectureStats: TeacherDirectoryLectureCounts;
+}
+
+

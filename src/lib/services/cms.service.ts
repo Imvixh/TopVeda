@@ -26,6 +26,7 @@ import {
   SuperAdminLiveControlData,
   LiveControlSessionItem,
   TeacherSummaryStats,
+  TeacherDirectoryItem,
 } from "@/types/teacher.types";
 import { NotificationService } from "@/lib/services/notification.service";
 
@@ -1567,6 +1568,69 @@ export class CmsService {
         recordingsAwaitingReview: [],
         teacherStats: [],
       };
+    }
+  }
+
+  /**
+   * Fetches real database teacher directory records with live class & recorded lecture metrics for Super Admin.
+   */
+  static async getTeachersForSuperAdmin(
+    supabase: SupabaseClient
+  ): Promise<TeacherDirectoryItem[]> {
+    try {
+      const [profilesRes, liveRes, lecturesRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, email, avatar_url, role, created_at")
+          .eq("role", "ADMIN")
+          .order("full_name", { ascending: true }),
+        supabase
+          .from("cms_live_classes")
+          .select("id, educator_id, created_by, live_status, scheduled_start"),
+        supabase
+          .from("cms_lectures")
+          .select("id, educator_id, created_by, submitted_by, status"),
+      ]);
+
+      const teachers = profilesRes.data || [];
+      const liveClasses = liveRes.data || [];
+      const lectures = lecturesRes.data || [];
+
+      return teachers.map((t) => {
+        const tLive = liveClasses.filter(
+          (lc) => lc.educator_id === t.id || lc.created_by === t.id
+        );
+        const tLectures = lectures.filter(
+          (lec) => lec.educator_id === t.id || lec.created_by === t.id || lec.submitted_by === t.id
+        );
+
+        return {
+          id: t.id,
+          fullName: t.full_name || "Educator",
+          email: t.email || "",
+          avatarUrl: t.avatar_url || undefined,
+          role: t.role || "ADMIN",
+          createdAt: t.created_at,
+          liveStats: {
+            total: tLive.length,
+            upcoming: tLive.filter((l) => l.live_status === "SCHEDULED").length,
+            liveNow: tLive.filter((l) => l.live_status === "LIVE").length,
+            completed: tLive.filter((l) => l.live_status === "COMPLETED").length,
+            terminated: tLive.filter((l) => l.live_status === "TERMINATED").length,
+            cancelled: tLive.filter((l) => l.live_status === "CANCELLED").length,
+          },
+          lectureStats: {
+            total: tLectures.length,
+            draft: tLectures.filter((l) => l.status === "DRAFT").length,
+            pendingReview: tLectures.filter((l) => l.status === "PENDING_REVIEW").length,
+            revisionRequested: tLectures.filter((l) => l.status === "REJECTED").length,
+            approved: tLectures.filter((l) => l.status === "APPROVED").length,
+            published: tLectures.filter((l) => l.status === "PUBLISHED").length,
+          },
+        };
+      });
+    } catch {
+      return [];
     }
   }
 }

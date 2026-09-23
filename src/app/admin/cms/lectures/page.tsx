@@ -337,6 +337,11 @@ function LecturesCmsContent() {
 
   const validateForm = () => {
     const errors: Record<string, string> = {};
+    if (editingLecture) {
+      if (!formThumbnailUrl.trim()) errors.thumbnailUrl = "Thumbnail reference or image path is required";
+      setFormErrors(errors);
+      return Object.keys(errors).length === 0;
+    }
     if (!formCourseId) errors.courseId = "Parent Course is required";
     if (!formChapterId) errors.chapterId = "Parent Chapter is required";
     if (!formTitle.trim()) errors.title = "Lecture title is required";
@@ -363,21 +368,21 @@ function LecturesCmsContent() {
 
     const payload: Partial<CmsLecture> = {
       ...(editingLecture ? { id: editingLecture.id } : {}),
-      chapter_id: formChapterId,
+      chapter_id: editingLecture ? editingLecture.chapter_id : formChapterId,
       batch_id: formBatchId || null,
-      title: formTitle.trim(),
-      slug: formSlug.trim().toLowerCase(),
-      subject: formSubject.trim(),
-      teacher_name: formTeacherName.trim(),
-      duration_seconds: totalSeconds,
-      duration_formatted: durationFormatted,
-      duration_human: durationHuman,
+      title: editingLecture ? editingLecture.title : formTitle.trim(),
+      slug: editingLecture ? editingLecture.slug : formSlug.trim().toLowerCase(),
+      subject: editingLecture ? editingLecture.subject : formSubject.trim(),
+      teacher_name: editingLecture ? editingLecture.teacher_name : formTeacherName.trim(),
+      duration_seconds: editingLecture ? editingLecture.duration_seconds : totalSeconds,
+      duration_formatted: editingLecture ? editingLecture.duration_formatted : durationFormatted,
+      duration_human: editingLecture ? editingLecture.duration_human : durationHuman,
       thumbnail_url: formThumbnailUrl.trim(),
       thumbnail_bg: formThumbnailBg.trim(),
-      category_tag: formCategoryTag.trim(),
-      video_stream_id: formVideoStreamId.trim() || null,
-      video_playback_url: formVideoPlaybackUrl.trim() || null,
-      video_upload_status: "ready",
+      category_tag: editingLecture ? editingLecture.category_tag : formCategoryTag.trim(),
+      video_stream_id: editingLecture ? editingLecture.video_stream_id : (formVideoStreamId.trim() || null),
+      video_playback_url: editingLecture ? editingLecture.video_playback_url : (formVideoPlaybackUrl.trim() || null),
+      video_upload_status: editingLecture ? (editingLecture.video_upload_status || "ready") : "ready",
       is_home_featured: formIsHomeFeatured,
       is_free_preview: formIsFreePreview,
       display_order: Number(formDisplayOrder) || 0,
@@ -870,346 +875,619 @@ function LecturesCmsContent() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => !isSaving && setIsModalOpen(false)}
-        title={editingLecture ? "Edit Recorded Lecture" : "Create Recorded Lecture"}
-        description="Configure video lecture metadata, syllabus chapter binding, private thumbnail, and playback duration."
+        title={editingLecture ? "Super Admin: Recorded Lecture Review" : "Create Recorded Lecture"}
+        description={
+          editingLecture
+            ? "Watch recording stream, inspect author metadata (read-only), and manage placement, batch linkage, and publication status."
+            : "Configure video lecture metadata, syllabus chapter binding, private thumbnail, and playback duration."
+        }
         maxWidth="lg"
       >
-        <form onSubmit={handleSaveLecture} className="space-y-4">
-          {/* Dependent Course & Chapter Selectors */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/60 border border-brand-border">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-brand-text-primary">Parent Course *</label>
-              <select
-                aria-label="Select course"
-                value={formCourseId}
-                onChange={(e) => handleCourseChangeInForm(e.target.value)}
-                disabled={isSaving}
-                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}
-                  </option>
-                ))}
-              </select>
-              {formErrors.courseId && <p className="text-[11px] text-red-500 font-medium">{formErrors.courseId}</p>}
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-brand-text-primary">Syllabus Chapter *</label>
-              <select
-                aria-label="Select syllabus chapter"
-                value={formChapterId}
-                onChange={(e) => setFormChapterId(e.target.value)}
-                disabled={isSaving}
-                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              >
-                {formChaptersList.length === 0 ? (
-                  <option value="">No chapters available for course</option>
-                ) : (
-                  formChaptersList.map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      Ch {ch.chapter_number}: {ch.title}
-                    </option>
-                  ))
-                )}
-              </select>
-              {formErrors.chapterId && <p className="text-[11px] text-red-500 font-medium">{formErrors.chapterId}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Lecture Title *"
-              placeholder="e.g. Fundamental Theorem of Arithmetic & Proofs"
-              value={formTitle}
-              onChange={handleTitleChange}
-              error={formErrors.title}
-              disabled={isSaving}
-            />
-
-            <Input
-              label="URL Slug *"
-              placeholder="e.g. fundamental-theorem-of-arithmetic"
-              value={formSlug}
-              onChange={(e) => setFormSlug(e.target.value)}
-              error={formErrors.slug}
-              disabled={isSaving}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              label="Subject Name *"
-              placeholder="e.g. Mathematics"
-              value={formSubject}
-              onChange={(e) => setFormSubject(e.target.value)}
-              error={formErrors.subject}
-              disabled={isSaving}
-            />
-
-            <Input
-              label="Teacher / Educator Name *"
-              placeholder="e.g. Dr. Vandana Sharma"
-              value={formTeacherName}
-              onChange={(e) => setFormTeacherName(e.target.value)}
-              error={formErrors.teacherName}
-              disabled={isSaving}
-            />
-
+        {editingLecture ? (
+          <form onSubmit={handleSaveLecture} className="space-y-4">
+            {/* 1. PRIMARY VIDEO PLAYER / RECORDING PREVIEW */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Category Tag</label>
-              <select
-                aria-label="Category tag"
-                value={formCategoryTag}
-                onChange={(e) => setFormCategoryTag(e.target.value)}
-                disabled={isSaving}
-                className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              >
-                <option value="Concept Deep-Dive">Concept Deep-Dive</option>
-                <option value="Full Lecture">Full Lecture</option>
-                <option value="Problem Solving">Problem Solving</option>
-                <option value="Formula Revision">Formula Revision</option>
-                <option value="PYQ Discussion">PYQ Discussion</option>
-              </select>
+              <div className="flex items-center justify-between text-xs font-bold text-brand-charcoal">
+                <span className="flex items-center gap-1.5">
+                  <Video className="h-4 w-4 text-brand-orange" />
+                  Recording Stream Preview
+                </span>
+                {editingLecture.video_playback_url && (
+                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    Playback Ready
+                  </span>
+                )}
+              </div>
+
+              <div className="aspect-video w-full rounded-2xl bg-brand-charcoal flex items-center justify-center text-white border border-brand-border/80 overflow-hidden shadow-inner relative">
+                {editingLecture.video_playback_url ? (
+                  <video
+                    src={editingLecture.video_playback_url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full h-full object-contain bg-black"
+                  />
+                ) : (
+                  <div className="text-center p-6 space-y-2">
+                    <Video className="h-10 w-10 text-brand-orange mx-auto animate-pulse" />
+                    <p className="text-xs font-bold">Video Recording Staged / In Processing</p>
+                    <p className="text-[11px] text-brand-text-muted">
+                      {editingLecture.video_stream_id
+                        ? `Stream ID: ${editingLecture.video_stream_id}`
+                        : "Recording stream is being processed by the provider pipeline."}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Duration Helper */}
-          <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/40 border border-brand-border">
-            <Input
-              label="Duration (Minutes)"
-              type="number"
-              value={formDurationMinutes}
-              onChange={(e) => setFormDurationMinutes(Number(e.target.value))}
-              disabled={isSaving}
-            />
+            {/* 2. READ-ONLY TEACHER METADATA SUMMARY */}
+            <div className="p-4 rounded-2xl bg-brand-bg-warm/70 border border-brand-border/80 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-bold text-brand-orange uppercase tracking-wider">
+                    {editingLecture.subject || "Subject"}
+                  </span>
+                  <h3 className="text-sm font-bold text-brand-charcoal leading-snug">
+                    {editingLecture.title}
+                  </h3>
+                  <p className="text-xs text-brand-text-muted mt-0.5">
+                    Teacher: <span className="font-semibold text-brand-charcoal">{editingLecture.teacher_name || "Educator"}</span>
+                  </p>
+                </div>
+                <Badge variant="outline" size="sm" className="font-bold text-[10px] bg-white">
+                  Lecture #{editingLecture.lecture_number || 1}
+                </Badge>
+              </div>
 
-            <Input
-              label="Duration (Seconds)"
-              type="number"
-              value={formDurationSecondsRemaining}
-              onChange={(e) => setFormDurationSecondsRemaining(Number(e.target.value))}
-              disabled={isSaving}
-            />
-          </div>
+              {editingLecture.description && (
+                <p className="text-xs text-brand-text-muted italic border-l-2 border-brand-orange/40 pl-2.5 py-0.5">
+                  &ldquo;{editingLecture.description}&rdquo;
+                </p>
+              )}
 
-          {/* Thumbnail & Private Storage Helper */}
-          <div className="space-y-2 p-3.5 rounded-xl border border-brand-border bg-brand-surface">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-brand-text-primary">Thumbnail Image (Private Bucket)</label>
-              <span className="text-[10px] text-brand-text-muted font-mono">bucket: lecture-thumbnails</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-brand-border/50 text-[11px]">
+                <div>
+                  <span className="text-[10px] text-brand-text-subtle font-medium block">Course</span>
+                  <span className="font-semibold text-brand-charcoal truncate block">
+                    {courses.find((c) => c.id === formCourseId)?.title || "Course"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-brand-text-subtle font-medium block">Chapter</span>
+                  <span className="font-semibold text-brand-charcoal truncate block">
+                    {chapters.find((ch) => ch.id === editingLecture.chapter_id)?.title || "Chapter"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-brand-text-subtle font-medium block">Duration</span>
+                  <span className="font-semibold text-brand-charcoal flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-brand-orange" />
+                    {editingLecture.duration_human || editingLecture.duration_formatted || "Duration unavailable"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-brand-text-subtle font-medium block">Category Tag</span>
+                  <span className="font-semibold text-brand-charcoal">
+                    {editingLecture.category_tag || "General"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. SUPER ADMIN MANAGEMENT CONTROLS (EDITABLE) */}
+            <div className="space-y-3 pt-1 border-t border-brand-border/60">
+              <div className="flex items-center gap-2 text-xs font-bold text-brand-charcoal">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                <span>Super Admin Content Placement & Governance</span>
+              </div>
+
+              {/* Row 1: Status & Display Order */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-brand-charcoal">Status</label>
+                  <select
+                    aria-label="Publication status"
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value as ContentStatus)}
+                    disabled={isSaving}
+                    className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-xs font-bold text-brand-charcoal focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="PENDING_REVIEW">Pending Review</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="PUBLISHED">Published</option>
+                    <option value="ARCHIVED">Archived</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-brand-charcoal">Display Order</label>
+                  <Input
+                    type="number"
+                    value={formDisplayOrder}
+                    onChange={(e) => setFormDisplayOrder(Number(e.target.value))}
+                    disabled={isSaving}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Linked Batch */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-brand-charcoal">Linked Batch / Cohort (Optional)</label>
+                <select
+                  aria-label="Select linked cohort"
+                  value={formBatchId}
+                  onChange={(e) => setFormBatchId(e.target.value)}
+                  disabled={isSaving}
+                  className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-xs font-semibold text-brand-charcoal focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                >
+                  <option value="">All Cohorts (General Course Lecture)</option>
+                  {batches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title} ({b.board_label})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Row 3: Thumbnail Replace */}
+              <div className="space-y-2 p-3.5 rounded-2xl border border-brand-border/80 bg-white">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-brand-charcoal">Thumbnail</label>
+                  <span className="text-[10px] text-brand-text-muted font-mono">bucket: lecture-thumbnails</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    placeholder="Thumbnail reference path or URL"
+                    value={formThumbnailUrl}
+                    onChange={(e) => setFormThumbnailUrl(e.target.value)}
+                    disabled={isSaving}
+                  />
+
+                  <label className="flex items-center justify-center gap-2 h-10 w-full rounded-xl border border-dashed border-brand-border bg-brand-bg-warm/60 px-3 py-2 text-xs font-semibold text-brand-charcoal cursor-pointer hover:border-brand-orange transition-colors">
+                    <Upload className="h-4 w-4 text-brand-orange" />
+                    <span>{isUploadingThumb ? "Uploading..." : "Replace Thumbnail"}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleThumbnailUpload}
+                      disabled={isSaving || isUploadingThumb}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {signedThumbPreview && (
+                  <div className="mt-2 flex items-center gap-3 p-2 rounded-xl bg-brand-bg-warm border border-brand-border text-xs">
+                    <img
+                      src={signedThumbPreview}
+                      alt="Thumbnail Preview"
+                      className="h-10 w-16 object-cover rounded-lg border border-brand-border"
+                    />
+                    <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Thumbnail Preview Staged
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 4: Visibility & Free Preview */}
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="formIsVisibleLec"
+                    checked={formIsVisible}
+                    onChange={(e) => setFormIsVisible(e.target.checked)}
+                    disabled={isSaving}
+                    className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
+                  />
+                  <label htmlFor="formIsVisibleLec" className="text-xs font-bold text-brand-charcoal cursor-pointer">
+                    Student Visible
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="formIsFreePreview"
+                    checked={formIsFreePreview}
+                    onChange={(e) => setFormIsFreePreview(e.target.checked)}
+                    disabled={isSaving}
+                    className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
+                  />
+                  <label htmlFor="formIsFreePreview" className="text-xs font-bold text-brand-charcoal cursor-pointer">
+                    Free Preview
+                  </label>
+                </div>
+              </div>
+
+              {/* Row 5: Starts At & Ends At */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-brand-charcoal">
+                    Starts At (Optional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={formStartsAt}
+                    onChange={(e) => setFormStartsAt(e.target.value)}
+                    disabled={isSaving}
+                    className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 py-1 text-xs font-medium text-brand-charcoal focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-brand-charcoal">
+                    Ends At (Optional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={formEndsAt}
+                    onChange={(e) => setFormEndsAt(e.target.value)}
+                    disabled={isSaving}
+                    className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 py-1 text-xs font-medium text-brand-charcoal focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border/60">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsModalOpen(false)}
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" disabled={isSaving} className="shadow-2xs">
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleSaveLecture} className="space-y-4">
+            {/* Dependent Course & Chapter Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/60 border border-brand-border">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-brand-text-primary">Parent Course *</label>
+                <select
+                  aria-label="Select course"
+                  value={formCourseId}
+                  onChange={(e) => handleCourseChangeInForm(e.target.value)}
+                  disabled={isSaving}
+                  className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.courseId && <p className="text-[11px] text-red-500 font-medium">{formErrors.courseId}</p>}
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-brand-text-primary">Syllabus Chapter *</label>
+                <select
+                  aria-label="Select syllabus chapter"
+                  value={formChapterId}
+                  onChange={(e) => setFormChapterId(e.target.value)}
+                  disabled={isSaving}
+                  className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                >
+                  {formChaptersList.length === 0 ? (
+                    <option value="">No chapters available for course</option>
+                  ) : (
+                    formChaptersList.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        Ch {ch.chapter_number}: {ch.title}
+                      </option>
+                    ))
+                  )}
+                </select>
+                {formErrors.chapterId && <p className="text-[11px] text-red-500 font-medium">{formErrors.chapterId}</p>}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Input
-                label="Thumbnail Reference Path *"
-                placeholder="e.g. {author_id}/{lecture_id}/thumb.jpg"
-                value={formThumbnailUrl}
-                onChange={(e) => setFormThumbnailUrl(e.target.value)}
-                error={formErrors.thumbnailUrl}
+                label="Lecture Title *"
+                placeholder="e.g. Fundamental Theorem of Arithmetic & Proofs"
+                value={formTitle}
+                onChange={handleTitleChange}
+                error={formErrors.title}
+                disabled={isSaving}
+              />
+
+              <Input
+                label="URL Slug *"
+                placeholder="e.g. fundamental-theorem-of-arithmetic"
+                value={formSlug}
+                onChange={(e) => setFormSlug(e.target.value)}
+                error={formErrors.slug}
+                disabled={isSaving}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Input
+                label="Subject Name *"
+                placeholder="e.g. Mathematics"
+                value={formSubject}
+                onChange={(e) => setFormSubject(e.target.value)}
+                error={formErrors.subject}
+                disabled={isSaving}
+              />
+
+              <Input
+                label="Teacher / Educator Name *"
+                placeholder="e.g. Dr. Vandana Sharma"
+                value={formTeacherName}
+                onChange={(e) => setFormTeacherName(e.target.value)}
+                error={formErrors.teacherName}
                 disabled={isSaving}
               />
 
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-brand-text-primary">Upload Thumbnail File</label>
-                <label className="flex items-center justify-center gap-2 h-10 w-full rounded-lg border border-dashed border-brand-border bg-brand-bg-warm px-3 py-2 text-xs font-semibold text-brand-text-primary cursor-pointer hover:border-brand-orange transition-colors">
-                  <Upload className="h-4 w-4 text-brand-orange" />
-                  <span>{isUploadingThumb ? "Uploading..." : "Upload File to Private Storage"}</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleThumbnailUpload}
-                    disabled={isSaving || isUploadingThumb}
-                    className="hidden"
-                  />
-                </label>
+                <label className="block text-sm font-medium text-brand-text-primary">Category Tag</label>
+                <select
+                  aria-label="Category tag"
+                  value={formCategoryTag}
+                  onChange={(e) => setFormCategoryTag(e.target.value)}
+                  disabled={isSaving}
+                  className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                >
+                  <option value="Concept Deep-Dive">Concept Deep-Dive</option>
+                  <option value="Full Lecture">Full Lecture</option>
+                  <option value="Problem Solving">Problem Solving</option>
+                  <option value="Formula Revision">Formula Revision</option>
+                  <option value="PYQ Discussion">PYQ Discussion</option>
+                </select>
               </div>
             </div>
 
-            {formErrors.thumb && <p className="text-[11px] text-red-500 font-medium">{formErrors.thumb}</p>}
+            {/* Duration Helper */}
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/40 border border-brand-border">
+              <Input
+                label="Duration (Minutes)"
+                type="number"
+                value={formDurationMinutes}
+                onChange={(e) => setFormDurationMinutes(Number(e.target.value))}
+                disabled={isSaving}
+              />
 
-            {signedThumbPreview && (
-              <div className="mt-2 flex items-center gap-3 p-2 rounded-lg bg-brand-bg-warm border border-brand-border text-xs">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={signedThumbPreview}
-                  alt="Thumbnail Preview"
-                  className="h-10 w-16 object-cover rounded border border-brand-border"
+              <Input
+                label="Duration (Seconds)"
+                type="number"
+                value={formDurationSecondsRemaining}
+                onChange={(e) => setFormDurationSecondsRemaining(Number(e.target.value))}
+                disabled={isSaving}
+              />
+            </div>
+
+            {/* Thumbnail & Private Storage Helper */}
+            <div className="space-y-2 p-3.5 rounded-xl border border-brand-border bg-brand-surface">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-brand-text-primary">Thumbnail Image (Private Bucket)</label>
+                <span className="text-[10px] text-brand-text-muted font-mono">bucket: lecture-thumbnails</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Thumbnail Reference Path *"
+                  placeholder="e.g. {author_id}/{lecture_id}/thumb.jpg"
+                  value={formThumbnailUrl}
+                  onChange={(e) => setFormThumbnailUrl(e.target.value)}
+                  error={formErrors.thumbnailUrl}
+                  disabled={isSaving}
                 />
-                <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Secure signed URL generated for preview
-                </span>
+
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-brand-text-primary">Upload Thumbnail File</label>
+                  <label className="flex items-center justify-center gap-2 h-10 w-full rounded-lg border border-dashed border-brand-border bg-brand-bg-warm px-3 py-2 text-xs font-semibold text-brand-text-primary cursor-pointer hover:border-brand-orange transition-colors">
+                    <Upload className="h-4 w-4 text-brand-orange" />
+                    <span>{isUploadingThumb ? "Uploading..." : "Upload File to Private Storage"}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleThumbnailUpload}
+                      disabled={isSaving || isUploadingThumb}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Cloudflare Stream Video Metadata Readiness Box */}
-          <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 text-xs space-y-2">
-            <div className="flex items-center gap-2 font-bold text-sky-900">
-              <Info className="h-4 w-4 text-sky-600" />
-              <span>Video Playback Metadata (Cloudflare Stream Integration)</span>
+              {formErrors.thumb && <p className="text-[11px] text-red-500 font-medium">{formErrors.thumb}</p>}
+
+              {signedThumbPreview && (
+                <div className="mt-2 flex items-center gap-3 p-2 rounded-lg bg-brand-bg-warm border border-brand-border text-xs">
+                  <img
+                    src={signedThumbPreview}
+                    alt="Thumbnail Preview"
+                    className="h-10 w-16 object-cover rounded border border-brand-border"
+                  />
+                  <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Secure signed URL generated for preview
+                  </span>
+                </div>
+              )}
             </div>
-            <p className="text-sky-700 text-[11px]">
-              Direct Cloudflare Stream video uploading will be connected in a subsequent step. You can configure metadata or existing playback URLs below.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <Input
-                label="Stream Video UID / Asset ID"
-                placeholder="e.g. cf-stream-uuid-12345"
-                value={formVideoStreamId}
-                onChange={(e) => setFormVideoStreamId(e.target.value)}
-                disabled={isSaving}
-                className="bg-white"
-              />
-              <Input
-                label="Playback / HLS URL"
-                placeholder="e.g. https://videodelivery.net/.../manifest/video.m3u8"
-                value={formVideoPlaybackUrl}
-                onChange={(e) => setFormVideoPlaybackUrl(e.target.value)}
-                disabled={isSaving}
-                className="bg-white"
-              />
+
+            {/* Cloudflare Stream Video Metadata Readiness Box */}
+            <div className="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 text-xs space-y-2">
+              <div className="flex items-center gap-2 font-bold text-sky-900">
+                <Info className="h-4 w-4 text-sky-600" />
+                <span>Video Playback Metadata (Cloudflare Stream Integration)</span>
+              </div>
+              <p className="text-sky-700 text-[11px]">
+                Direct Cloudflare Stream video uploading will be connected in a subsequent step. You can configure metadata or existing playback URLs below.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <Input
+                  label="Stream Video UID / Asset ID"
+                  placeholder="e.g. cf-stream-uuid-12345"
+                  value={formVideoStreamId}
+                  onChange={(e) => setFormVideoStreamId(e.target.value)}
+                  disabled={isSaving}
+                  className="bg-white"
+                />
+                <Input
+                  label="Playback / HLS URL"
+                  placeholder="e.g. https://videodelivery.net/.../manifest/video.m3u8"
+                  value={formVideoPlaybackUrl}
+                  onChange={(e) => setFormVideoPlaybackUrl(e.target.value)}
+                  disabled={isSaving}
+                  className="bg-white"
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Optional Linked Batch Selector */}
-          <div className="space-y-1">
-            <label className="block text-xs font-bold text-brand-text-primary">Linked Batch / Cohort (Optional)</label>
-            <select
-              aria-label="Select linked cohort"
-              value={formBatchId}
-              onChange={(e) => setFormBatchId(e.target.value)}
-              disabled={isSaving}
-              className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            >
-              <option value="">All Cohorts (General Course Lecture)</option>
-              {batches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.title} ({b.board_label})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Flags & Publication Controls */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              label="Display Order"
-              type="number"
-              value={formDisplayOrder}
-              onChange={(e) => setFormDisplayOrder(Number(e.target.value))}
-              disabled={isSaving}
-            />
-
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Status</label>
+            {/* Optional Linked Batch Selector */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-brand-text-primary">Linked Batch / Cohort (Optional)</label>
               <select
-                aria-label="Publication status"
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as ContentStatus)}
+                aria-label="Select linked cohort"
+                value={formBatchId}
+                onChange={(e) => setFormBatchId(e.target.value)}
                 disabled={isSaving}
                 className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
               >
-                <option value="PUBLISHED">Published</option>
-                <option value="DRAFT">Draft</option>
-                <option value="PENDING_REVIEW">Pending Review</option>
-                <option value="ARCHIVED">Archived</option>
+                <option value="">All Cohorts (General Course Lecture)</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.title} ({b.board_label})
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-brand-text-primary">Visibility</label>
-              <div className="flex items-center gap-2 h-10">
+            {/* Flags & Publication Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Input
+                label="Display Order"
+                type="number"
+                value={formDisplayOrder}
+                onChange={(e) => setFormDisplayOrder(Number(e.target.value))}
+                disabled={isSaving}
+              />
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-brand-text-primary">Status</label>
+                <select
+                  aria-label="Publication status"
+                  value={formStatus}
+                  onChange={(e) => setFormStatus(e.target.value as ContentStatus)}
+                  disabled={isSaving}
+                  className="h-10 w-full rounded-lg border border-brand-border bg-brand-surface px-3 py-2 text-xs font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                >
+                  <option value="PUBLISHED">Published</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="PENDING_REVIEW">Pending Review</option>
+                  <option value="ARCHIVED">Archived</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-brand-text-primary">Visibility</label>
+                <div className="flex items-center gap-2 h-10">
+                  <input
+                    type="checkbox"
+                    id="formIsVisibleLec"
+                    checked={formIsVisible}
+                    onChange={(e) => setFormIsVisible(e.target.checked)}
+                    disabled={isSaving}
+                    className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
+                  />
+                  <label htmlFor="formIsVisibleLec" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
+                    Student Visible
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-brand-text-primary">
+                  Starts At (Activation Window)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formStartsAt}
+                  onChange={(e) => setFormStartsAt(e.target.value)}
+                  disabled={isSaving}
+                  className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-brand-text-primary">
+                  Ends At (Expiry Window)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formEndsAt}
+                  onChange={(e) => setFormEndsAt(e.target.value)}
+                  disabled={isSaving}
+                  className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/40 border border-brand-border">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  id="formIsVisibleLec"
-                  checked={formIsVisible}
-                  onChange={(e) => setFormIsVisible(e.target.checked)}
+                  id="formIsFreePreview"
+                  checked={formIsFreePreview}
+                  onChange={(e) => setFormIsFreePreview(e.target.checked)}
                   disabled={isSaving}
                   className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
                 />
-                <label htmlFor="formIsVisibleLec" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
-                  Student Visible
+                <label htmlFor="formIsFreePreview" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
+                  Free Demo Preview
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="formIsHomeFeatured"
+                  checked={formIsHomeFeatured}
+                  onChange={(e) => setFormIsHomeFeatured(e.target.checked)}
+                  disabled={isSaving}
+                  className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
+                />
+                <label htmlFor="formIsHomeFeatured" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
+                  Featured on Student Home
                 </label>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-brand-text-primary">
-                Starts At (Activation Window)
-              </label>
-              <input
-                type="datetime-local"
-                value={formStartsAt}
-                onChange={(e) => setFormStartsAt(e.target.value)}
+            {/* Submit Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsModalOpen(false)}
                 disabled={isSaving}
-                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              />
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" disabled={isSaving} className="shadow-2xs">
+                {isSaving ? "Saving..." : "Create Lecture"}
+              </Button>
             </div>
-
-            <div className="space-y-1">
-              <label className="block text-xs font-semibold text-brand-text-primary">
-                Ends At (Expiry Window)
-              </label>
-              <input
-                type="datetime-local"
-                value={formEndsAt}
-                onChange={(e) => setFormEndsAt(e.target.value)}
-                disabled={isSaving}
-                className="h-9 w-full rounded-lg border border-brand-border bg-brand-surface px-2.5 py-1 text-xs font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/40 border border-brand-border">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="formIsFreePreview"
-                checked={formIsFreePreview}
-                onChange={(e) => setFormIsFreePreview(e.target.checked)}
-                disabled={isSaving}
-                className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
-              />
-              <label htmlFor="formIsFreePreview" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
-                Free Demo Preview
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="formIsHomeFeatured"
-                checked={formIsHomeFeatured}
-                onChange={(e) => setFormIsHomeFeatured(e.target.checked)}
-                disabled={isSaving}
-                className="h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
-              />
-              <label htmlFor="formIsHomeFeatured" className="text-xs font-semibold text-brand-text-primary cursor-pointer">
-                Featured on Student Home
-              </label>
-            </div>
-          </div>
-
-          {/* Submit Actions */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsModalOpen(false)}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" size="sm" disabled={isSaving} className="shadow-2xs">
-              {isSaving ? "Saving..." : editingLecture ? "Update Lecture" : "Create Lecture"}
-            </Button>
-          </div>
-        </form>
+          </form>
+        )}
       </Modal>
 
       {/* 5. Archive Confirmation Modal */}

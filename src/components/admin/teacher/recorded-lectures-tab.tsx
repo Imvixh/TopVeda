@@ -40,6 +40,7 @@ interface RecordedLecturesTabProps {
   courses: CmsCourse[];
   chapters: CmsChapter[];
   batches: CmsBatch[];
+  isSuperAdmin?: boolean;
   onRefresh: () => void;
   setFeedback: (fb: { type: "success" | "error" | "info"; message: string } | null) => void;
 }
@@ -54,6 +55,7 @@ export function RecordedLecturesTab({
   courses,
   chapters,
   batches,
+  isSuperAdmin = false,
   onRefresh,
   setFeedback,
 }: RecordedLecturesTabProps) {
@@ -446,7 +448,7 @@ export function RecordedLecturesTab({
                         Edit Metadata
                       </Button>
 
-                      {isDraft && (
+                      {isDraft && !isSuperAdmin && (
                         <Button
                           size="sm"
                           onClick={async () => {
@@ -467,7 +469,20 @@ export function RecordedLecturesTab({
                         </Button>
                       )}
 
-                      {isRejected && (
+                      {isPending && isSuperAdmin && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            window.location.href = `/admin/cms/lectures?search=${encodeURIComponent(lec.title)}`;
+                          }}
+                          className="bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-xs"
+                        >
+                          <FileText className="h-3.5 w-3.5 mr-1" />
+                          Review in CMS
+                        </Button>
+                      )}
+
+                      {isRejected && !isSuperAdmin && (
                         <Button
                           size="sm"
                           onClick={() => openEditModal(lec)}

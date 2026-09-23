@@ -38,6 +38,7 @@ interface LiveClassesTabProps {
   subjects: CmsSubject[];
   courses: CmsCourse[];
   chapters: CmsChapter[];
+  isSuperAdmin?: boolean;
   onRefresh: () => void;
   setFeedback: (fb: { type: "success" | "error" | "info"; message: string } | null) => void;
 }
@@ -51,6 +52,7 @@ export function LiveClassesTab({
   subjects,
   courses,
   chapters,
+  isSuperAdmin = false,
   onRefresh,
   setFeedback,
 }: LiveClassesTabProps) {
@@ -81,13 +83,19 @@ export function LiveClassesTab({
   const [cancelReason, setCancelReason] = React.useState("");
   const [isCancelling, setIsCancelling] = React.useState(false);
 
+  // Super Admin Terminate Live Modal State
+  const [terminateTarget, setTerminateTarget] = React.useState<CmsLiveClass | null>(null);
+  const [terminationReason, setTerminationReason] = React.useState("");
+  const [isTerminating, setIsTerminating] = React.useState(false);
+  const [terminateError, setTerminateError] = React.useState("");
+
   // Action Loading states
   const [actionLoadingId, setActionLoadingId] = React.useState<string | null>(null);
 
   // Preview Recording Modal State
   const [previewRecordingUrl, setPreviewRecordingUrl] = React.useState<string | null>(null);
 
-  // End Class Confirmation Modal
+  // End Class Confirmation Modal (Teacher only)
   const [endTarget, setEndTarget] = React.useState<CmsLiveClass | null>(null);
   const [isEnding, setIsEnding] = React.useState(false);
 
@@ -266,6 +274,49 @@ export function LiveClassesTab({
       setFeedback({ type: "error", message: error.message });
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  // Handle Super Admin Terminate Live Session
+  const handleTerminateSubmit = async () => {
+    if (!terminateTarget) return;
+    if (!terminationReason.trim() || terminationReason.trim().length < 5) {
+      setTerminateError("A valid termination reason (minimum 5 characters) is required for audit logs.");
+      return;
+    }
+
+    try {
+      setIsTerminating(true);
+      setTerminateError("");
+      setFeedback(null);
+
+      const res = await fetch("/api/admin/live/terminate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          liveClassId: terminateTarget.id,
+          terminationReason: terminationReason.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setTerminateError(data.error || "Failed to terminate live class.");
+      } else {
+        setFeedback({
+          type: "success",
+          message: `Live class "${terminateTarget.topic}" has been terminated and access severed.`,
+        });
+        setTerminateTarget(null);
+        setTerminationReason("");
+        onRefresh();
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setTerminateError(error.message || "Failed to terminate live class.");
+    } finally {
+      setIsTerminating(false);
     }
   };
 
@@ -597,16 +648,32 @@ export function LiveClassesTab({
                         className="flex-1 bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-xs shadow-xs"
                       >
                         <Video className="h-3.5 w-3.5 mr-1.5" />
-                        Enter Room
+                        {isSuperAdmin ? "Monitor Room" : "Enter Room"}
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEndTarget(lc)}
-                        className="bg-white hover:bg-rose-50 text-rose-600 border-rose-200 font-bold text-xs"
-                      >
-                        End Class
-                      </Button>
+                      {isSuperAdmin ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setTerminateTarget(lc);
+                            setTerminationReason("");
+                            setTerminateError("");
+                          }}
+                          className="bg-white hover:bg-rose-50 text-rose-600 border-rose-200 font-bold text-xs"
+                        >
+                          <ShieldAlert className="h-3.5 w-3.5 mr-1 text-rose-600" />
+                          Terminate Live
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEndTarget(lc)}
+                          className="bg-white hover:bg-rose-50 text-rose-600 border-rose-200 font-bold text-xs"
+                        >
+                          End Class
+                        </Button>
+                      )}
                     </div>
                   )}
 
@@ -974,6 +1041,70 @@ export function LiveClassesTab({
           <div className="flex justify-end pt-2">
             <Button variant="outline" size="sm" onClick={() => setPreviewRecordingUrl(null)}>
               Close Preview
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      {/* SUPER ADMIN TERMINATE LIVE MODAL */}
+      <Modal
+        isOpen={!!terminateTarget}
+        onClose={() => {
+          setTerminateTarget(null);
+          setTerminationReason("");
+          setTerminateError("");
+        }}
+        title="Super Admin: Emergency Terminate Live Session"
+        description="Immediately shuts down the live broadcast and severs all connected student streams. This action is permanently audited."
+        maxWidth="md"
+      >
+        <div className="space-y-4 pt-2">
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold">
+              <ShieldAlert className="h-4 w-4 text-rose-600" />
+              <span>Emergency Session Termination</span>
+            </div>
+            <p className="text-[11px] text-rose-700">
+              Terminating &ldquo;{terminateTarget?.topic}&rdquo;. All student client connections will be immediately terminated.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-brand-charcoal">
+              Termination Reason (Required) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={terminationReason}
+              onChange={(e) => {
+                setTerminationReason(e.target.value);
+                if (terminateError) setTerminateError("");
+              }}
+              placeholder="e.g. Inappropriate content broadcasted, session breached platform guidelines..."
+              className={terminateError ? "border-rose-500" : ""}
+            />
+            {terminateError && <p className="text-[11px] text-rose-600 font-semibold">{terminateError}</p>}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-brand-border/60">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTerminateTarget(null);
+                setTerminationReason("");
+                setTerminateError("");
+              }}
+              disabled={isTerminating}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleTerminateSubmit}
+              disabled={isTerminating}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs"
+            >
+              {isTerminating && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              Confirm Termination
             </Button>
           </div>
         </div>
