@@ -270,29 +270,66 @@ export class StudentLearningService {
         };
       }
 
-      // 2. Check for Duplicate Enrollment
+      // 2. Resolve target batch binding (if not explicitly passed, find the primary active batch for this course)
+      let resolvedBatchId = batchId || null;
+      if (!resolvedBatchId) {
+        const { data: defaultBatch } = await supabase
+          .from("cms_batches")
+          .select("id")
+          .eq("course_id", courseId)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true)
+          .order("display_order", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (defaultBatch?.id) {
+          resolvedBatchId = defaultBatch.id;
+        }
+      }
+
+      // 3. Check for Duplicate Enrollment & Update Batch Binding if unlinked
       const { data: existing } = await supabase
         .from("student_enrollments")
-        .select("id, status")
+        .select("*")
         .eq("student_id", userId)
         .eq("course_id", courseId)
         .maybeSingle();
 
       if (existing) {
-        // If already enrolled, simply return the existing enrollment
+        if (resolvedBatchId && (!existing.batch_id || existing.batch_id !== resolvedBatchId)) {
+          const { data: updated, error: updateErr } = await supabase
+            .from("student_enrollments")
+            .update({
+              batch_id: resolvedBatchId,
+              status: "ACTIVE",
+              last_accessed_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id)
+            .select("*")
+            .single();
+
+          if (!updateErr && updated) {
+            return {
+              success: true,
+              enrollment: updated as StudentEnrollment,
+            };
+          }
+        }
+
         return {
           success: true,
           enrollment: existing as StudentEnrollment,
         };
       }
 
-      // 3. Insert Enrollment Record
+      // 4. Insert New Enrollment Record with resolved batch_id
       const { data: newEnrollment, error: insertError } = await supabase
         .from("student_enrollments")
         .insert({
           student_id: userId,
           course_id: courseId,
-          batch_id: batchId || null,
+          batch_id: resolvedBatchId,
           status: "ACTIVE",
           enrolled_at: new Date().toISOString(),
           last_accessed_at: new Date().toISOString(),
