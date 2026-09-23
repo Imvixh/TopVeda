@@ -239,11 +239,54 @@ export class StudentProgressService {
         liveClassesAttended = count || 0;
       }
 
-      // 7. Assessment / Test Performance (Strictly Non-Fabricated)
-      // Phase 5D will populate dedicated test tables. Zero fake numbers injected.
-      const testsAttempted = 0;
-      const quizzesAttempted = 0;
+      // 7. Assessment / Test Performance (Factual Query from student_test_attempts)
+      let testsAttempted = 0;
+      let quizzesAttempted = 0;
       const recentTestResults: RecentTestResultItem[] = [];
+
+      try {
+        const { data: attempts } = await supabase
+          .from("student_test_attempts")
+          .select(`
+            id,
+            test_id,
+            score_obtained,
+            max_score,
+            passed,
+            created_at,
+            test:student_tests(
+              id,
+              title,
+              subject_name,
+              test_type
+            )
+          `)
+          .eq("student_id", userId)
+          .in("status", ["SUBMITTED", "EVALUATED"])
+          .order("created_at", { ascending: false });
+
+        (attempts || []).forEach((att) => {
+          const testData = att.test as { id?: string; title?: string; subject_name?: string; test_type?: string } | null;
+          testsAttempted++;
+          if (testData?.test_type === "chapter_quiz") {
+            quizzesAttempted++;
+          }
+
+          if (recentTestResults.length < 5) {
+            recentTestResults.push({
+              id: att.id,
+              testTitle: testData?.title || "Academic Test",
+              subjectName: testData?.subject_name || "General",
+              scoreObtained: att.score_obtained,
+              maxScore: att.max_score,
+              passed: att.passed,
+              attemptedAt: att.created_at,
+            });
+          }
+        });
+      } catch (testErr) {
+        console.warn("[StudentProgressService] Non-blocking attempt fetch error:", testErr);
+      }
 
       // 8. Dynamic Focus Areas to Improve (Derived from enrolled subjects with lowest completion)
       const areasToImprove: string[] = [];

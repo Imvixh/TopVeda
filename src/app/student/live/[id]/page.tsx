@@ -70,6 +70,36 @@ export default function StudentLiveRoomPage() {
     return () => clearInterval(timer);
   }, [countdown]);
 
+  // Server-Authoritative Live Attendance Heartbeat Tracker (Phase 5B & 5C)
+  React.useEffect(() => {
+    if (!liveClassId || !user || !sessionData?.isLive) return;
+
+    const recordHeartbeat = async () => {
+      try {
+        await fetch("/api/student/live/attendance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            liveClassId,
+            heartbeatDurationSeconds: 30,
+          }),
+        });
+      } catch {
+        // silent non-blocking
+      }
+    };
+
+    // Initial check-in on join
+    void recordHeartbeat();
+
+    // 30s heartbeat interval while active in room
+    const heartbeatTimer = setInterval(() => {
+      void recordHeartbeat();
+    }, 30000);
+
+    return () => clearInterval(heartbeatTimer);
+  }, [liveClassId, user, sessionData?.isLive]);
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMsg.trim()) return;

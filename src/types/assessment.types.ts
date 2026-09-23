@@ -1,25 +1,11 @@
 /**
- * Assessment & Test Engine Domain Models
- * Represents tests, questions, options, student attempts, and results.
+ * Assessment & Test Engine Domain Models (Phase 5D)
+ * Represents tests, questions, options, student attempts, evaluations, and scorecards.
  */
 
-export type TestType = "chapter_quiz" | "mock_exam" | "sample_paper_test" | "live_test";
+import { ContentAccessTier } from "@/types/student-learning.types";
 
-export interface Test {
-  id: string;
-  courseId?: string;
-  chapterId?: string;
-  title: string;
-  slug: string;
-  description?: string;
-  testType: TestType;
-  durationMinutes: number;
-  totalMarks: number;
-  passingMarks: number;
-  isPublished: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+export type TestType = "chapter_quiz" | "mock_exam" | "practice_drill" | "sample_paper_test" | "live_test";
 
 export type QuestionType =
   | "single_choice"
@@ -27,12 +13,22 @@ export type QuestionType =
   | "numerical"
   | "assertion_reason";
 
+export type AttemptStatus = "IN_PROGRESS" | "SUBMITTED" | "EVALUATED" | "ABANDONED";
+
 export interface QuestionOption {
   id: string;
   questionId: string;
   optionText: string;
   optionLabel: string; // "A", "B", "C", "D"
-  isCorrect?: boolean; // Hidden from student until evaluation
+  isCorrect?: boolean; // STRICTLY HIDDEN from student until evaluation
+  displayOrder: number;
+}
+
+export interface SafeQuestionOption {
+  id: string;
+  questionId: string;
+  optionLabel: string;
+  optionText: string;
   displayOrder: number;
 }
 
@@ -48,31 +44,116 @@ export interface Question {
   options?: QuestionOption[];
 }
 
-export type AttemptStatus = "in_progress" | "submitted" | "evaluated" | "abandoned";
+export interface SafeTestQuestion {
+  id: string;
+  testId: string;
+  questionText: string;
+  questionType: QuestionType;
+  marks: number;
+  negativeMarks: number;
+  displayOrder: number;
+  options: SafeQuestionOption[];
+}
+
+export interface StudentTestItem {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string;
+  subjectId?: string;
+  subjectName: string;
+  courseId?: string;
+  chapterId?: string;
+  testType: TestType;
+  durationMinutes: number;
+  totalMarks: number;
+  passingMarks: number;
+  totalQuestions: number;
+  accessTier: ContentAccessTier;
+  iconBg: string;
+  iconColor: string;
+  badgeBg: string;
+  badgeText: string;
+  // Student state
+  isAttempted?: boolean;
+  lastAttemptId?: string;
+  lastScore?: number;
+  lastPercentage?: number;
+  lastPassed?: boolean;
+}
 
 export interface TestAttempt {
   id: string;
   studentId: string;
   testId: string;
+  status: AttemptStatus;
   startedAt: string;
   submittedAt?: string;
   totalQuestions: number;
-  attemptedQuestions: number;
-  correctAnswers: number;
-  incorrectAnswers: number;
-  score: number;
+  attemptedCount: number;
+  correctCount: number;
+  incorrectCount: number;
+  unansweredCount: number;
+  scoreObtained: number;
   maxScore: number;
   percentage: number;
-  status: AttemptStatus;
+  passed: boolean;
+  timeSpentSeconds: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface StudentAnswer {
-  id: string;
-  attemptId: string;
+export interface QuestionSubmissionItem {
   questionId: string;
   selectedOptionIds: string[];
   numericalAnswer?: string;
-  isCorrect?: boolean;
-  marksAwarded: number;
   timeSpentSeconds?: number;
+}
+
+export interface TestSubmissionPayload {
+  attemptId: string;
+  timeSpentSeconds: number;
+  answers: QuestionSubmissionItem[];
+}
+
+export interface QuestionEvaluationResult {
+  questionId: string;
+  questionText: string;
+  questionType: QuestionType;
+  marks: number;
+  negativeMarks: number;
+  marksAwarded: number;
+  isCorrect: boolean;
+  isAttempted: boolean;
+  explanation?: string;
+  studentSelectedOptionIds: string[];
+  correctOptionIds: string[];
+  options: {
+    id: string;
+    optionLabel: string;
+    optionText: string;
+    isCorrect: boolean;
+  }[];
+}
+
+export interface TestScorecardResult {
+  attemptId: string;
+  testId: string;
+  testTitle: string;
+  subjectName: string;
+  durationMinutes: number;
+  startedAt: string;
+  submittedAt: string;
+  timeSpentSeconds: number;
+  totalQuestions: number;
+  attemptedCount: number;
+  correctCount: number;
+  incorrectCount: number;
+  unansweredCount: number;
+  scoreObtained: number;
+  maxScore: number;
+  passingMarks: number;
+  percentage: number;
+  passed: boolean;
+  evaluations: QuestionEvaluationResult[];
 }
