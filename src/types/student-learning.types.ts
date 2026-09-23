@@ -1,6 +1,6 @@
 /**
  * TopVeda Phase 5: Student Learning Platform Domain Types
- * Defines data structures for My Learning, Content Access, Enrollments, Progress, and Entitlements.
+ * Defines data structures for My Learning, Content Access, Enrollments, Progress, Entitlements, and Live Attendance.
  */
 
 export type ContentAccessTier = "FREE" | "PAID_ONLY" | "PREMIUM_INCLUDED";
@@ -63,6 +63,19 @@ export interface StudentLectureProgress {
   isCompleted: boolean;
   completedAt?: string | null;
   lastWatchedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentLiveAttendance {
+  id: string;
+  studentId: string;
+  liveClassId: string;
+  joinedAt: string;
+  lastHeartbeatAt: string;
+  leftAt?: string | null;
+  durationSeconds: number;
+  isAttended: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -131,6 +144,53 @@ export interface MyLearningData {
   enrolledCourses: EnrolledCourseCardData[];
   completedCourses: EnrolledCourseCardData[];
   recommendedCourses: RecommendedCourseCardData[];
+}
+
+/**
+ * Subject Progress Presentation Item (Phase 5B Progress Tracker)
+ */
+export interface SubjectProgressItem {
+  subjectId: string;
+  subjectName: string;
+  code?: string;
+  iconName?: string;
+  iconBg: string;
+  iconColor: string;
+  barColor: string;
+  progressPercent: number;
+  totalLectures: number;
+  completedLectures: number;
+}
+
+/**
+ * Recent Test Result Presentation Item (Phase 5B/5D Assessment Progress)
+ */
+export interface RecentTestResultItem {
+  id: string;
+  testTitle: string;
+  subjectName: string;
+  scoreObtained: number;
+  maxScore: number;
+  passed: boolean;
+  attemptedAt: string;
+  iconBg?: string;
+}
+
+/**
+ * Comprehensive Student Progress Summary (Phase 5B Progress Tracker)
+ */
+export interface StudentProgressSummary {
+  overallProgressPercent: number;
+  coursesCompleted: number;
+  totalEnrolledCourses: number;
+  lecturesWatched: number;
+  totalAccessibleLectures: number;
+  testsAttempted: number;
+  quizzesAttempted: number;
+  liveClassesAttended: number;
+  subjectProgress: SubjectProgressItem[];
+  recentTestResults: RecentTestResultItem[];
+  areasToImprove: string[];
 }
 
 /**
