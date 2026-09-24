@@ -24,6 +24,8 @@ export class YouTubeUploadService {
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status";
   private static readonly YOUTUBE_VIDEOS_ENDPOINT =
     "https://www.googleapis.com/youtube/v3/videos";
+  private static readonly YOUTUBE_THUMBNAILS_ENDPOINT =
+    "https://www.googleapis.com/upload/youtube/v3/thumbnails/set";
 
   /**
    * Parses ISO 8601 duration (e.g. PT1H2M30S, PT45M12S) into seconds.
@@ -243,5 +245,58 @@ export class YouTubeUploadService {
       isProcessed,
       embedPlaybackUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
     };
+  }
+
+  /**
+   * Applies a custom thumbnail to an uploaded YouTube video.
+   * Non-blocking: catches and logs any API failures (e.g. unverified channel permissions)
+   * so the lecture upload is never aborted.
+   */
+  public static async setVideoThumbnail(
+    videoId: string,
+    imageBuffer: Buffer,
+    mimeType = "image/jpeg",
+    dbClient?: SupabaseClient
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!videoId?.trim()) {
+      return { success: false, error: "Missing video ID for thumbnail." };
+    }
+    if (!imageBuffer || imageBuffer.length === 0) {
+      return { success: false, error: "Empty thumbnail image buffer." };
+    }
+
+    try {
+      const accessToken = await YouTubeLiveService.getValidAccessToken(dbClient);
+      const url = `${this.YOUTUBE_THUMBNAILS_ENDPOINT}?videoId=${encodeURIComponent(videoId.trim())}&uploadType=media`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": mimeType,
+          "Content-Length": String(imageBuffer.length),
+          Accept: "application/json",
+        },
+        body: new Uint8Array(imageBuffer),
+      });
+
+      if (!response.ok) {
+        let errorMsg = `HTTP ${response.status}`;
+        try {
+          const errJson = await response.json();
+          if (errJson.error?.message) errorMsg = errJson.error.message;
+        } catch {
+          // Fallback
+        }
+        console.warn(`[YouTubeUploadService] Non-fatal custom thumbnail notice for video ${videoId}: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+
+      return { success: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error";
+      console.warn(`[YouTubeUploadService] Non-fatal custom thumbnail error for video ${videoId}: ${msg}`);
+      return { success: false, error: msg };
+    }
   }
 }

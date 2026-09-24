@@ -76,7 +76,8 @@ export function RecordedLecturesTab({
   const [uploadBatchId, setUploadBatchId] = React.useState("");
   const [uploadLectureNumber, setUploadLectureNumber] = React.useState("1");
   const [uploadDescription, setUploadDescription] = React.useState("");
-  const [uploadThumbnailUrl, setUploadThumbnailUrl] = React.useState("/thumbnails/physics_motion.jpg");
+  const [thumbnailFile, setThumbnailFile] = React.useState<File | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = React.useState<string | null>(null);
   const [uploadVideoPlaybackUrl, setUploadVideoPlaybackUrl] = React.useState("https://stream.topveda.com/lectures/sample.m3u8");
   const [uploadDurationFormatted, setUploadDurationFormatted] = React.useState("45:00");
   const [uploadStatusTarget, setUploadStatusTarget] = React.useState<"DRAFT" | "PENDING_REVIEW">("PENDING_REVIEW");
@@ -144,7 +145,6 @@ export function RecordedLecturesTab({
 
     const errors: Record<string, string> = {};
     if (!uploadTitle.trim()) errors.title = "Lecture title is required.";
-    if (!uploadThumbnailUrl.trim()) errors.thumbnail = "Thumbnail URL is required.";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -157,7 +157,7 @@ export function RecordedLecturesTab({
 
       let res: Response;
 
-      if (videoFile) {
+      if (videoFile || thumbnailFile) {
         const formData = new FormData();
         formData.append("title", uploadTitle.trim());
         formData.append("subject", uploadSubject);
@@ -168,11 +168,12 @@ export function RecordedLecturesTab({
         if (uploadBatchId) formData.append("batchId", uploadBatchId);
         formData.append("lectureNumber", uploadLectureNumber);
         if (uploadDescription.trim()) formData.append("description", uploadDescription.trim());
-        formData.append("thumbnailUrl", uploadThumbnailUrl.trim());
+        if (uploadVideoPlaybackUrl.trim()) formData.append("videoPlaybackUrl", uploadVideoPlaybackUrl.trim());
         formData.append("durationFormatted", uploadDurationFormatted.trim() || "45:00");
         formData.append("durationHuman", `${uploadDurationFormatted.split(":")[0] || "45"} min`);
         formData.append("status", uploadStatusTarget);
-        formData.append("video", videoFile);
+        if (videoFile) formData.append("video", videoFile);
+        if (thumbnailFile) formData.append("thumbnail", thumbnailFile);
 
         res = await fetch("/api/teacher/lectures/upload", {
           method: "POST",
@@ -189,7 +190,6 @@ export function RecordedLecturesTab({
           batchId: uploadBatchId || null,
           lectureNumber: parseInt(uploadLectureNumber, 10) || 1,
           description: uploadDescription.trim() || undefined,
-          thumbnailUrl: uploadThumbnailUrl.trim(),
           videoPlaybackUrl: uploadVideoPlaybackUrl.trim() || undefined,
           durationFormatted: uploadDurationFormatted.trim() || "45:00",
           durationHuman: `${uploadDurationFormatted.split(":")[0] || "45"} min`,
@@ -220,6 +220,11 @@ export function RecordedLecturesTab({
         setUploadTitle("");
         setUploadDescription("");
         setVideoFile(null);
+        if (thumbnailPreviewUrl) {
+          URL.revokeObjectURL(thumbnailPreviewUrl);
+        }
+        setThumbnailFile(null);
+        setThumbnailPreviewUrl(null);
         setMaterialFile(null);
         setUploadedMaterialUrl(null);
         onRefresh();
@@ -734,16 +739,84 @@ export function RecordedLecturesTab({
             )}
           </div>
 
-          {/* Thumbnail URL */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-brand-charcoal">
-              Thumbnail URL <span className="text-red-500">*</span>
-            </label>
-            <Input
-              value={uploadThumbnailUrl}
-              onChange={(e) => setUploadThumbnailUrl(e.target.value)}
-              placeholder="/thumbnails/sample.jpg"
-            />
+          {/* Custom Thumbnail Upload Box (Optional) */}
+          <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/80 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-brand-charcoal flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-amber-600" />
+                Custom Thumbnail (Optional)
+              </label>
+              <span className="text-[10px] font-bold text-amber-700 bg-white px-2 py-0.5 rounded-full border border-amber-200">
+                Max 2 MB • 16:9 recommended
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                id="lecture-thumbnail-file-input"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 2 * 1024 * 1024) {
+                      setFormErrors((prev) => ({ ...prev, thumbnail: "Thumbnail image exceeds 2 MB limit (16:9 ratio recommended)." }));
+                      return;
+                    }
+                    setFormErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.thumbnail;
+                      return copy;
+                    });
+                    setThumbnailFile(file);
+                    if (thumbnailPreviewUrl) {
+                      URL.revokeObjectURL(thumbnailPreviewUrl);
+                    }
+                    setThumbnailPreviewUrl(URL.createObjectURL(file));
+                  }
+                }}
+              />
+              <label
+                htmlFor="lecture-thumbnail-file-input"
+                className="w-full sm:w-auto cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white border border-brand-border/80 text-xs font-bold text-brand-charcoal hover:bg-brand-bg-warm transition-all shadow-2xs shrink-0"
+              >
+                <UploadCloud className="h-4 w-4 text-amber-600" />
+                {thumbnailFile ? "Change Thumbnail" : "Choose Custom Thumbnail"}
+              </label>
+
+              {thumbnailFile && thumbnailPreviewUrl ? (
+                <div className="flex items-center gap-2.5 text-xs text-brand-charcoal font-medium bg-white p-1.5 pr-3 rounded-xl border border-brand-border w-full justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <img
+                      src={thumbnailPreviewUrl}
+                      alt="Thumbnail preview"
+                      className="h-9 w-14 object-cover rounded-lg border border-brand-border shrink-0"
+                    />
+                    <div className="truncate">
+                      <p className="truncate text-xs font-bold text-brand-charcoal">{thumbnailFile.name}</p>
+                      <p className="text-[10px] text-brand-text-muted">{(thumbnailFile.size / 1024).toFixed(0)} KB</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (thumbnailPreviewUrl) URL.revokeObjectURL(thumbnailPreviewUrl);
+                      setThumbnailFile(null);
+                      setThumbnailPreviewUrl(null);
+                    }}
+                    className="text-[11px] text-red-600 font-bold hover:underline shrink-0 ml-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-brand-text-muted">
+                  Optional • JPG, PNG or WebP • Max 2 MB • 16:9 recommended
+                </p>
+              )}
+            </div>
+            {formErrors.thumbnail && <p className="text-[11px] text-red-500">{formErrors.thumbnail}</p>}
           </div>
 
           {/* Description */}

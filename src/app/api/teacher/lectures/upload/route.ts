@@ -30,6 +30,15 @@ const ALLOWED_VIDEO_EXTENSIONS = new Set([
 
 const MAX_VIDEO_FILE_SIZE_BYTES = 1024 * 1024 * 1024; // 1 GB maximum upload limit
 
+// Whitelist of supported thumbnail image MIME types
+const ALLOWED_THUMBNAIL_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const MAX_THUMBNAIL_FILE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB maximum thumbnail size (YouTube thumbnails.set limit)
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -82,7 +91,7 @@ export async function POST(request: NextRequest) {
     let batchId: string | null = null;
     let lectureNumber = 1;
     let description: string | null = null;
-    let thumbnailUrl = "/thumbnails/sample.jpg";
+    let thumbnailUrl = "";
     let thumbnailBg = "from-[#0F2042] via-[#162D59] to-[#0A162B]";
     let videoStreamId: string | null = null;
     let videoPlaybackUrl: string | null = null;
@@ -108,7 +117,7 @@ export async function POST(request: NextRequest) {
       batchId = (formData.get("batchId") as string) || null;
       lectureNumber = parseInt((formData.get("lectureNumber") as string) || "1", 10) || 1;
       description = (formData.get("description") as string) || null;
-      thumbnailUrl = (formData.get("thumbnailUrl") as string) || thumbnailUrl;
+      thumbnailUrl = (formData.get("thumbnailUrl") as string) || "";
       thumbnailBg = (formData.get("thumbnailBg") as string) || thumbnailBg;
       videoStreamId = (formData.get("videoStreamId") as string) || null;
       videoPlaybackUrl = (formData.get("videoPlaybackUrl") as string) || null;
@@ -149,7 +158,7 @@ export async function POST(request: NextRequest) {
       batchId = body.batchId || null;
       lectureNumber = body.lectureNumber || 1;
       description = body.description || null;
-      thumbnailUrl = body.thumbnailUrl || thumbnailUrl;
+      thumbnailUrl = body.thumbnailUrl || "";
       thumbnailBg = body.thumbnailBg || thumbnailBg;
       videoStreamId = body.videoStreamId || null;
       videoPlaybackUrl = body.videoPlaybackUrl || null;
@@ -170,8 +179,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subject is required." }, { status: 400 });
     }
 
-    // 5. Handle Thumbnail File Upload if attached
+    // 5. Handle Optional Thumbnail File Upload if attached
+    let thumbnailBuffer: Buffer | null = null;
     if (thumbnailFile) {
+      if (!ALLOWED_THUMBNAIL_MIME_TYPES.has(thumbnailFile.type)) {
+        return NextResponse.json(
+          {
+            error: `Unsupported thumbnail format "${thumbnailFile.type}". Please upload JPG, PNG, or WebP image.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      if (thumbnailFile.size > MAX_THUMBNAIL_FILE_SIZE_BYTES) {
+        return NextResponse.json(
+          {
+            error: `Thumbnail image size exceeds maximum limit of 2 MB (${(thumbnailFile.size / (1024 * 1024)).toFixed(1)} MB uploaded).`,
+          },
+          { status: 400 }
+        );
+      }
+
       try {
         const thumbEntityId = crypto.randomUUID();
         const thumbPath = StorageService.generateScopedPath(user.id, thumbEntityId, thumbnailFile.name);
@@ -185,6 +213,9 @@ export async function POST(request: NextRequest) {
         if (!thumbUploadErr && uploadedThumbPath) {
           thumbnailUrl = uploadedThumbPath;
         }
+
+        const thumbArrayBuf = await thumbnailFile.arrayBuffer();
+        thumbnailBuffer = Buffer.from(thumbArrayBuf);
       } catch (thumbErr) {
         console.warn("[LectureUpload] Non-blocking thumbnail storage warning:", thumbErr);
       }
@@ -262,6 +293,16 @@ export async function POST(request: NextRequest) {
       finalVideoStreamId = uploadResult.videoId;
       finalVideoPlaybackUrl = uploadResult.embedPlaybackUrl;
       videoUploadStatus = "ready";
+
+      // If custom thumbnail buffer is available, apply it to YouTube (non-blocking)
+      if (thumbnailBuffer && finalVideoStreamId) {
+        await YouTubeUploadService.setVideoThumbnail(
+          finalVideoStreamId,
+          thumbnailBuffer,
+          thumbnailFile?.type || "image/jpeg",
+          supabase
+        );
+      }
     }
 
     if (!finalVideoStreamId) {
@@ -298,7 +339,7 @@ export async function POST(request: NextRequest) {
         duration_seconds: durationSeconds || 2700,
         duration_formatted: durationFormatted || "45:00",
         duration_human: durationHuman || "45 min",
-        categoryTag: categoryTag || "Recorded Lecture",
+        category_tag: categoryTag || "Recorded Lecture",
         is_home_featured: false,
         is_free_preview: isFreePreview ?? true,
         material_ids: materialIds || [],
