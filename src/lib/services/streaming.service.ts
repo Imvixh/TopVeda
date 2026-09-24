@@ -1,76 +1,94 @@
 /**
- * TopVeda Server-Authoritative Streaming Provider & Session Abstraction (Phase 4.1 Step 5J)
+ * TopVeda Server-Authoritative Streaming Provider & Session Abstraction (Phase 6A)
  * Decouples live broadcasting, WebRTC/HLS sessions, recording processing,
- * and emergency termination from CMS storage.
+ * and emergency termination from CMS storage, delegating live input provisioning
+ * to real Cloudflare Stream REST API in production.
  */
 
-export interface CreateSessionDTO {
-  liveClassId: string;
-  topic: string;
-  educatorId: string;
-  educatorName: string;
-  scheduledStart: string;
-  scheduledEnd?: string | null;
-}
+import {
+  IStreamingProvider,
+  CreateSessionDTO,
+  JoinSessionDTO,
+  StreamingSessionResult,
+  SessionStatusResult,
+} from "@/types/streaming.types";
+import {
+  CloudflareStreamService,
+  CloudflareStreamConfigError,
+} from "./cloudflare-stream.service";
+import { YouTubeStreamingProvider } from "./youtube-streaming.service";
 
-export interface JoinSessionDTO {
-  sessionId: string;
-  liveClassId: string;
-  userId: string;
-  userName: string;
-  userRole: "SUPER_ADMIN" | "ADMIN" | "STUDENT";
-}
-
-export interface StreamingSessionResult {
-  provider: string;
-  sessionId: string;
-  streamRoomUrl: string;
-  // Internal server stream key (never sent to client in public responses)
-  internalStreamKey?: string;
-}
-
-export interface SessionStatusResult {
-  sessionId: string;
-  status: "SCHEDULED" | "LIVE" | "COMPLETED" | "TERMINATED" | "CANCELLED";
-  viewerCount: number;
-  durationSeconds: number;
-  recordingStatus: "NONE" | "PROCESSING" | "READY" | "FAILED";
-  recordingUrl?: string | null;
-}
-
-export interface IStreamingProvider {
-  createSession(params: CreateSessionDTO): Promise<StreamingSessionResult>;
-  getJoinUrl(params: JoinSessionDTO): Promise<string>;
-  startSession(sessionId: string): Promise<{ success: boolean; startedAt: string }>;
-  endSession(sessionId: string): Promise<{ success: boolean; endedAt: string; recordingId?: string }>;
-  terminateSession(sessionId: string, reason: string): Promise<{ success: boolean; terminatedAt: string }>;
-  getStatus(sessionId: string): Promise<SessionStatusResult>;
-  getRecordingDownloadUrl(recordingId: string, userRole: string): Promise<string | null>;
-}
+export type {
+  IStreamingProvider,
+  CreateSessionDTO,
+  JoinSessionDTO,
+  StreamingSessionResult,
+  SessionStatusResult,
+};
+export { YouTubeStreamingProvider };
 
 /**
- * Standard Production/Development Provider Implementation
+ * Real Cloudflare Stream Provider Implementation
  * Server-authoritative and truthful without faking live states.
  */
-class StandardStreamingProvider implements IStreamingProvider {
-  private readonly providerName = "cloudflare_stream";
+export class CloudflareStreamingProvider implements IStreamingProvider {
+  public readonly providerName = "cloudflare_stream";
 
   async createSession(params: CreateSessionDTO): Promise<StreamingSessionResult> {
-    const sessionId = `topveda_live_${params.liveClassId.slice(0, 8)}_${Date.now()}`;
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const roomUrl = `${baseUrl}/student/live/${params.liveClassId}`;
 
+    // 1. Production / Configured Path: Call Real Cloudflare Stream REST API
+    if (CloudflareStreamService.isConfigured()) {
+      const idempotencyKey = `topveda-live-${params.liveClassId}`;
+      const liveInput = await CloudflareStreamService.createLiveInput({
+        name: params.topic,
+        liveClassId: params.liveClassId,
+        recordingMode: "automatic",
+        timeoutSeconds: 300,
+        idempotencyKey,
+        meta: {
+          educatorId: params.educatorId,
+          educatorName: params.educatorName,
+          scheduledStart: params.scheduledStart,
+          scheduledEnd: params.scheduledEnd || undefined,
+        },
+      });
+
+      return {
+        provider: this.providerName,
+        sessionId: liveInput.uid, // Real Cloudflare Live Input UID
+        streamRoomUrl: roomUrl,
+        internalStreamKey: liveInput.rtmps?.streamKey,
+        webRtcPublishUrl: liveInput.webRTC?.url,
+        webRtcPlaybackUrl: liveInput.webRTCPlayback?.url,
+        rtmpsUrl: liveInput.rtmps?.url,
+        srtUrl: liveInput.srt?.url,
+      };
+    }
+
+    // 2. Production Guard: Never fake IDs in production environment
+    if (process.env.NODE_ENV === "production") {
+      throw new CloudflareStreamConfigError(
+        "Cloudflare Stream is not configured in production. Set CLOUDFLARE_STREAM_ACCOUNT_ID and CLOUDFLARE_STREAM_API_TOKEN in the server environment."
+      );
+    }
+
+    // 3. Development-Only Isolated Fallback (clearly marked)
+    console.warn(
+      `[DEV ONLY WARNING] Cloudflare Stream API credentials not found. Using local simulated development session for liveClassId="${params.liveClassId}".`
+    );
+
     return {
       provider: this.providerName,
-      sessionId,
+      sessionId: `dev_mock_cf_${params.liveClassId.slice(0, 8)}_${Date.now()}`,
       streamRoomUrl: roomUrl,
-      internalStreamKey: `cf_live_key_${params.liveClassId.slice(0, 6)}_${Math.random().toString(36).substring(7)}`,
+      internalStreamKey: `dev_mock_key_${params.liveClassId.slice(0, 6)}_${Math.random().toString(36).substring(7)}`,
     };
   }
 
   async getJoinUrl(params: JoinSessionDTO): Promise<string> {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    // Returns appropriate student or educator live room route
     return `${baseUrl}/student/live/${params.liveClassId}?role=${params.userRole.toLowerCase()}&session=${params.sessionId}`;
   }
 
@@ -97,6 +115,26 @@ class StandardStreamingProvider implements IStreamingProvider {
   }
 
   async getStatus(sessionId: string): Promise<SessionStatusResult> {
+    // If configured and not a dev mock, query live status from Cloudflare
+    if (CloudflareStreamService.isConfigured() && !sessionId.startsWith("dev_mock_")) {
+      try {
+        const liveInput = await CloudflareStreamService.getLiveInput(sessionId);
+        if (liveInput) {
+          const isLiveConnected = liveInput.status === "connected";
+          return {
+            sessionId,
+            status: isLiveConnected ? "LIVE" : "SCHEDULED",
+            viewerCount: 0,
+            durationSeconds: 0,
+            recordingStatus: liveInput.recording?.mode === "automatic" ? "READY" : "NONE",
+            recordingUrl: null,
+          };
+        }
+      } catch {
+        // Fall back gracefully to scheduled state
+      }
+    }
+
     return {
       sessionId,
       status: "SCHEDULED",
@@ -108,18 +146,30 @@ class StandardStreamingProvider implements IStreamingProvider {
   }
 
   async getRecordingDownloadUrl(recordingId: string, userRole: string): Promise<string | null> {
-    // Teachers are strictly prohibited from downloading live stream recordings
+    // Teachers and Students are strictly prohibited from downloading live stream recordings
     if (userRole !== "SUPER_ADMIN") {
       return null;
     }
 
-    // Super Admin permitted download url
-    return `https://stream.topveda.com/recordings/${recordingId}/download.mp4`;
+    const config = CloudflareStreamService.isConfigured()
+      ? CloudflareStreamService.getConfig()
+      : null;
+
+    const subdomain = config?.customerSubdomain || "cloudflarestream.com";
+    return `https://${subdomain}/${recordingId}/downloads/default.mp4`;
   }
 }
 
 export class StreamingService {
-  private static provider: IStreamingProvider = new StandardStreamingProvider();
+  private static provider: IStreamingProvider = new YouTubeStreamingProvider();
+
+  public static setProvider(customProvider: IStreamingProvider): void {
+    this.provider = customProvider;
+  }
+
+  public static getProvider(): IStreamingProvider {
+    return this.provider;
+  }
 
   public static async createLiveSession(params: CreateSessionDTO): Promise<StreamingSessionResult> {
     return this.provider.createSession(params);

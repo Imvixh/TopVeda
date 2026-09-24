@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   type LucideIcon,
 } from "lucide-react";
+import { YoutubeIcon } from "@/components/brand/youtube-icon";
 
 export interface CmsNavItem {
   title: string;
@@ -166,6 +167,19 @@ export const CMS_NAV_SECTIONS: CmsNavSection[] = [
         href: "/admin/cms/chatbot/knowledge",
         icon: Database,
         description: "Curriculum specifications, courses, and verified knowledge sync.",
+      },
+    ],
+  },
+  {
+    section: "INTEGRATIONS",
+    items: [
+      {
+        title: "YouTube Integration",
+        href: "/admin/cms/integrations/youtube",
+        icon: YoutubeIcon as unknown as LucideIcon,
+        description: "Google OAuth connection, YouTube channel status, and live broadcast identity.",
+        badge: "Phase 6A",
+        badgeVariant: "primary",
       },
     ],
   },

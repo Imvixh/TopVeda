@@ -158,6 +158,15 @@ export async function GET(request: NextRequest) {
         ? isLiveActive
         : isStudentAllowed;
 
+    const playbackVideoId = liveClass.provider_session_id || null;
+    const embedPlaybackUrl = playbackVideoId
+      ? `https://www.youtube-nocookie.com/embed/${playbackVideoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
+      : null;
+
+    const studioPublishUrl = isOwnerTeacher || isSuperAdmin
+      ? playbackVideoId ? `https://studio.youtube.com/video/${playbackVideoId}/livestreaming` : null
+      : null;
+
     return NextResponse.json({
       id: liveClass.id,
       topic: liveClass.topic,
@@ -169,10 +178,14 @@ export async function GET(request: NextRequest) {
       scheduledEnd: liveClass.scheduled_end,
       timeDisplay: liveClass.time_display,
       liveStatus: liveClass.live_status,
+      streamProvider: liveClass.stream_provider,
       isLive: isEffectiveLive,
       canJoin,
       accessMode,
       joinUrl,
+      playbackVideoId,
+      embedPlaybackUrl,
+      studioPublishUrl,
       isTeacher: isOwnerTeacher || isSuperAdmin,
       isPreparationWindow: isOwnerTeacher || isSuperAdmin ? isTeacherInPreparationWindow : isStudentInPreparation,
       secondsToStart: Math.max(0, Math.floor((scheduledStartMs - nowMs) / 1000)),

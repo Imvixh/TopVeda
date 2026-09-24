@@ -82,6 +82,7 @@ export function RecordedLecturesTab({
   const [uploadStatusTarget, setUploadStatusTarget] = React.useState<"DRAFT" | "PENDING_REVIEW">("PENDING_REVIEW");
 
   // Material File Upload State
+  const [videoFile, setVideoFile] = React.useState<File | null>(null);
   const [materialFile, setMaterialFile] = React.useState<File | null>(null);
   const [isUploadingMaterial, setIsUploadingMaterial] = React.useState(false);
   const [uploadedMaterialUrl, setUploadedMaterialUrl] = React.useState<string | null>(null);
@@ -154,28 +155,53 @@ export function RecordedLecturesTab({
       setIsUploading(true);
       setFeedback(null);
 
-      const payload = {
-        title: uploadTitle.trim(),
-        subject: uploadSubject,
-        boardId: uploadBoardId || null,
-        classId: uploadClassId || null,
-        courseId: uploadCourseId || null,
-        chapterId: uploadChapterId || null,
-        batchId: uploadBatchId || null,
-        lectureNumber: parseInt(uploadLectureNumber, 10) || 1,
-        description: uploadDescription.trim() || undefined,
-        thumbnailUrl: uploadThumbnailUrl.trim(),
-        videoPlaybackUrl: uploadVideoPlaybackUrl.trim() || undefined,
-        durationFormatted: uploadDurationFormatted.trim() || "45:00",
-        durationHuman: `${uploadDurationFormatted.split(":")[0] || "45"} min`,
-        status: uploadStatusTarget,
-      };
+      let res: Response;
 
-      const res = await fetch("/api/teacher/lectures/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (videoFile) {
+        const formData = new FormData();
+        formData.append("title", uploadTitle.trim());
+        formData.append("subject", uploadSubject);
+        if (uploadBoardId) formData.append("boardId", uploadBoardId);
+        if (uploadClassId) formData.append("classId", uploadClassId);
+        if (uploadCourseId) formData.append("courseId", uploadCourseId);
+        if (uploadChapterId) formData.append("chapterId", uploadChapterId);
+        if (uploadBatchId) formData.append("batchId", uploadBatchId);
+        formData.append("lectureNumber", uploadLectureNumber);
+        if (uploadDescription.trim()) formData.append("description", uploadDescription.trim());
+        formData.append("thumbnailUrl", uploadThumbnailUrl.trim());
+        formData.append("durationFormatted", uploadDurationFormatted.trim() || "45:00");
+        formData.append("durationHuman", `${uploadDurationFormatted.split(":")[0] || "45"} min`);
+        formData.append("status", uploadStatusTarget);
+        formData.append("video", videoFile);
+
+        res = await fetch("/api/teacher/lectures/upload", {
+          method: "POST",
+          body: formData,
+        });
+      } else {
+        const payload = {
+          title: uploadTitle.trim(),
+          subject: uploadSubject,
+          boardId: uploadBoardId || null,
+          classId: uploadClassId || null,
+          courseId: uploadCourseId || null,
+          chapterId: uploadChapterId || null,
+          batchId: uploadBatchId || null,
+          lectureNumber: parseInt(uploadLectureNumber, 10) || 1,
+          description: uploadDescription.trim() || undefined,
+          thumbnailUrl: uploadThumbnailUrl.trim(),
+          videoPlaybackUrl: uploadVideoPlaybackUrl.trim() || undefined,
+          durationFormatted: uploadDurationFormatted.trim() || "45:00",
+          durationHuman: `${uploadDurationFormatted.split(":")[0] || "45"} min`,
+          status: uploadStatusTarget,
+        };
+
+        res = await fetch("/api/teacher/lectures/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
 
       const data = await res.json();
 
@@ -186,13 +212,14 @@ export function RecordedLecturesTab({
           type: "success",
           message:
             uploadStatusTarget === "PENDING_REVIEW"
-              ? `Lecture "${uploadTitle}" submitted to Super Admin for verification.`
+              ? `Lecture "${uploadTitle}" uploaded to YouTube and submitted to Super Admin for verification.`
               : `Lecture draft "${uploadTitle}" saved successfully.`,
         });
         setIsUploadOpen(false);
         // Reset form
         setUploadTitle("");
         setUploadDescription("");
+        setVideoFile(null);
         setMaterialFile(null);
         setUploadedMaterialUrl(null);
         onRefresh();
@@ -646,27 +673,77 @@ export function RecordedLecturesTab({
             </div>
           </div>
 
-          {/* Video Playback & Thumbnail URLs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">
-                Thumbnail URL <span className="text-red-500">*</span>
+          {/* Video Asset Upload Box */}
+          <div className="p-3.5 rounded-2xl bg-orange-50/50 border border-orange-200/80 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-brand-charcoal flex items-center gap-1.5">
+                <Video className="h-4 w-4 text-brand-orange" />
+                Select Recorded Video File (Auto-Upload to YouTube)
               </label>
-              <Input
-                value={uploadThumbnailUrl}
-                onChange={(e) => setUploadThumbnailUrl(e.target.value)}
-                placeholder="/thumbnails/sample.jpg"
-              />
+              <span className="text-[10px] font-bold text-brand-orange bg-white px-2 py-0.5 rounded-full border border-orange-200">
+                YouTube v3 Ingest
+              </span>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Video Stream / HLS URL</label>
-              <Input
-                value={uploadVideoPlaybackUrl}
-                onChange={(e) => setUploadVideoPlaybackUrl(e.target.value)}
-                placeholder="https://stream.topveda.com/.../manifest.m3u8"
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-matroska,video/x-msvideo"
+                id="lecture-video-file-input"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setVideoFile(file);
+                  }
+                }}
               />
+              <label
+                htmlFor="lecture-video-file-input"
+                className="w-full sm:w-auto cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white border border-brand-border/80 text-xs font-bold text-brand-charcoal hover:bg-brand-bg-warm transition-all shadow-2xs shrink-0"
+              >
+                <UploadCloud className="h-4 w-4 text-brand-orange" />
+                {videoFile ? "Change Video File" : "Choose Video File (MP4, WebM, MOV)"}
+              </label>
+
+              {videoFile ? (
+                <div className="flex items-center gap-2 text-xs text-brand-charcoal font-medium bg-white px-3 py-1.5 rounded-xl border border-brand-border w-full justify-between">
+                  <span className="truncate max-w-[200px] sm:max-w-[260px] font-bold text-brand-charcoal">
+                    {videoFile.name}
+                  </span>
+                  <span className="text-[11px] text-brand-text-muted shrink-0">
+                    {(videoFile.size / (1024 * 1024)).toFixed(1)} MB
+                  </span>
+                </div>
+              ) : (
+                <p className="text-[11px] text-brand-text-muted">
+                  Or provide a pre-existing HLS stream URL below if already hosted.
+                </p>
+              )}
             </div>
+
+            {!videoFile && (
+              <div className="pt-1">
+                <Input
+                  value={uploadVideoPlaybackUrl}
+                  onChange={(e) => setUploadVideoPlaybackUrl(e.target.value)}
+                  placeholder="Fallback Stream URL: https://stream.topveda.com/.../manifest.m3u8"
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Thumbnail URL */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-brand-charcoal">
+              Thumbnail URL <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={uploadThumbnailUrl}
+              onChange={(e) => setUploadThumbnailUrl(e.target.value)}
+              placeholder="/thumbnails/sample.jpg"
+            />
           </div>
 
           {/* Description */}

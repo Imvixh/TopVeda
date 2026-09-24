@@ -14,15 +14,11 @@ import {
   CheckCircle2,
   Clock,
   User,
-  BookOpen,
   Sparkles,
   Loader2,
-  FileText,
-  HelpCircle,
-  Share2,
-  Video,
+  ShieldCheck,
+  BookOpen,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface LectureDetail {
   id: string;
@@ -30,9 +26,11 @@ interface LectureDetail {
   subject: string;
   teacher_name: string;
   description?: string;
+  duration_seconds?: number;
   duration_human?: string;
   duration_formatted?: string;
   video_playback_url?: string;
+  video_stream_id?: string;
   category_tag?: string;
   course_id?: string;
   batch_id?: string;
@@ -51,6 +49,7 @@ export default function LectureVideoPlayerPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCompleted, setIsCompleted] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [watchProgressPercent, setWatchProgressPercent] = React.useState(0);
 
   const fetchLecture = React.useCallback(async () => {
     if (!lectureId) return;
@@ -66,9 +65,11 @@ export default function LectureVideoPlayerPage() {
           subject,
           teacher_name,
           description,
+          duration_seconds,
           duration_human,
           duration_formatted,
           video_playback_url,
+          video_stream_id,
           category_tag,
           course_id,
           batch_id,
@@ -84,37 +85,46 @@ export default function LectureVideoPlayerPage() {
         return;
       }
 
-      // Check progress if student is logged in
+      // Check existing progress if student is logged in
       let completed = false;
+      let existingProgress = 0;
       if (user) {
         const { data: progress } = await supabase
           .from("student_lecture_progress")
-          .select("is_completed")
+          .select("is_completed, last_position_seconds, watch_duration_seconds")
           .eq("student_id", user.id)
           .eq("lecture_id", lectureId)
           .maybeSingle();
 
         completed = !!progress?.is_completed;
-
-        // Record activity and progress
-        if (data.course_id) {
-          await supabase.from("student_lecture_progress").upsert(
-            {
-              student_id: user.id,
-              lecture_id: lectureId,
-              course_id: data.course_id,
-              is_completed: true,
-              last_watched_at: new Date().toISOString(),
-              progress_percentage: 100,
-            },
-            { onConflict: "student_id,lecture_id" }
+        if (completed) {
+          existingProgress = 100;
+        } else if (progress?.last_position_seconds && data.duration_seconds) {
+          existingProgress = Math.min(
+            100,
+            Math.round((progress.last_position_seconds / data.duration_seconds) * 100)
           );
-          completed = true;
+        }
+
+        // Send an initial watch heartbeat
+        if (data.course_id) {
+          await fetch("/api/student/learning/progress", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lectureId,
+              courseId: data.course_id,
+              lastPositionSeconds: progress?.last_position_seconds || 30,
+              watchDurationSeconds: 30,
+              totalDurationSeconds: data.duration_seconds || 2700,
+            }),
+          }).catch((e) => console.warn("Progress update warning:", e));
         }
       }
 
       setLecture({ ...data, is_completed: completed });
       setIsCompleted(completed);
+      setWatchProgressPercent(existingProgress);
     } catch (err) {
       console.error("Failed to fetch lecture details:", err);
     } finally {
@@ -127,6 +137,53 @@ export default function LectureVideoPlayerPage() {
       fetchLecture();
     }
   }, [isAuthLoading, fetchLecture]);
+
+  // Helper to extract YouTube embed URL
+  const getEmbedUrl = React.useCallback((): string | null => {
+    if (!lecture) return null;
+    const url = lecture.video_playback_url;
+    const streamId = lecture.video_stream_id;
+
+    if (url && (url.includes("youtube.com") || url.includes("youtube-nocookie.com") || url.includes("youtu.be"))) {
+      if (url.includes("/embed/")) return url;
+      const vMatch = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+      if (vMatch && vMatch[1]) {
+        return `https://www.youtube-nocookie.com/embed/${vMatch[1]}?enablejsapi=1&rel=0&modestbranding=1`;
+      }
+    }
+
+    if (streamId && streamId.length === 11 && !streamId.startsWith("cf_")) {
+      return `https://www.youtube-nocookie.com/embed/${streamId}?enablejsapi=1&rel=0&modestbranding=1`;
+    }
+
+    return null;
+  }, [lecture]);
+
+  const handleManualComplete = async () => {
+    if (!user || !lecture || !lecture.course_id) return;
+    try {
+      const totalSecs = lecture.duration_seconds || 2700;
+      const res = await fetch("/api/student/learning/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lectureId: lecture.id,
+          courseId: lecture.course_id,
+          lastPositionSeconds: totalSecs,
+          watchDurationSeconds: totalSecs,
+          totalDurationSeconds: totalSecs,
+        }),
+      });
+      if (res.ok) {
+        setIsCompleted(true);
+        setWatchProgressPercent(100);
+      }
+    } catch (err) {
+      console.error("Failed to mark completed:", err);
+    }
+  };
+
+  const embedUrl = getEmbedUrl();
 
   return (
     <div className="min-h-screen bg-[#FDFDFC] text-brand-text-primary flex flex-col font-sans antialiased">
@@ -145,13 +202,13 @@ export default function LectureVideoPlayerPage() {
             className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-text-muted hover:text-brand-orange transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Back</span>
+            <span>Back to Course Lectures</span>
           </button>
 
           {isLoading ? (
             <div className="p-16 text-center flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-              <p className="text-xs font-semibold text-brand-text-muted">Loading video lecture...</p>
+              <p className="text-xs font-semibold text-brand-text-muted">Loading secure video lecture...</p>
             </div>
           ) : !lecture ? (
             <div className="p-12 text-center bg-white rounded-3xl border border-brand-border space-y-3">
@@ -168,9 +225,17 @@ export default function LectureVideoPlayerPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Video Player Box */}
+              {/* Video Player Canvas */}
               <div className="relative aspect-video w-full rounded-3xl overflow-hidden bg-brand-charcoal border border-brand-border/80 shadow-lg flex items-center justify-center group">
-                {lecture.video_playback_url ? (
+                {embedUrl ? (
+                  <iframe
+                    src={embedUrl}
+                    title={lecture.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="w-full h-full border-0"
+                  />
+                ) : lecture.video_playback_url ? (
                   <video
                     src={lecture.video_playback_url}
                     controls
@@ -212,11 +277,19 @@ export default function LectureVideoPlayerPage() {
                       <Clock className="h-3.5 w-3.5" />
                       {lecture.duration_human || lecture.duration_formatted || "45 min"}
                     </span>
-                    {isCompleted && (
-                      <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Completed
+                    {isCompleted ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-600 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Completed (100%)
                       </span>
+                    ) : (
+                      <button
+                        onClick={handleManualComplete}
+                        className="inline-flex items-center gap-1 text-brand-orange hover:text-brand-orange-hover font-bold bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200 transition-colors"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Mark Completed
+                      </button>
                     )}
                   </div>
                 </div>
@@ -236,6 +309,14 @@ export default function LectureVideoPlayerPage() {
                     {lecture.description}
                   </p>
                 )}
+
+                {/* Privacy & Governance Notice Banner */}
+                <div className="p-3.5 rounded-2xl bg-brand-bg-warm/80 border border-brand-border/70 flex items-start gap-2.5 text-xs text-brand-text-muted">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] leading-relaxed">
+                    <strong>TopVeda Security Model:</strong> TopVeda authentication and enrollment control access to the embedded player. YouTube Unlisted reduces public discoverability but cannot prevent sharing of a discovered URL.
+                  </p>
+                </div>
               </div>
             </div>
           )}

@@ -200,33 +200,55 @@ export function ReviewInspectionModal({
 
           {item.entity_type === "LECTURE" && (
             <div className="p-3.5 rounded-xl border border-brand-border bg-white space-y-3 text-xs">
-              <div className="flex items-start gap-3">
-                {signedMediaUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={signedMediaUrl}
-                    alt={item.title}
-                    className="h-20 w-32 rounded-lg object-cover border border-brand-border shadow-xs shrink-0"
-                  />
+              <div className="space-y-3">
+                {item.video_stream_url && (item.video_stream_url.includes("youtube") || item.video_stream_url.includes("embed")) ? (
+                  <div className="relative aspect-video w-full rounded-lg overflow-hidden bg-black shadow-xs">
+                    <iframe
+                      src={item.video_stream_url.includes("/embed/") ? item.video_stream_url : `https://www.youtube-nocookie.com/embed/${item.video_stream_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1] || ""}`}
+                      title={item.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full border-0"
+                    />
+                  </div>
                 ) : (
-                  <div className="h-20 w-32 rounded-lg bg-slate-800 flex items-center justify-center text-white/50 shrink-0">
-                    <Video className="h-6 w-6" />
+                  <div className="flex items-start gap-3">
+                    {signedMediaUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={signedMediaUrl}
+                        alt={item.title}
+                        className="h-20 w-32 rounded-lg object-cover border border-brand-border shadow-xs shrink-0"
+                      />
+                    ) : (
+                      <div className="h-20 w-32 rounded-lg bg-slate-800 flex items-center justify-center text-white/50 shrink-0">
+                        <Video className="h-6 w-6" />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-bold text-brand-text-primary">{item.title}</p>
+                      <p className="text-[11px] text-brand-text-muted">Subject: {item.subject}</p>
+                      {item.video_stream_url ? (
+                        <p className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                          Playback Ready: {item.video_stream_url}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-brand-text-muted italic">
+                          Video stream URL staged for production encoding.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                <div className="space-y-1">
-                  <p className="font-bold text-brand-text-primary">{item.title}</p>
-                  <p className="text-[11px] text-brand-text-muted">Subject: {item.subject}</p>
-                  {item.video_stream_url ? (
-                    <p className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
-                      Playback Ready: {item.video_stream_url}
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-brand-text-muted italic">
-                      Video stream URL staged for production encoding.
-                    </p>
-                  )}
-                </div>
+                {item.video_stream_url && (item.video_stream_url.includes("youtube") || item.video_stream_url.includes("embed")) && (
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-brand-border/60">
+                    <span className="font-bold text-brand-charcoal">{item.title}</span>
+                    <span className="text-emerald-700 font-mono text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      YouTube Stream Ready
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
