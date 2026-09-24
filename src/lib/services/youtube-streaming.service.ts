@@ -22,7 +22,7 @@ export class YouTubeStreamingProvider implements IStreamingProvider {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const roomUrl = `${baseUrl}/student/live/${params.liveClassId}`;
 
-    const connection = await YouTubeService.getConnectionStatus();
+    const connection = await YouTubeService.getConnectionStatus(params.client);
 
     // 1. Configured & Connected: Create real YouTube Live resources
     if (connection.connected) {
@@ -37,17 +37,17 @@ export class YouTubeStreamingProvider implements IStreamingProvider {
           enableAutoStart: true,
           enableAutoStop: true,
           latencyPreference: "ultraLow",
-        });
+        }, params.client);
 
         // Step B: Create Ingest Stream
         const stream = await YouTubeLiveService.createLiveStream({
           title: `${params.topic} (${params.liveClassId.slice(0, 8)})`,
           frameRate: "variable",
           resolution: "variable",
-        });
+        }, params.client);
 
         // Step C: Bind Broadcast to Stream
-        await YouTubeLiveService.bindBroadcastToStream(broadcast.id, stream.id);
+        await YouTubeLiveService.bindBroadcastToStream(broadcast.id, stream.id, params.client);
 
         const streamKey = stream.cdn?.ingestionInfo?.streamName;
         const rtmpUrl = stream.cdn?.ingestionInfo?.ingestionAddress;

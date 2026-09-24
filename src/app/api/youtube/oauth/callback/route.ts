@@ -4,9 +4,6 @@ import { YouTubeOAuthService } from "@/lib/services/youtube-oauth.service";
 import { YouTubeService } from "@/lib/services/youtube.service";
 
 export async function GET(request: NextRequest) {
-  const returnBaseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const integrationPageUrl = `${returnBaseUrl}/admin/cms/integrations/youtube`;
-
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
   const state = searchParams.get("state");
@@ -15,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   // Helper to build redirect response and clear state cookie
   const makeRedirect = (queryParams: Record<string, string>) => {
-    const url = new URL(integrationPageUrl);
+    const url = new URL("/admin/cms/integrations/youtube", request.url);
     for (const [k, v] of Object.entries(queryParams)) {
       url.searchParams.set(k, v);
     }
@@ -64,7 +61,10 @@ export async function GET(request: NextRequest) {
 
   try {
     // 5. Exchange authorization code for tokens
-    const tokenResponse = await YouTubeOAuthService.exchangeCodeForTokens(code);
+    const dynamicRedirectUri =
+      process.env.GOOGLE_YOUTUBE_REDIRECT_URI?.trim() ||
+      new URL("/api/youtube/oauth/callback", request.url).toString();
+    const tokenResponse = await YouTubeOAuthService.exchangeCodeForTokens(code, dynamicRedirectUri);
 
     if (!tokenResponse.access_token) {
       return makeRedirect({

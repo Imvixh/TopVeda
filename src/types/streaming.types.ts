@@ -88,6 +88,7 @@ export interface CreateSessionDTO {
   educatorName: string;
   scheduledStart: string;
   scheduledEnd?: string | null;
+  client?: any;
 }
 
 export interface JoinSessionDTO {

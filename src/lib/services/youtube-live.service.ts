@@ -81,9 +81,10 @@ export class YouTubeLiveService {
    * Endpoint: POST /youtube/v3/liveBroadcasts?part=snippet,status,contentDetails
    */
   public static async createLiveBroadcast(
-    options: CreateYouTubeBroadcastOptions
+    options: CreateYouTubeBroadcastOptions,
+    client?: SupabaseClient
   ): Promise<YouTubeLiveBroadcast> {
-    const accessToken = await this.getValidAccessToken();
+    const accessToken = await this.getValidAccessToken(client);
 
     const payload = {
       snippet: {
@@ -138,9 +139,10 @@ export class YouTubeLiveService {
    * Endpoint: POST /youtube/v3/liveStreams?part=snippet,cdn,contentDetails
    */
   public static async createLiveStream(
-    options: CreateYouTubeStreamOptions
+    options: CreateYouTubeStreamOptions,
+    client?: SupabaseClient
   ): Promise<YouTubeLiveStream> {
-    const accessToken = await this.getValidAccessToken();
+    const accessToken = await this.getValidAccessToken(client);
 
     const payload = {
       snippet: {
@@ -186,9 +188,10 @@ export class YouTubeLiveService {
    */
   public static async bindBroadcastToStream(
     broadcastId: string,
-    streamId: string
+    streamId: string,
+    client?: SupabaseClient
   ): Promise<YouTubeLiveBroadcast> {
-    const accessToken = await this.getValidAccessToken();
+    const accessToken = await this.getValidAccessToken(client);
 
     const url = `${this.YOUTUBE_API_BASE}/liveBroadcasts/bind?id=${encodeURIComponent(broadcastId)}&streamId=${encodeURIComponent(streamId)}&part=id,snippet,contentDetails,status`;
     const res = await fetch(url, {
@@ -218,9 +221,10 @@ export class YouTubeLiveService {
    */
   public static async transitionBroadcast(
     broadcastId: string,
-    broadcastStatus: YouTubeBroadcastTransition
+    broadcastStatus: YouTubeBroadcastTransition,
+    client?: SupabaseClient
   ): Promise<YouTubeLiveBroadcast> {
-    const accessToken = await this.getValidAccessToken();
+    const accessToken = await this.getValidAccessToken(client);
 
     const url = `${this.YOUTUBE_API_BASE}/liveBroadcasts/transition?id=${encodeURIComponent(broadcastId)}&broadcastStatus=${encodeURIComponent(broadcastStatus)}&part=id,status`;
     const res = await fetch(url, {
@@ -247,8 +251,11 @@ export class YouTubeLiveService {
   /**
    * Retrieves a Live Broadcast by its ID.
    */
-  public static async getBroadcast(broadcastId: string): Promise<YouTubeLiveBroadcast | null> {
-    const accessToken = await this.getValidAccessToken();
+  public static async getBroadcast(
+    broadcastId: string,
+    client?: SupabaseClient
+  ): Promise<YouTubeLiveBroadcast | null> {
+    const accessToken = await this.getValidAccessToken(client);
 
     const url = `${this.YOUTUBE_API_BASE}/liveBroadcasts?id=${encodeURIComponent(broadcastId)}&part=id,snippet,status,contentDetails`;
     const res = await fetch(url, {
@@ -269,8 +276,11 @@ export class YouTubeLiveService {
   /**
    * Retrieves an Ingest Stream by its ID.
    */
-  public static async getStream(streamId: string): Promise<YouTubeLiveStream | null> {
-    const accessToken = await this.getValidAccessToken();
+  public static async getStream(
+    streamId: string,
+    client?: SupabaseClient
+  ): Promise<YouTubeLiveStream | null> {
+    const accessToken = await this.getValidAccessToken(client);
 
     const url = `${this.YOUTUBE_API_BASE}/liveStreams?id=${encodeURIComponent(streamId)}&part=id,snippet,cdn,status`;
     const res = await fetch(url, {

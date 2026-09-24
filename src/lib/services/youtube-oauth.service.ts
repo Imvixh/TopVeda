@@ -73,14 +73,15 @@ export class YouTubeOAuthService {
    * Resolves server-side YouTube OAuth configuration.
    * Never exposes secrets to browser or client contexts.
    */
-  public static getConfig(): YouTubeOAuthConfig {
+  public static getConfig(redirectUriOverride?: string): YouTubeOAuthConfig {
     const clientId = process.env.GOOGLE_YOUTUBE_CLIENT_ID?.trim();
     const clientSecret = process.env.GOOGLE_YOUTUBE_CLIENT_SECRET?.trim();
     const redirectUri =
+      redirectUriOverride?.trim() ||
       process.env.GOOGLE_YOUTUBE_REDIRECT_URI?.trim() ||
       (process.env.NEXT_PUBLIC_APP_URL
         ? `${process.env.NEXT_PUBLIC_APP_URL}/api/youtube/oauth/callback`
-        : "http://localhost:3000/api/youtube/oauth/callback");
+        : "https://topveda.in/api/youtube/oauth/callback");
 
     const encryptionKey = process.env.YOUTUBE_TOKEN_ENCRYPTION_KEY?.trim();
 
@@ -253,8 +254,8 @@ export class YouTubeOAuthService {
   /**
    * Builds Google's OAuth 2.0 authorization URL.
    */
-  public static buildAuthorizationUrl(state: string): string {
-    const config = this.getConfig();
+  public static buildAuthorizationUrl(state: string, redirectUriOverride?: string): string {
+    const config = this.getConfig(redirectUriOverride);
     const params = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: config.redirectUri,
@@ -272,12 +273,15 @@ export class YouTubeOAuthService {
   /**
    * Exchanges authorization code for Google access and refresh tokens.
    */
-  public static async exchangeCodeForTokens(code: string): Promise<GoogleOAuthTokenResponse> {
+  public static async exchangeCodeForTokens(
+    code: string,
+    redirectUriOverride?: string
+  ): Promise<GoogleOAuthTokenResponse> {
     if (!code?.trim()) {
       throw new YouTubeOAuthError("Missing authorization code for token exchange.", 400, "MISSING_CODE");
     }
 
-    const config = this.getConfig();
+    const config = this.getConfig(redirectUriOverride);
     const body = new URLSearchParams({
       code: code.trim(),
       client_id: config.clientId,

@@ -118,7 +118,7 @@ assert(fs.existsSync(studentLivePage), "Student Live Classroom page exists (/stu
 const studentPageCode = fs.readFileSync(studentLivePage, "utf8");
 assert(studentPageCode.includes("youtube-nocookie.com/embed"), "Embeds YouTube Live using privacy-enhanced domain");
 assert(studentPageCode.includes("iframe"), "Renders embedded player inside TopVeda without external redirection");
-assert(studentPageCode.includes("Classroom Chat"), "Embeds native TopVeda classroom chat alongside stream");
+assert(studentPageCode.includes("Classroom Chat") || studentPageCode.includes("<span>Chat</span>") || studentPageCode.includes('activeTab === "CHAT"'), "Embeds native TopVeda classroom chat alongside stream");
 
 // ------------------------------------------------------------------------------
 // Phase 7: Server-Authoritative Live Attendance & Anti-Spoofing

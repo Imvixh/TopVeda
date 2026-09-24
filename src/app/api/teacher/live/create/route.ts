@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
       educatorName,
       scheduledStart: new Date(startTimestamp).toISOString(),
       scheduledEnd: new Date(endTimestamp).toISOString(),
+      client: supabase,
     });
 
     // 7. Insert Live Class into Database

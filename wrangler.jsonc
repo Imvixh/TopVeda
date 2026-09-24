@@ -4,8 +4,10 @@
   "main": "vinext/server/fetch-handler",
   "compatibility_date": "2025-02-04",
   "compatibility_flags": [
-    "nodejs_compat"
+    "nodejs_compat",
+    "nodejs_compat_populate_process_env"
   ],
+  "keep_vars": true,
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
@@ -15,6 +17,7 @@
     "NEXT_PUBLIC_SUPABASE_URL": "https://uxkvwuavidufnqliauuj.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_",
-    "NEXT_PUBLIC_APP_URL": "https://topveda.in"
+    "NEXT_PUBLIC_APP_URL": "https://topveda.in",
+    "GOOGLE_YOUTUBE_REDIRECT_URI": "https://topveda.in/api/youtube/oauth/callback"
   }
 }

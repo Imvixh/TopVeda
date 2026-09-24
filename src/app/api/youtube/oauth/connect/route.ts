@@ -55,7 +55,10 @@ export async function GET(request: NextRequest) {
 
     // 4. Generate cryptographically secure OAuth state
     const { state, cookieValue } = YouTubeOAuthService.generateState(user.id);
-    const authUrl = YouTubeOAuthService.buildAuthorizationUrl(state);
+    const dynamicRedirectUri =
+      process.env.GOOGLE_YOUTUBE_REDIRECT_URI?.trim() ||
+      new URL("/api/youtube/oauth/callback", request.url).toString();
+    const authUrl = YouTubeOAuthService.buildAuthorizationUrl(state, dynamicRedirectUri);
 
     // 5. Create redirect response and attach short-lived secure state cookie
     const response = NextResponse.redirect(authUrl, { status: 302 });
