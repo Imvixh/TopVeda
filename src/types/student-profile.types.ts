@@ -40,6 +40,8 @@ export interface StudentProfileSummary {
   role: "STUDENT" | "ADMIN" | "SUPER_ADMIN";
   avatar_url?: string | null;
   qualification?: string | null;
+  location?: string | null;
+  address?: string | null;
   bio?: string | null;
   display_class?: string;
   display_board?: string;
@@ -53,6 +55,8 @@ export interface UpdateStudentProfilePayload {
   full_name?: string;
   phone?: string;
   qualification?: string;
+  location?: string;
+  address?: string;
   bio?: string;
   avatar_url?: string;
 }
@@ -73,6 +77,8 @@ export interface AdminProfileSummary {
   role: "ADMIN" | "SUPER_ADMIN";
   avatar_url?: string | null;
   qualification?: string | null;
+  location?: string | null;
+  address?: string | null;
   bio?: string | null;
   created_at: string;
   unread_notifications_count: number;
@@ -82,6 +88,8 @@ export interface UpdateAdminProfilePayload {
   full_name?: string;
   phone?: string;
   qualification?: string;
+  location?: string;
+  address?: string;
   bio?: string;
   avatar_url?: string;
 }

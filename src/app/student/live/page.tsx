@@ -189,14 +189,21 @@ export default function StudentLiveClassesPage() {
                             {liveClass.topic}
                           </h3>
                           <div className="flex items-center gap-2.5 pt-1">
-                            <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0">
-                              <Image
-                                src={liveClass.educatorAvatar}
-                                alt={liveClass.educatorName}
-                                width={28}
-                                height={28}
-                                className="w-full h-full object-cover"
-                              />
+                            <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0 bg-brand-bg-warm flex items-center justify-center">
+                              {liveClass.educatorAvatar ? (
+                                <img
+                                  src={liveClass.educatorAvatar}
+                                  alt={liveClass.educatorName}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-[10px] font-black text-brand-orange">
+                                  {liveClass.educatorName ? liveClass.educatorName.charAt(0) : "E"}
+                                </span>
+                              )}
                             </div>
                             <span className="text-xs font-bold text-brand-text-muted">
                               {liveClass.educatorName}
@@ -252,14 +259,21 @@ export default function StudentLiveClassesPage() {
                               {c.topic}
                             </h3>
                             <div className="flex items-center gap-2.5 pt-1">
-                              <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0">
-                                <Image
-                                  src={c.educatorAvatar}
-                                  alt={c.educatorName}
-                                  width={28}
-                                  height={28}
-                                  className="w-full h-full object-cover"
-                                />
+                              <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0 bg-brand-bg-warm flex items-center justify-center">
+                                {c.educatorAvatar ? (
+                                  <img
+                                    src={c.educatorAvatar}
+                                    alt={c.educatorName}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <span className="text-[10px] font-black text-brand-orange">
+                                    {c.educatorName ? c.educatorName.charAt(0) : "E"}
+                                  </span>
+                                )}
                               </div>
                               <span className="text-xs font-bold text-brand-text-muted">
                                 {c.educatorName}

@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   LogOut,
   ChevronRight,
+  User,
 } from "lucide-react";
 import { CMS_NAV_SECTIONS } from "./cms-nav-config";
 
@@ -88,6 +89,19 @@ export function CmsTopbar({ onOpenMobile }: CmsTopbarProps) {
           <ShieldCheck className="h-3.5 w-3.5" />
           <span>SUPER_ADMIN</span>
         </div>
+
+        {/* Super Admin Profile Link */}
+        <Link href="/admin/cms/profile">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-8 px-2.5 text-brand-text-muted hover:text-brand-text-primary"
+            title="Super Admin Profile"
+          >
+            <User className="h-3.5 w-3.5 mr-1 text-brand-orange" />
+            <span className="hidden sm:inline">Profile</span>
+          </Button>
+        </Link>
 
         {/* View Student Portal Link */}
         <Link href="/student" target="_blank" rel="noopener noreferrer">

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { NotificationService } from "@/lib/services/notification.service";
+import {
+  formatLiveTimeDisplay,
+  formatLiveDateIST,
+  formatLiveTimeIST,
+} from "@/lib/utils/timezone";
 
 export async function POST(request: NextRequest) {
   try {
@@ -119,8 +124,8 @@ export async function POST(request: NextRequest) {
         const ecEnd = ec.scheduled_end ? new Date(ec.scheduled_end).getTime() : ecStart + 60 * 60 * 1000;
 
         if (startTimestamp < ecEnd && endTimestamp > ecStart) {
-          const conflictStartFormatted = new Date(ec.scheduled_start).toLocaleString();
-          const conflictEndFormatted = new Date(ecEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const conflictStartFormatted = `${formatLiveDateIST(ec.scheduled_start)} • ${formatLiveTimeIST(ec.scheduled_start)}`;
+          const conflictEndFormatted = formatLiveTimeIST(ecEnd);
           return NextResponse.json(
             {
               error: `Schedule Conflict: You already have another Live Class ("${ec.topic}") scheduled during this window (${conflictStartFormatted} – ${conflictEndFormatted}).`,
@@ -131,11 +136,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Format human time display
-    const formattedTimeDisplay = `${new Date(startTimestamp).toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-    })} • ${new Date(startTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    // 6. Format human time display (strictly Asia/Kolkata IST)
+    const formattedTimeDisplay = formatLiveTimeDisplay(startTimestamp, endTimestamp);
 
     const nowIso = new Date().toISOString();
 

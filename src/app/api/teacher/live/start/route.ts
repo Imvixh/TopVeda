@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { StreamingService } from "@/lib/services/streaming.service";
+import { getTMinus10TimeIST } from "@/lib/utils/timezone";
 
 export async function POST(request: NextRequest) {
   try {
@@ -86,10 +87,7 @@ export async function POST(request: NextRequest) {
 
     if (!isSuperAdmin && nowMs < scheduledStartMs - earlyAccessWindowMs) {
       const minutesRemaining = Math.ceil((scheduledStartMs - earlyAccessWindowMs - nowMs) / 60000);
-      const accessTime = new Date(scheduledStartMs - earlyAccessWindowMs).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      const accessTime = getTMinus10TimeIST(liveClass.scheduled_start);
 
       return NextResponse.json(
         {

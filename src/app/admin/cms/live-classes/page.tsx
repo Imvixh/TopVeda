@@ -22,6 +22,11 @@ import {
   PublishDialogTarget,
 } from "@/components/admin/cms/publish-confirmation-dialog";
 import {
+  formatLiveDateIST,
+  formatLiveTimeIST,
+  formatLiveTimeDisplay,
+} from "@/lib/utils/timezone";
+import {
   ContentPreviewModal,
   PreviewContentItem,
 } from "@/components/admin/cms/content-preview-modal";
@@ -368,7 +373,7 @@ export default function LiveClassesCmsPage() {
                     <div className="p-3 rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 text-xs flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-brand-charcoal font-semibold">
                         <Clock className="h-3.5 w-3.5 text-brand-orange" />
-                        <span>Started at: {item.started_at ? new Date(item.started_at).toLocaleTimeString() : item.time_display}</span>
+                        <span>Started at: {item.started_at ? formatLiveTimeIST(item.started_at) : (item.scheduled_start ? formatLiveTimeDisplay(item.scheduled_start) : item.time_display)}</span>
                       </div>
                       <Badge variant="outline" size="sm" className="bg-white text-emerald-700 border-emerald-200 text-[10px] font-bold">
                         Stream Active
@@ -435,8 +440,8 @@ export default function LiveClassesCmsPage() {
                     <p className="text-[11px] text-brand-text-muted mt-0.5">Teacher: {item.educator_name}</p>
                   </div>
                   <div className="p-2 rounded-xl bg-brand-bg-warm/60 border border-brand-border/40 text-[11px] flex items-center justify-between text-brand-charcoal">
-                    <span>{new Date(item.scheduled_start).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
-                    <span className="font-bold">{new Date(item.scheduled_start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span>{formatLiveDateIST(item.scheduled_start)}</span>
+                    <span className="font-bold">{formatLiveTimeIST(item.scheduled_start)}</span>
                   </div>
                   <div className="flex justify-end pt-1">
                     <Button
@@ -507,12 +512,7 @@ export default function LiveClassesCmsPage() {
                       <td className="py-3 px-4 text-brand-orange font-semibold">{lc.subject}</td>
                       <td className="py-3 px-4 text-brand-charcoal">{lc.educator_name}</td>
                       <td className="py-3 px-4 text-brand-text-muted">
-                        {new Date(lc.scheduled_start).toLocaleString([], {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatLiveTimeDisplay(lc.scheduled_start)}
                       </td>
                       <td className="py-3 px-4">
                         {lc.live_status === "LIVE" && (

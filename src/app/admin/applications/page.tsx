@@ -26,6 +26,7 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  User,
 } from "lucide-react";
 
 export default function SuperAdminApplicationsPage() {
@@ -219,6 +220,12 @@ export default function SuperAdminApplicationsPage() {
             </Link>
 
             <div className="flex items-center gap-3">
+              <Link href="/admin/cms/profile">
+                <Button variant="ghost" size="sm" className="text-xs font-semibold text-brand-text-primary hover:text-brand-orange">
+                  <User className="h-3.5 w-3.5 mr-1.5 text-brand-orange" />
+                  Profile
+                </Button>
+              </Link>
               <Link href="/admin">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="h-4 w-4 mr-1.5" />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { StreamingService } from "@/lib/services/streaming.service";
+import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 
 export async function GET(request: NextRequest) {
   try {
@@ -167,16 +168,20 @@ export async function GET(request: NextRequest) {
       ? playbackVideoId ? `https://studio.youtube.com/video/${playbackVideoId}/livestreaming` : null
       : null;
 
+    const profileData = liveClass.profiles as { full_name?: string; email?: string; avatar_url?: string } | null;
+    const resolvedEducatorName = profileData?.full_name || liveClass.educator_name || "Educator";
+    const resolvedEducatorAvatar = profileData?.avatar_url || liveClass.educator_avatar_url || null;
+
     return NextResponse.json({
       id: liveClass.id,
       topic: liveClass.topic,
       subject: liveClass.subject,
       description: liveClass.description,
-      educatorName: liveClass.educator_name,
-      educatorAvatarUrl: liveClass.educator_avatar_url,
+      educatorName: resolvedEducatorName,
+      educatorAvatarUrl: resolvedEducatorAvatar,
       scheduledStart: liveClass.scheduled_start,
       scheduledEnd: liveClass.scheduled_end,
-      timeDisplay: liveClass.time_display,
+      timeDisplay: liveClass.scheduled_start ? formatLiveTimeDisplay(liveClass.scheduled_start, liveClass.scheduled_end) : liveClass.time_display,
       liveStatus: liveClass.live_status,
       streamProvider: liveClass.stream_provider,
       isLive: isEffectiveLive,

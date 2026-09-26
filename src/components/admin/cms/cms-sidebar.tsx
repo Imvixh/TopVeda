@@ -209,9 +209,9 @@ export function CmsSidebar({
             <div className="p-2.5 rounded-xl bg-brand-surface border border-brand-border/80 shadow-2xs">
               <div className="flex items-center justify-between gap-2">
                 <Link
-                  href="/admin/profile"
+                  href="/admin/cms/profile"
                   className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity"
-                  title="View Administrator Profile"
+                  title="View Super Administrator Profile"
                 >
                   <div className="h-8 w-8 rounded-lg bg-brand-charcoal text-white flex items-center justify-center shrink-0">
                     <ShieldCheck className="h-4 w-4 text-brand-orange" />
@@ -240,9 +240,9 @@ export function CmsSidebar({
           ) : (
             <div className="flex flex-col items-center gap-2">
               <Link
-                href="/admin/profile"
+                href="/admin/cms/profile"
                 className="h-8 w-8 rounded-lg bg-brand-charcoal text-white flex items-center justify-center hover:opacity-80 transition-opacity"
-                title="Admin Profile"
+                title="Super Admin Profile"
               >
                 <ShieldCheck className="h-4 w-4 text-brand-orange" />
               </Link>

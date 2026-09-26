@@ -149,8 +149,11 @@ assert(fs.existsSync(adminProfilePagePath), "Dedicated Admin Profile page exists
 if (fs.existsSync(adminProfilePagePath)) {
   const adminUi = fs.readFileSync(adminProfilePagePath, "utf-8");
   assert(adminUi.includes("/api/admin/profile"), "Queries dedicated admin API");
-  assert(adminUi.includes("CmsSidebar"), "Integrates Admin CMS layout");
+  assert(!adminUi.includes("CmsSidebar"), "Enforces isolated Admin Profile layout (no CMS sidebar)");
 }
+
+const superAdminProfilePath = path.join(ROOT, "src", "app", "admin", "cms", "profile", "page.tsx");
+assert(fs.existsSync(superAdminProfilePath), "Dedicated Super Admin CMS Profile page exists");
 
 assert(fs.existsSync(headerPath), "Student Header exists");
 if (fs.existsSync(headerPath)) {

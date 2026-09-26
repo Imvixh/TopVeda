@@ -61,6 +61,8 @@ export default function AdminFoundationPage() {
     );
   }
 
+  const profileHref = isSuperAdmin ? "/admin/cms/profile" : "/admin/profile";
+
   return (
     <div className="min-h-screen bg-brand-bg-warm flex flex-col">
       {/* Top Header */}
@@ -73,6 +75,12 @@ export default function AdminFoundationPage() {
             </Link>
 
             <div className="flex items-center gap-3">
+              <Link href={profileHref}>
+                <Button variant="ghost" size="sm" className="font-semibold text-brand-text-primary hover:text-brand-orange">
+                  <User className="h-4 w-4 mr-1.5 text-brand-orange" />
+                  Profile
+                </Button>
+              </Link>
               <Link href="/">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="h-4 w-4 mr-1.5" />
@@ -212,18 +220,35 @@ export default function AdminFoundationPage() {
 
             {/* Admin Profile Overview */}
             <Card className="p-6 sm:p-8 space-y-6 shadow-md">
-              <div className="flex items-center gap-4 pb-4 border-b border-brand-border">
-                <div className="h-14 w-14 rounded-2xl bg-brand-charcoal text-white flex items-center justify-center font-bold text-xl shadow-md">
-                  <ShieldCheck className="h-7 w-7 text-brand-orange" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-brand-border">
+                <div className="flex items-center gap-4">
+                  {profile?.avatarUrl ? (
+                    <img
+                      src={profile.avatarUrl}
+                      alt={profile.fullName || "Admin"}
+                      className="h-14 w-14 rounded-2xl object-cover border border-brand-border shadow-md shrink-0"
+                    />
+                  ) : (
+                    <div className="h-14 w-14 rounded-2xl bg-brand-charcoal text-white flex items-center justify-center font-bold text-xl shadow-md shrink-0">
+                      <ShieldCheck className="h-7 w-7 text-brand-orange" />
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="text-lg font-bold text-brand-text-primary">
+                      {profile?.fullName || (isSuperAdmin ? "Super Administrator" : "System Administrator")}
+                    </h2>
+                    <p className="text-xs text-brand-text-muted">
+                      Role: <span className="font-bold text-brand-orange">{profile?.role || "ADMIN"}</span> • Session active
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-bold text-brand-text-primary">
-                    {profile?.fullName || (isSuperAdmin ? "Super Administrator" : "System Administrator")}
-                  </h2>
-                  <p className="text-xs text-brand-text-muted">
-                    Role: <span className="font-bold text-brand-orange">{profile?.role || "ADMIN"}</span> • Session active
-                  </p>
-                </div>
+
+                <Link href={profileHref}>
+                  <Button variant="outline" size="sm" className="bg-white hover:bg-brand-bg-warm border-brand-border font-bold text-xs shadow-2xs">
+                    <User className="h-3.5 w-3.5 mr-1.5 text-brand-orange" />
+                    Edit Profile
+                  </Button>
+                </Link>
               </div>
 
               {/* Verified Claims Grid */}
@@ -247,6 +272,28 @@ export default function AdminFoundationPage() {
                     {user?.email || profile?.email || "admin@topveda.com"}
                   </p>
                 </div>
+              </div>
+
+              {/* Profile Quick Action Banner */}
+              <div className="rounded-xl bg-gradient-to-r from-brand-bg-warm to-brand-bg-peach/40 border border-brand-border/70 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="space-y-0.5">
+                  <p className="font-bold text-brand-text-primary">
+                    {isSuperAdmin
+                      ? "Manage Super Admin Profile & Credentials"
+                      : "Manage Educator Profile & Qualifications"}
+                  </p>
+                  <p className="text-brand-text-muted text-[11px]">
+                    {isSuperAdmin
+                      ? "Update root administrator avatar, contact details, location, and platform security credentials."
+                      : "Update your avatar picture, academic qualifications, location, contact info, and security credentials."}
+                  </p>
+                </div>
+                <Link href={profileHref} className="shrink-0">
+                  <Button variant="primary" size="sm" className="text-xs shadow-subtle w-full sm:w-auto">
+                    Manage Profile
+                    <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                  </Button>
+                </Link>
               </div>
 
               {/* Upcoming CMS Notice */}

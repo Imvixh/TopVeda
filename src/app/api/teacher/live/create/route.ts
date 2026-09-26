@@ -3,6 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 import { StreamingService } from "@/lib/services/streaming.service";
 import { NotificationService } from "@/lib/services/notification.service";
 import { CreateLiveClassDTO } from "@/types/teacher.types";
+import {
+  formatLiveTimeDisplay,
+  formatLiveDateIST,
+  formatLiveTimeIST,
+} from "@/lib/utils/timezone";
 
 export async function POST(request: NextRequest) {
   try {
@@ -102,8 +107,8 @@ export async function POST(request: NextRequest) {
 
         // Overlap condition: start < ecEnd && end > ecStart
         if (startTimestamp < ecEnd && endTimestamp > ecStart) {
-          const conflictStartFormatted = new Date(ec.scheduled_start).toLocaleString();
-          const conflictEndFormatted = new Date(ecEnd).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          const conflictStartFormatted = `${formatLiveDateIST(ec.scheduled_start)} • ${formatLiveTimeIST(ec.scheduled_start)}`;
+          const conflictEndFormatted = formatLiveTimeIST(ecEnd);
           return NextResponse.json(
             {
               error: `Schedule Conflict: You already have a Live Class ("${ec.topic}") scheduled during this window (${conflictStartFormatted} – ${conflictEndFormatted}). Overlapping live sessions are not allowed.`,
@@ -114,12 +119,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Automatic human time display formatting
+    // 5. Automatic human time display formatting (strictly Asia/Kolkata IST)
     const formattedTimeDisplay =
       timeDisplay?.trim() ||
-      `${new Date(scheduledStart).toLocaleDateString([], { month: "short", day: "numeric" })} • ${new Date(scheduledStart).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      formatLiveTimeDisplay(scheduledStart);
 
-    const educatorAvatar = profile.avatar_url || "/avatars/default_teacher.jpg";
+    const educatorAvatar = profile.avatar_url || null;
     const educatorName = profile.full_name || "Educator";
 
     // 6. Initialize Provider Session

@@ -14,6 +14,7 @@ import {
   DailyQuote,
   ChatbotConfig,
 } from "@/types/student-home.types";
+import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 
 export interface StudentHomeAggregatedData {
   heroSlides: HeroSlide[];
@@ -188,11 +189,15 @@ export async function fetchPublishedLiveClasses(
       const isLiveActive = l.live_status === "LIVE" || l.is_live;
       const isLiveNow = isLiveActive && (scheduledStartMs === 0 || nowMs >= scheduledStartMs);
 
-      // Resolve Teacher Profile Image: profiles.avatar_url > educator_avatar_url > thumbnail_url > TopVeda fallback
-      const profileAvatar = (l.profiles as { avatar_url?: string; full_name?: string } | null)?.avatar_url;
-      let resolvedAvatar = profileAvatar || l.educator_avatar_url || l.thumbnail_url;
-      if (!resolvedAvatar || resolvedAvatar.startsWith("/avatars/default_teacher.jpg") || resolvedAvatar === "undefined") {
-        resolvedAvatar = "/assets/student/teacher-male-1.jpg";
+      // Resolve Teacher Profile: profiles.avatar_url > educator_avatar_url > thumbnail_url
+      const profileData = l.profiles as { avatar_url?: string; full_name?: string } | null;
+      let resolvedAvatar = "";
+      if (profileData?.avatar_url && profileData.avatar_url !== "undefined" && profileData.avatar_url !== "null") {
+        resolvedAvatar = profileData.avatar_url;
+      } else if (l.educator_avatar_url && !l.educator_avatar_url.startsWith("/avatars/default_teacher.jpg") && l.educator_avatar_url !== "undefined" && l.educator_avatar_url !== "null") {
+        resolvedAvatar = l.educator_avatar_url;
+      } else if (l.thumbnail_url && !l.thumbnail_url.startsWith("/avatars/default_teacher.jpg") && l.thumbnail_url !== "undefined" && l.thumbnail_url !== "null") {
+        resolvedAvatar = l.thumbnail_url;
       }
 
       return {
@@ -201,9 +206,9 @@ export async function fetchPublishedLiveClasses(
         statusText: isLiveNow ? "LIVE" : "UPCOMING",
         subject: l.subject,
         topic: l.topic,
-        educatorName: (l.profiles as { full_name?: string } | null)?.full_name || l.educator_name || "Educator",
+        educatorName: profileData?.full_name || l.educator_name || "Educator",
         educatorAvatar: resolvedAvatar,
-        time: l.time_display,
+        time: l.scheduled_start ? formatLiveTimeDisplay(l.scheduled_start) : l.time_display,
         ctaText: isLiveNow ? "Join Class" : (l.cta_text || "Reminder"),
         ctaVariant: isLiveNow ? "primary" : "reminder",
       };

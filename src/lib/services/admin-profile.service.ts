@@ -20,7 +20,7 @@ export class AdminProfileService {
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, phone, role, avatar_url, qualification, bio, created_at")
+        .select("id, full_name, email, phone, role, avatar_url, qualification, location, address, bio, created_at")
         .eq("id", adminId)
         .single();
 
@@ -55,6 +55,8 @@ export class AdminProfileService {
         role: profile.role as "ADMIN" | "SUPER_ADMIN",
         avatar_url: profile.avatar_url,
         qualification: profile.qualification,
+        location: profile.location,
+        address: profile.address,
         bio: profile.bio,
         created_at: profile.created_at,
         unread_notifications_count: unreadCount || 0,
@@ -91,6 +93,8 @@ export class AdminProfileService {
       if (payload.full_name !== undefined) updateData.full_name = payload.full_name.trim();
       if (payload.phone !== undefined) updateData.phone = payload.phone.trim();
       if (payload.qualification !== undefined) updateData.qualification = payload.qualification?.trim() || null;
+      if (payload.location !== undefined) updateData.location = payload.location?.trim() || null;
+      if (payload.address !== undefined) updateData.address = payload.address?.trim() || null;
       if (payload.bio !== undefined) updateData.bio = payload.bio?.trim() || null;
       if (payload.avatar_url !== undefined) updateData.avatar_url = payload.avatar_url;
 

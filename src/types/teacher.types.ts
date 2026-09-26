@@ -141,7 +141,12 @@ export interface TeacherDirectoryItem {
   id: string;
   fullName: string;
   email: string;
+  phone?: string;
   avatarUrl?: string;
+  qualification?: string;
+  location?: string;
+  address?: string;
+  bio?: string;
   role: string;
   createdAt: string;
   liveStats: TeacherDirectoryLiveCounts;

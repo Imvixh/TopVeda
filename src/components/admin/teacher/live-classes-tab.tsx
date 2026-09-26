@@ -8,25 +8,35 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { CmsLiveClass, CmsBoard, CmsClassLevel, CmsSubject, CmsCourse, CmsChapter } from "@/types/cms.types";
 import {
+  parseISTInputToUTC,
+  formatLiveDateIST,
+  formatLiveTimeIST,
+  formatLiveTimeDisplay,
+  getTMinus10TimeIST,
+  getISTDateInput,
+  getISTTimeInput,
+  isWithinEarlyAccessWindow,
+} from "@/lib/utils/timezone";
+import {
   Radio,
-  Plus,
-  Search,
-  Clock,
   Video,
-  Play,
-  CheckCircle2,
-  AlertTriangle,
-  Calendar,
   Layers,
-  GraduationCap,
-  Sparkles,
+  Search,
+  Plus,
+  Calendar,
+  Clock,
   ExternalLink,
   Loader2,
-  Eye,
+  AlertTriangle,
+  Play,
+  Sparkles,
   Info,
-  ShieldAlert,
-  XCircle,
+  Users,
   Edit3,
+  XCircle,
+  ShieldAlert,
+  CheckCircle2,
+  Eye,
 } from "lucide-react";
 
 interface LiveClassesTabProps {
@@ -147,17 +157,18 @@ export function LiveClassesTab({
       setIsCreating(true);
       setFeedback(null);
 
-      const startDateTimeStr = `${createDate}T${createStartTime}:00`;
-      const startDateTime = new Date(startDateTimeStr);
-      // Backend collision detection default window (start + 60 min)
-      const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000);
+      // Parse user's IST input into canonical UTC ISO timestamp
+      const scheduledStartUtc = parseISTInputToUTC(createDate, createStartTime);
+      const startMs = new Date(scheduledStartUtc).getTime();
+      // Default live window: start + 60 minutes
+      const scheduledEndUtc = new Date(startMs + 60 * 60 * 1000).toISOString();
 
       const payload = {
         topic: createTopic.trim(),
         subject: createSubject,
         description: createDescription.trim() || undefined,
-        scheduledStart: startDateTime.toISOString(),
-        scheduledEnd: endDateTime.toISOString(),
+        scheduledStart: scheduledStartUtc,
+        scheduledEnd: scheduledEndUtc,
         boardId: createBoardId || null,
         classId: createClassId || null,
       };
@@ -207,15 +218,14 @@ export function LiveClassesTab({
 
     try {
       setIsRescheduling(true);
-      const startDateTimeStr = `${rescheduleDate}T${rescheduleStartTime}:00`;
-      const startDateTime = new Date(startDateTimeStr);
+      const scheduledStartUtc = parseISTInputToUTC(rescheduleDate, rescheduleStartTime);
 
       const res = await fetch("/api/teacher/live/reschedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           liveClassId: rescheduleTarget.id,
-          scheduledStart: startDateTime.toISOString(),
+          scheduledStart: scheduledStartUtc,
         }),
       });
 
@@ -467,19 +477,14 @@ export function LiveClassesTab({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredClasses.map((lc) => {
-            const scheduledStartMs = new Date(lc.scheduled_start).getTime();
-            const earlyAccessOpensMs = scheduledStartMs - 10 * 60 * 1000; // 10 minutes prior
-            const isWithinEarlyAccess = currentTime >= earlyAccessOpensMs;
+            const isWithinEarlyAccess = isWithinEarlyAccessWindow(lc.scheduled_start, 10);
             const isLive = lc.live_status === "LIVE";
             const isScheduled = lc.live_status === "SCHEDULED";
             const isCompleted = lc.live_status === "COMPLETED";
             const isTerminated = lc.live_status === "TERMINATED";
             const isCancelled = lc.live_status === "CANCELLED";
 
-            const earlyAccessOpensAt = new Date(earlyAccessOpensMs).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
+            const earlyAccessOpensAt = getTMinus10TimeIST(lc.scheduled_start);
 
             return (
               <Card
@@ -542,11 +547,11 @@ export function LiveClassesTab({
                     <div className="flex items-center justify-between text-xs text-brand-charcoal font-bold">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-brand-orange" />
-                        <span>{new Date(lc.scheduled_start).toLocaleDateString([], { month: "short", day: "numeric", weekday: "short" })}</span>
+                        <span>{formatLiveDateIST(lc.scheduled_start)}</span>
                       </div>
                       <div className="flex items-center gap-1 text-brand-text-muted font-semibold text-[11px]">
                         <Clock className="h-3.5 w-3.5" />
-                        <span>{new Date(lc.scheduled_start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span>{formatLiveTimeIST(lc.scheduled_start)}</span>
                       </div>
                     </div>
 
@@ -612,11 +617,8 @@ export function LiveClassesTab({
                           variant="outline"
                           onClick={() => {
                             setRescheduleTarget(lc);
-                            const d = new Date(lc.scheduled_start);
-                            const dateStr = d.toISOString().split("T")[0];
-                            const timeStr = d.toTimeString().slice(0, 5);
-                            setRescheduleDate(dateStr);
-                            setRescheduleStartTime(timeStr);
+                            setRescheduleDate(getISTDateInput(lc.scheduled_start));
+                            setRescheduleStartTime(getISTTimeInput(lc.scheduled_start));
                             setRescheduleError("");
                           }}
                           className="flex-1 text-xs font-bold text-brand-charcoal hover:bg-brand-bg-warm border-brand-border"

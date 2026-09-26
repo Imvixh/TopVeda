@@ -23,6 +23,7 @@ import {
   Building2,
   GraduationCap,
 } from "lucide-react";
+import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 import { cn } from "@/lib/utils";
 
 interface BatchDetailData {
@@ -125,7 +126,7 @@ export default function BatchDetailPage() {
       // 4. Fetch Batch Live Classes
       const { data: liveData } = await supabase
         .from("cms_live_classes")
-        .select("id, topic, time_display, is_live, live_status")
+        .select("id, topic, time_display, is_live, live_status, scheduled_start")
         .eq("batch_id", batchId)
         .eq("is_visible", true)
         .in("live_status", ["SCHEDULED", "LIVE"])
@@ -148,7 +149,7 @@ export default function BatchDetailPage() {
         badge_text: batchData.badge_text,
         badge_variant: batchData.badge_variant,
         educator_name: batchData.educator_name,
-        educator_avatar_url: batchData.educator_avatar_url || "/assets/student/teacher-male-1.jpg",
+        educator_avatar_url: batchData.educator_avatar_url || null,
         course_id: batchData.course_id,
         is_enrolled: isEnrolled,
         lectures: (lecturesData || []).map((l) => ({
@@ -160,7 +161,7 @@ export default function BatchDetailPage() {
         liveClasses: (liveData || []).map((lc) => ({
           id: lc.id,
           topic: lc.topic,
-          time_display: lc.time_display,
+          time_display: lc.scheduled_start ? formatLiveTimeDisplay(lc.scheduled_start) : lc.time_display,
           is_live: lc.live_status === "LIVE" || lc.is_live,
         })),
         studyMaterials: (materialsData || []).map((m) => ({

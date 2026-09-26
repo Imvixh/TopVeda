@@ -10,6 +10,11 @@ import {
   NotificationCategory,
   NotificationFilterCategory,
 } from "@/types/cms.types";
+import {
+  formatLiveTimeDisplay,
+  formatLiveDateIST,
+  formatLiveTimeIST,
+} from "@/lib/utils/timezone";
 
 export class NotificationService {
   /**
@@ -299,12 +304,7 @@ export class NotificationService {
 
     if (studentIds.length === 0) return;
 
-    const formattedTime = new Date(params.scheduledStart).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const formattedTime = formatLiveTimeDisplay(params.scheduledStart);
 
     const inserts = studentIds.map((studentId) => ({
       recipient_id: studentId,
@@ -407,12 +407,7 @@ export class NotificationService {
       scheduledStart: string;
     }
   ): Promise<void> {
-    const formattedTime = new Date(params.scheduledStart).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const formattedTime = formatLiveTimeDisplay(params.scheduledStart);
 
     await this.createNotification(supabase, {
       recipientRole: "SUPER_ADMIN",
@@ -440,12 +435,7 @@ export class NotificationService {
       newStart: string;
     }
   ): Promise<void> {
-    const formattedNewTime = new Date(params.newStart).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const formattedNewTime = formatLiveTimeDisplay(params.newStart);
 
     await this.createNotification(supabase, {
       recipientRole: "SUPER_ADMIN",

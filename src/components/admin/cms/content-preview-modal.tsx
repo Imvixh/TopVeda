@@ -17,6 +17,7 @@ import {
   CmsChatbotPrompt,
   CmsChatbotFaq,
 } from "@/types/cms.types";
+import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 import {
   GraduationCap,
   Video,
@@ -293,7 +294,7 @@ function LiveClassCardPreview({ liveClass }: { liveClass: CmsLiveClass }) {
         </h4>
         <div className="flex items-center gap-1.5 text-xs text-brand-text-muted">
           <Calendar className="h-3.5 w-3.5 text-brand-orange" />
-          <span>{liveClass.time_display}</span>
+          <span>{liveClass.scheduled_start ? formatLiveTimeDisplay(liveClass.scheduled_start, liveClass.scheduled_end) : liveClass.time_display}</span>
         </div>
       </div>
 

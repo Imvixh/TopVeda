@@ -18,6 +18,7 @@ import {
   HelpCircle,
   Database,
   ClipboardCheck,
+  User,
   type LucideIcon,
 } from "lucide-react";
 import { YoutubeIcon } from "@/components/brand/youtube-icon";
@@ -191,6 +192,12 @@ export const CMS_NAV_SECTIONS: CmsNavSection[] = [
         href: "/admin/applications",
         icon: ClipboardCheck,
         description: "Review educator verification credentials and grant admin privileges.",
+      },
+      {
+        title: "Profile & Settings",
+        href: "/admin/cms/profile",
+        icon: User,
+        description: "Manage avatar, location, address, bio, and security credentials.",
       },
     ],
   },

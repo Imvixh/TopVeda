@@ -1581,7 +1581,7 @@ export class CmsService {
       const [profilesRes, liveRes, lecturesRes] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, email, avatar_url, role, created_at")
+          .select("id, full_name, email, phone, avatar_url, qualification, location, address, bio, role, created_at")
           .eq("role", "ADMIN")
           .order("full_name", { ascending: true }),
         supabase
@@ -1608,7 +1608,12 @@ export class CmsService {
           id: t.id,
           fullName: t.full_name || "Educator",
           email: t.email || "",
+          phone: t.phone || undefined,
           avatarUrl: t.avatar_url || undefined,
+          qualification: t.qualification || undefined,
+          location: t.location || undefined,
+          address: t.address || undefined,
+          bio: t.bio || undefined,
           role: t.role || "ADMIN",
           createdAt: t.created_at,
           liveStats: {

@@ -27,6 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Wordmark } from "@/components/brand/wordmark";
 import { BrandGlyph } from "@/components/brand/glyph";
+import { Modal } from "@/components/ui/modal";
+import { formatLiveDateIST } from "@/lib/utils/timezone";
 import {
   Radio,
   Video,
@@ -50,6 +52,11 @@ import {
   GraduationCap,
   FileText,
   Eye,
+  Mail,
+  Phone,
+  MapPin,
+  Home,
+  User,
 } from "lucide-react";
 
 export default function TeacherWorkspacePage() {
@@ -62,6 +69,7 @@ export default function TeacherWorkspacePage() {
   // Super Admin Directory State
   const [teachers, setTeachers] = React.useState<TeacherDirectoryItem[]>([]);
   const [selectedTeacher, setSelectedTeacher] = React.useState<TeacherDirectoryItem | null>(null);
+  const [viewingProfileTeacher, setViewingProfileTeacher] = React.useState<TeacherDirectoryItem | null>(null);
   const [teacherSearchQuery, setTeacherSearchQuery] = React.useState("");
   const [isTeachersLoading, setIsTeachersLoading] = React.useState(true);
 
@@ -283,6 +291,12 @@ export default function TeacherWorkspacePage() {
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Refresh
               </Button>
+              <Link href={isSuperAdmin ? "/admin/cms/profile" : "/admin/profile"}>
+                <Button variant="ghost" size="sm" className="text-xs font-semibold text-brand-text-primary hover:text-brand-orange">
+                  <User className="h-3.5 w-3.5 mr-1.5 text-brand-orange" />
+                  Profile
+                </Button>
+              </Link>
               <Link href="/admin">
                 <Button variant="ghost" size="sm" className="text-xs">
                   <ArrowLeft className="h-4 w-4 mr-1.5" />
@@ -557,10 +571,23 @@ export default function TeacherWorkspacePage() {
                             </div>
                           </div>
 
-                          {/* Card Action Link */}
-                          <div className="pt-2 border-t border-brand-border/50 flex items-center justify-between text-xs font-bold text-brand-orange group-hover:translate-x-0.5 transition-transform">
-                            <span>Open Teacher Workspace</span>
-                            <ChevronRight className="h-4 w-4" />
+                          {/* Card Action Link & Profile Button */}
+                          <div className="pt-2 border-t border-brand-border/50 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setViewingProfileTeacher(teacher);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-bg-warm text-brand-charcoal hover:bg-brand-orange hover:text-white text-xs font-bold transition-colors"
+                            >
+                              <User className="h-3.5 w-3.5" />
+                              <span>View Profile</span>
+                            </button>
+                            <div className="flex items-center gap-1 text-xs font-bold text-brand-orange group-hover:translate-x-0.5 transition-transform">
+                              <span>Workspace</span>
+                              <ChevronRight className="h-4 w-4" />
+                            </div>
                           </div>
                         </Card>
                       );
@@ -602,6 +629,12 @@ export default function TeacherWorkspacePage() {
                         alt={selectedTeacher.fullName}
                         className="h-14 w-14 rounded-2xl object-cover border border-brand-border shadow-md shrink-0"
                       />
+                    ) : !isSuperAdmin && profile?.avatarUrl ? (
+                      <img
+                        src={profile.avatarUrl}
+                        alt={profile.fullName || "Educator"}
+                        className="h-14 w-14 rounded-2xl object-cover border border-brand-border shadow-md shrink-0"
+                      />
                     ) : (
                       <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-brand-orange to-amber-500 text-white flex items-center justify-center font-black text-2xl shadow-md shrink-0">
                         {isSuperAdmin
@@ -627,6 +660,31 @@ export default function TeacherWorkspacePage() {
                       </p>
                     </div>
                   </div>
+
+                  {isSuperAdmin && selectedTeacher && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingProfileTeacher(selectedTeacher)}
+                      className="text-xs font-bold bg-white text-brand-charcoal hover:bg-brand-bg-warm border-brand-border"
+                    >
+                      <User className="h-3.5 w-3.5 mr-1.5 text-brand-orange" />
+                      View Educator Profile
+                    </Button>
+                  )}
+
+                  {!isSuperAdmin && (
+                    <Link href="/admin/profile">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs font-bold bg-white text-brand-charcoal hover:bg-brand-bg-warm border-brand-border shadow-2xs"
+                      >
+                        <User className="h-3.5 w-3.5 mr-1.5 text-brand-orange" />
+                        Edit Profile
+                      </Button>
+                    </Link>
+                  )}
 
                   {/* Workspace Navigation Switcher */}
                   <div className="flex items-center bg-brand-bg-warm/80 p-1.5 rounded-2xl border border-brand-border/80">
@@ -778,6 +836,155 @@ export default function TeacherWorkspacePage() {
           </div>
         </Container>
       </main>
+
+      {/* SUPER ADMIN READ-ONLY TEACHER PROFILE MODAL */}
+      {viewingProfileTeacher && (
+        <Modal
+          isOpen={!!viewingProfileTeacher}
+          onClose={() => setViewingProfileTeacher(null)}
+          title="Educator Profile (Super Admin View)"
+          description="Read-only administrative view of registered educator credentials and activity."
+          maxWidth="lg"
+        >
+          <div className="space-y-6 pt-2">
+            {/* Header Profile Summary */}
+            <div className="flex items-center gap-4 p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60">
+              <div className="h-16 w-16 rounded-2xl bg-brand-charcoal text-white flex items-center justify-center font-black text-2xl shrink-0 overflow-hidden border-2 border-brand-orange shadow-xs">
+                {viewingProfileTeacher.avatarUrl ? (
+                  <img
+                    src={viewingProfileTeacher.avatarUrl}
+                    alt={viewingProfileTeacher.fullName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{viewingProfileTeacher.fullName.charAt(0)}</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-brand-charcoal truncate">
+                    {viewingProfileTeacher.fullName}
+                  </h3>
+                  <Badge variant="primary" size="sm" className="text-[10px] font-bold">
+                    {viewingProfileTeacher.role === "SUPER_ADMIN" ? "Super Admin" : "Teacher"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-brand-text-muted truncate mt-0.5">
+                  {viewingProfileTeacher.email}
+                </p>
+                {viewingProfileTeacher.createdAt && (
+                  <p className="text-[10px] text-brand-text-subtle mt-1">
+                    Educator Since: {formatLiveDateIST(viewingProfileTeacher.createdAt, { year: "numeric", month: "short", day: "numeric" })}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Profile Details Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3.5 rounded-2xl bg-white border border-brand-border/70 space-y-1">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase flex items-center gap-1">
+                  <Mail className="h-3 w-3 text-brand-orange" />
+                  Email Address
+                </span>
+                <p className="font-semibold text-brand-charcoal truncate">{viewingProfileTeacher.email}</p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white border border-brand-border/70 space-y-1">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-brand-orange" />
+                  Phone Number
+                </span>
+                <p className="font-semibold text-brand-charcoal">
+                  {viewingProfileTeacher.phone || "Not provided"}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white border border-brand-border/70 space-y-1">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase flex items-center gap-1">
+                  <GraduationCap className="h-3 w-3 text-brand-orange" />
+                  Qualification
+                </span>
+                <p className="font-semibold text-brand-charcoal">
+                  {viewingProfileTeacher.qualification || "Not specified"}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-white border border-brand-border/70 space-y-1">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-brand-orange" />
+                  Location
+                </span>
+                <p className="font-semibold text-brand-charcoal">
+                  {viewingProfileTeacher.location || "Not specified"}
+                </p>
+              </div>
+            </div>
+
+            {/* Address */}
+            {viewingProfileTeacher.address && (
+              <div className="p-3.5 rounded-2xl bg-white border border-brand-border/70 space-y-1 text-xs">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase flex items-center gap-1">
+                  <Home className="h-3 w-3 text-brand-orange" />
+                  Communication Address
+                </span>
+                <p className="font-medium text-brand-charcoal whitespace-pre-line leading-relaxed">
+                  {viewingProfileTeacher.address}
+                </p>
+              </div>
+            )}
+
+            {/* Bio */}
+            {viewingProfileTeacher.bio && (
+              <div className="p-3.5 rounded-2xl bg-white border border-brand-border/70 space-y-1 text-xs">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase flex items-center gap-1">
+                  <FileText className="h-3 w-3 text-brand-orange" />
+                  Educator Bio & Philosophy
+                </span>
+                <p className="font-medium text-brand-charcoal whitespace-pre-line leading-relaxed">
+                  {viewingProfileTeacher.bio}
+                </p>
+              </div>
+            )}
+
+            {/* Activity Metrics Strip */}
+            <div className="p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 space-y-3">
+              <h4 className="text-xs font-bold text-brand-charcoal uppercase tracking-wider">
+                Teaching Activity Summary
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                  <span className="text-[10px] font-bold text-brand-text-muted uppercase">Live Classes</span>
+                  <p className="text-base font-black text-brand-charcoal mt-0.5">{viewingProfileTeacher.liveStats.total}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase">Concluded</span>
+                  <p className="text-base font-black text-emerald-600 mt-0.5">{viewingProfileTeacher.liveStats.completed}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                  <span className="text-[10px] font-bold text-brand-text-muted uppercase">Lectures</span>
+                  <p className="text-base font-black text-brand-charcoal mt-0.5">{viewingProfileTeacher.lectureStats.total}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-brand-border/60">
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase">Published</span>
+                  <p className="text-base font-black text-emerald-600 mt-0.5">{viewingProfileTeacher.lectureStats.published}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setViewingProfileTeacher(null)}
+                className="text-xs font-bold"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

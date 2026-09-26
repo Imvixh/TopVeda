@@ -6,6 +6,7 @@
 
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ContentAccessService } from "@/lib/services/content-access.service";
+import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 
 export interface StudentLiveClassCard {
   id: string;
@@ -38,14 +39,19 @@ export interface StudentLiveScheduleGroup {
 
 export class StudentLiveService {
   /**
-   * Resolves Teacher Profile Avatar with safe fallback to prevent broken images
+   * Resolves Teacher Profile Avatar strictly prioritizing joined profile avatar
    */
   private static resolveEducatorAvatar(profileAvatar?: string | null, educatorAvatar?: string | null, thumbnail?: string | null): string {
-    const raw = profileAvatar || educatorAvatar || thumbnail;
-    if (!raw || raw.startsWith("/avatars/default_teacher.jpg") || raw === "undefined" || raw === "null") {
-      return "/assets/student/teacher-male-1.jpg";
+    if (profileAvatar && profileAvatar !== "undefined" && profileAvatar !== "null") {
+      return profileAvatar;
     }
-    return raw;
+    if (educatorAvatar && !educatorAvatar.startsWith("/avatars/default_teacher.jpg") && educatorAvatar !== "undefined" && educatorAvatar !== "null") {
+      return educatorAvatar;
+    }
+    if (thumbnail && !thumbnail.startsWith("/avatars/default_teacher.jpg") && thumbnail !== "undefined" && thumbnail !== "null") {
+      return thumbnail;
+    }
+    return "";
   }
 
   /**
@@ -131,7 +137,7 @@ export class StudentLiveService {
           subject: c.subject || "Academic",
           educatorName,
           educatorAvatar,
-          timeDisplay: c.time_display || (c.scheduled_start ? new Date(c.scheduled_start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Live Today"),
+          timeDisplay: c.scheduled_start ? formatLiveTimeDisplay(c.scheduled_start, c.scheduled_end) : (c.time_display || "Live Today"),
           scheduledStart: c.scheduled_start,
           scheduledEnd: c.scheduled_end,
           liveStatus: c.live_status,
