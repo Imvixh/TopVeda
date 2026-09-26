@@ -25,6 +25,27 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+function EducatorAvatarCircle({ avatarUrl, name }: { avatarUrl?: string; name: string }) {
+  const [imgError, setImgError] = React.useState(false);
+
+  return (
+    <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0 bg-brand-bg-warm flex items-center justify-center">
+      {avatarUrl && !imgError ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <span className="text-[10px] font-black text-brand-orange">
+          {name ? name.charAt(0).toUpperCase() : "E"}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function StudentLiveClassesPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const [schedule, setSchedule] = React.useState<StudentLiveScheduleGroup>({
@@ -189,22 +210,10 @@ export default function StudentLiveClassesPage() {
                             {liveClass.topic}
                           </h3>
                           <div className="flex items-center gap-2.5 pt-1">
-                            <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0 bg-brand-bg-warm flex items-center justify-center">
-                              {liveClass.educatorAvatar ? (
-                                <img
-                                  src={liveClass.educatorAvatar}
-                                  alt={liveClass.educatorName}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <span className="text-[10px] font-black text-brand-orange">
-                                  {liveClass.educatorName ? liveClass.educatorName.charAt(0) : "E"}
-                                </span>
-                              )}
-                            </div>
+                            <EducatorAvatarCircle
+                              avatarUrl={liveClass.educatorAvatar}
+                              name={liveClass.educatorName}
+                            />
                             <span className="text-xs font-bold text-brand-text-muted">
                               {liveClass.educatorName}
                             </span>
@@ -259,22 +268,10 @@ export default function StudentLiveClassesPage() {
                               {c.topic}
                             </h3>
                             <div className="flex items-center gap-2.5 pt-1">
-                              <div className="w-7 h-7 rounded-full overflow-hidden border border-brand-border shrink-0 bg-brand-bg-warm flex items-center justify-center">
-                                {c.educatorAvatar ? (
-                                  <img
-                                    src={c.educatorAvatar}
-                                    alt={c.educatorName}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = "none";
-                                    }}
-                                  />
-                                ) : (
-                                  <span className="text-[10px] font-black text-brand-orange">
-                                    {c.educatorName ? c.educatorName.charAt(0) : "E"}
-                                  </span>
-                                )}
-                              </div>
+                              <EducatorAvatarCircle
+                                avatarUrl={c.educatorAvatar}
+                                name={c.educatorName}
+                              />
                               <span className="text-xs font-bold text-brand-text-muted">
                                 {c.educatorName}
                               </span>

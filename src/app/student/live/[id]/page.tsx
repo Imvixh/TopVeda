@@ -464,10 +464,10 @@ export default function StudentLiveRoomPage() {
       {/* Top Classroom Navigation Bar */}
       <header className="h-14 border-b border-white/10 bg-[#0E1B33] px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/student">
+          <Link href={isTeacherOrAdmin ? "/admin/content" : "/student"}>
             <Button variant="ghost" size="sm" className="text-white hover:bg-white/10 text-xs">
               <ArrowLeft className="h-4 w-4 mr-1" />
-              Student Home
+              {isTeacherOrAdmin ? "Teacher Workspace" : "Student Home"}
             </Button>
           </Link>
           <div className="h-4 w-px bg-white/20" />
@@ -477,17 +477,42 @@ export default function StudentLiveRoomPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          {sessionData?.studioPublishUrl && isTeacherOrAdmin && (
+            <Button
+              size="sm"
+              onClick={() => window.open(sessionData.studioPublishUrl, "_blank")}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs hidden sm:inline-flex items-center gap-1.5"
+            >
+              <Radio className="h-3.5 w-3.5" />
+              <span>Broadcast Studio</span>
+            </Button>
+          )}
+
           {isLive && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black tracking-wide uppercase shadow-sm">
               <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
               LIVE
             </span>
           )}
+
           {sessionData?.educatorName && (
-            <span className="text-xs text-white/70 hidden sm:inline-block">
-              Teacher: <span className="font-bold text-white">{sessionData.educatorName}</span>
-            </span>
+            <div className="flex items-center gap-2 text-xs text-white/70">
+              {sessionData.educatorAvatarUrl ? (
+                <img
+                  src={sessionData.educatorAvatarUrl}
+                  alt={sessionData.educatorName}
+                  className="w-6 h-6 rounded-full object-cover border border-white/20"
+                />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-brand-orange/30 text-brand-orange flex items-center justify-center font-bold text-[10px]">
+                  {sessionData.educatorName.charAt(0)}
+                </div>
+              )}
+              <span className="hidden sm:inline-block">
+                Teacher: <span className="font-bold text-white">{sessionData.educatorName}</span>
+              </span>
+            </div>
           )}
         </div>
       </header>

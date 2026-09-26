@@ -161,6 +161,21 @@ export async function fetchPublishedOngoingBatches(
   }
 }
 
+function formatAvatarUrl(urlOrPath?: string | null): string {
+  if (!urlOrPath || urlOrPath === "undefined" || urlOrPath === "null") return "";
+  const clean = urlOrPath.trim();
+  if (!clean || clean.startsWith("/avatars/default_teacher.jpg")) return "";
+  if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("/")) {
+    return clean;
+  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  if (supabaseUrl) {
+    const normalizedPath = clean.startsWith("avatars/") ? clean.replace(/^avatars\//, "") : clean;
+    return `${supabaseUrl}/storage/v1/object/public/avatars/${normalizedPath}`;
+  }
+  return clean;
+}
+
 /**
  * 4. Fetch Published Live Classes Today (Section 3)
  */
@@ -173,7 +188,7 @@ export async function fetchPublishedLiveClasses(
   try {
     const { data, error } = await supabase
       .from("cms_live_classes")
-      .select("id, is_live, status_text, live_status, subject, topic, educator_name, educator_avatar_url, thumbnail_url, time_display, cta_text, scheduled_start, display_order, educator_id, profiles:educator_id(avatar_url, full_name)")
+      .select("id, is_live, status_text, live_status, subject, topic, educator_name, educator_avatar_url, thumbnail_url, time_display, cta_text, scheduled_start, display_order, educator_id, created_by, profiles:educator_id(avatar_url, full_name), creator_profile:created_by(avatar_url, full_name)")
       .eq("is_visible", true)
       .in("live_status", ["SCHEDULED", "LIVE"])
       .order("scheduled_start", { ascending: true });
@@ -190,15 +205,12 @@ export async function fetchPublishedLiveClasses(
       const isLiveNow = isLiveActive && (scheduledStartMs === 0 || nowMs >= scheduledStartMs);
 
       // Resolve Teacher Profile: profiles.avatar_url > educator_avatar_url > thumbnail_url
-      const profileData = l.profiles as { avatar_url?: string; full_name?: string } | null;
-      let resolvedAvatar = "";
-      if (profileData?.avatar_url && profileData.avatar_url !== "undefined" && profileData.avatar_url !== "null") {
-        resolvedAvatar = profileData.avatar_url;
-      } else if (l.educator_avatar_url && !l.educator_avatar_url.startsWith("/avatars/default_teacher.jpg") && l.educator_avatar_url !== "undefined" && l.educator_avatar_url !== "null") {
-        resolvedAvatar = l.educator_avatar_url;
-      } else if (l.thumbnail_url && !l.thumbnail_url.startsWith("/avatars/default_teacher.jpg") && l.thumbnail_url !== "undefined" && l.thumbnail_url !== "null") {
-        resolvedAvatar = l.thumbnail_url;
-      }
+      const profileData = (l.profiles || l.creator_profile) as { avatar_url?: string; full_name?: string } | null;
+      const resolvedAvatar =
+        formatAvatarUrl(profileData?.avatar_url) ||
+        formatAvatarUrl(l.educator_avatar_url) ||
+        formatAvatarUrl(l.thumbnail_url) ||
+        "";
 
       return {
         id: l.id,

@@ -349,8 +349,9 @@ export function LiveClassesTab({
       } else {
         setFeedback({ type: "success", message: `Live class session started!` });
         onRefresh();
-        if (data.streamRoomUrl) {
-          window.open(data.streamRoomUrl, "_blank");
+        const targetUrl = data.studioPublishUrl || data.streamRoomUrl || `/student/live/${lc.id}`;
+        if (targetUrl) {
+          window.open(targetUrl, "_blank");
         }
       }
     } catch (err: unknown) {
@@ -599,7 +600,7 @@ export function LiveClassesTab({
                           ) : (
                             <Play className="h-3.5 w-3.5 mr-1.5" />
                           )}
-                          Attend / Start Live
+                          {isSuperAdmin ? "Monitor Room" : "Enter Room"}
                         </Button>
                       ) : (
                         <div className="flex items-center justify-between p-2 rounded-xl bg-brand-bg-warm border border-brand-border/60 text-xs text-brand-text-muted">
@@ -646,7 +647,15 @@ export function LiveClassesTab({
                     <div className="flex items-center gap-2 w-full">
                       <Button
                         size="sm"
-                        onClick={() => window.open(lc.stream_room_url || `/student/live/${lc.id}`, "_blank")}
+                        onClick={() => {
+                          const broadcastId = lc.provider_session_id;
+                          const isRealYt = broadcastId && !broadcastId.startsWith("dev_yt_");
+                          const studioUrl = isRealYt ? "https://www.youtube.com/webcam" : null;
+                          const targetUrl = isSuperAdmin
+                            ? `/student/live/${lc.id}`
+                            : (studioUrl || lc.stream_room_url || `/student/live/${lc.id}`);
+                          window.open(targetUrl, "_blank");
+                        }}
                         className="flex-1 bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-xs shadow-xs"
                       >
                         <Video className="h-3.5 w-3.5 mr-1.5" />

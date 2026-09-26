@@ -103,6 +103,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Synchronize educator avatar across any active/upcoming live classes
+    await supabase
+      .from("cms_live_classes")
+      .update({ educator_avatar_url: avatarUrl })
+      .or(`educator_id.eq.${user.id},created_by.eq.${user.id}`)
+      .in("live_status", ["SCHEDULED", "LIVE"]);
+
     return NextResponse.json({ success: true, avatarUrl });
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));
@@ -147,6 +154,13 @@ export async function DELETE(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Synchronize educator avatar removal across any active/upcoming live classes
+    await supabase
+      .from("cms_live_classes")
+      .update({ educator_avatar_url: null })
+      .or(`educator_id.eq.${user.id},created_by.eq.${user.id}`)
+      .in("live_status", ["SCHEDULED", "LIVE"]);
 
     return NextResponse.json({ success: true });
   } catch (err: unknown) {

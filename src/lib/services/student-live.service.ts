@@ -39,18 +39,36 @@ export interface StudentLiveScheduleGroup {
 
 export class StudentLiveService {
   /**
+   * Formats a raw storage path or URL into a valid public avatar URL.
+   */
+  public static formatAvatarUrl(urlOrPath?: string | null): string {
+    if (!urlOrPath || urlOrPath === "undefined" || urlOrPath === "null") return "";
+    const clean = urlOrPath.trim();
+    if (!clean || clean.startsWith("/avatars/default_teacher.jpg")) return "";
+    if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("/")) {
+      return clean;
+    }
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    if (supabaseUrl) {
+      const normalizedPath = clean.startsWith("avatars/") ? clean.replace(/^avatars\//, "") : clean;
+      return `${supabaseUrl}/storage/v1/object/public/avatars/${normalizedPath}`;
+    }
+    return clean;
+  }
+
+  /**
    * Resolves Teacher Profile Avatar strictly prioritizing joined profile avatar
    */
   private static resolveEducatorAvatar(profileAvatar?: string | null, educatorAvatar?: string | null, thumbnail?: string | null): string {
-    if (profileAvatar && profileAvatar !== "undefined" && profileAvatar !== "null") {
-      return profileAvatar;
-    }
-    if (educatorAvatar && !educatorAvatar.startsWith("/avatars/default_teacher.jpg") && educatorAvatar !== "undefined" && educatorAvatar !== "null") {
-      return educatorAvatar;
-    }
-    if (thumbnail && !thumbnail.startsWith("/avatars/default_teacher.jpg") && thumbnail !== "undefined" && thumbnail !== "null") {
-      return thumbnail;
-    }
+    const formattedProfile = this.formatAvatarUrl(profileAvatar);
+    if (formattedProfile) return formattedProfile;
+
+    const formattedEducator = this.formatAvatarUrl(educatorAvatar);
+    if (formattedEducator) return formattedEducator;
+
+    const formattedThumbnail = this.formatAvatarUrl(thumbnail);
+    if (formattedThumbnail) return formattedThumbnail;
+
     return "";
   }
 
@@ -82,7 +100,9 @@ export class StudentLiveService {
           batch_id,
           recording_url,
           educator_id,
-          profiles:educator_id(avatar_url, full_name)
+          created_by,
+          profiles:educator_id(avatar_url, full_name),
+          creator_profile:created_by(avatar_url, full_name)
         `)
         .eq("is_visible", true)
         .in("live_status", ["SCHEDULED", "LIVE", "COMPLETED"])
@@ -125,7 +145,7 @@ export class StudentLiveService {
         const prepStartMs = scheduledStartMs - 10 * 60 * 1000;
         const isPrepWindow = nowMs >= prepStartMs && nowMs < scheduledStartMs && c.live_status === "SCHEDULED";
 
-        const profileData = c.profiles as { avatar_url?: string; full_name?: string } | null;
+        const profileData = (c.profiles || c.creator_profile) as { avatar_url?: string; full_name?: string } | null;
         const educatorName = profileData?.full_name || c.educator_name || "Educator";
         const educatorAvatar = this.resolveEducatorAvatar(profileData?.avatar_url, c.educator_avatar_url, c.thumbnail_url);
 
@@ -200,7 +220,9 @@ export class StudentLiveService {
           terminated_by,
           termination_reason,
           educator_id,
-          profiles:educator_id(avatar_url, full_name)
+          created_by,
+          profiles:educator_id(avatar_url, full_name),
+          creator_profile:created_by(avatar_url, full_name)
         `)
         .eq("id", liveClassId)
         .single();
@@ -223,7 +245,7 @@ export class StudentLiveService {
       const prepStartMs = scheduledStartMs - 10 * 60 * 1000;
       const isPrepWindow = nowMs >= prepStartMs && nowMs < scheduledStartMs && liveClass.live_status === "SCHEDULED";
 
-      const profileData = liveClass.profiles as { avatar_url?: string; full_name?: string } | null;
+      const profileData = (liveClass.profiles || liveClass.creator_profile) as { avatar_url?: string; full_name?: string } | null;
       const educatorName = profileData?.full_name || liveClass.educator_name || "Educator";
       const educatorAvatar = this.resolveEducatorAvatar(profileData?.avatar_url, liveClass.educator_avatar_url, liveClass.thumbnail_url);
 

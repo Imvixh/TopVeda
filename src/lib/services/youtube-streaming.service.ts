@@ -53,12 +53,12 @@ export class YouTubeStreamingProvider implements IStreamingProvider {
         const rtmpUrl = stream.cdn?.ingestionInfo?.ingestionAddress;
         const rtmpsUrl = stream.cdn?.ingestionInfo?.rtmpsIngestionAddress || rtmpUrl;
         const embedPlaybackUrl = `https://www.youtube-nocookie.com/embed/${broadcast.id}`;
-        const studioPublishUrl = `https://studio.youtube.com/video/${broadcast.id}/livestreaming`;
+        const studioPublishUrl = "https://www.youtube.com/webcam";
 
         return {
           provider: this.providerName,
           sessionId: broadcast.id, // Real YouTube Broadcast Video ID
-          streamRoomUrl: roomUrl,
+          streamRoomUrl: studioPublishUrl || roomUrl,
           internalStreamKey: streamKey,
           rtmpsUrl,
           webRtcPlaybackUrl: embedPlaybackUrl,
@@ -93,6 +93,11 @@ export class YouTubeStreamingProvider implements IStreamingProvider {
 
   async getJoinUrl(params: JoinSessionDTO): Promise<string> {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    if (params.userRole === "ADMIN" || params.userRole === "SUPER_ADMIN") {
+      if (params.sessionId && !params.sessionId.startsWith("dev_yt_")) {
+        return "https://www.youtube.com/webcam";
+      }
+    }
     return `${baseUrl}/student/live/${params.liveClassId}?role=${params.userRole.toLowerCase()}&session=${params.sessionId}`;
   }
 

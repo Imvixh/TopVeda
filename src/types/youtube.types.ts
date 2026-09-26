@@ -92,6 +92,7 @@ export interface YouTubeLiveBroadcast {
   snippet?: {
     title: string;
     description: string;
+    publishedAt?: string;
     scheduledStartTime: string;
     scheduledEndTime?: string;
     actualStartTime?: string;

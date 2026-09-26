@@ -57,93 +57,14 @@ export function LiveClassesSection({ liveClasses }: LiveClassesSectionProps) {
           className="flex items-stretch gap-4 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
-          {activeLiveClasses.map((item: LiveClass) => {
-            const hasReminder = !!reminders[item.id];
-
-            return (
-              <div
-                key={item.id}
-                className="flex flex-col justify-between min-w-[270px] max-w-[285px] sm:min-w-[285px] rounded-2xl bg-white border border-brand-border/80 p-4 shadow-2xs hover:shadow-card transition-all duration-200 shrink-0 select-none"
-              >
-                {/* Top Row: Badge & Educator Info */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1.5 flex-1">
-                    {item.isLive ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-extrabold tracking-wide uppercase shadow-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                        LIVE
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-sky-100/80 text-sky-800 text-[10px] font-extrabold tracking-wide uppercase">
-                        UPCOMING
-                      </span>
-                    )}
-
-                    <div className="space-y-0.5 pt-0.5">
-                      <p className="text-xs font-extrabold text-brand-charcoal leading-tight">
-                        {item.subject}
-                      </p>
-                      <p className="text-xs font-medium text-brand-text-muted leading-tight">
-                        {item.topic}
-                      </p>
-                      <p className="text-[11px] font-semibold text-brand-text-subtle pt-0.5">
-                        {item.educatorName}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Educator Avatar Graphic */}
-                  <div className="relative w-12 h-14 shrink-0 overflow-hidden rounded-xl bg-brand-charcoal/5 border border-brand-border/60 flex items-center justify-center">
-                    {item.educatorAvatar ? (
-                      <img
-                        src={item.educatorAvatar}
-                        alt={item.educatorName || "Educator"}
-                        className="w-full h-full object-cover rounded-xl shadow-xs"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-brand-orange/20 to-amber-100 flex items-center justify-center text-brand-orange font-black text-lg">
-                        {item.educatorName ? item.educatorName.charAt(0) : "E"}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Bottom Row: Scheduled Time & CTA */}
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-brand-border/40 gap-2">
-                  <div className="flex items-center gap-1 text-[11px] font-bold text-brand-text-muted">
-                    <Clock className="h-3.5 w-3.5 text-brand-orange" />
-                    <span>{item.time}</span>
-                  </div>
-
-                  {item.isLive ? (
-                    <Link
-                      href={`/student/live/${item.id}`}
-                      className="inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold shadow-xs transition-all duration-150"
-                    >
-                      Join Class
-                    </Link>
-                  ) : (
-                    <button
-                      onClick={() => toggleReminder(item.id)}
-                      className={cn(
-                        "inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150",
-                        hasReminder
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-[#F4F6F8] hover:bg-[#EAEFF4] text-brand-charcoal"
-                      )}
-                    >
-                      <Bell className={cn("h-3 w-3", hasReminder && "fill-emerald-600 text-emerald-600")} />
-                      {hasReminder ? "Set" : "Reminder"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {activeLiveClasses.map((item: LiveClass) => (
+            <LiveClassCardItem
+              key={item.id}
+              item={item}
+              hasReminder={!!reminders[item.id]}
+              onToggleReminder={() => toggleReminder(item.id)}
+            />
+          ))}
         </div>
 
         {/* Scroll right button */}
@@ -156,5 +77,95 @@ export function LiveClassesSection({ liveClasses }: LiveClassesSectionProps) {
         </button>
       </div>
     </section>
+  );
+}
+
+function LiveClassCardItem({
+  item,
+  hasReminder,
+  onToggleReminder,
+}: {
+  item: LiveClass;
+  hasReminder: boolean;
+  onToggleReminder: () => void;
+}) {
+  const [imgError, setImgError] = React.useState(false);
+
+  return (
+    <div className="flex flex-col justify-between min-w-[270px] max-w-[285px] sm:min-w-[285px] rounded-2xl bg-white border border-brand-border/80 p-4 shadow-2xs hover:shadow-card transition-all duration-200 shrink-0 select-none">
+      {/* Top Row: Badge & Educator Info */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1.5 flex-1">
+          {item.isLive ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-extrabold tracking-wide uppercase shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+              LIVE
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-sky-100/80 text-sky-800 text-[10px] font-extrabold tracking-wide uppercase">
+              UPCOMING
+            </span>
+          )}
+
+          <div className="space-y-0.5 pt-0.5">
+            <p className="text-xs font-extrabold text-brand-charcoal leading-tight">
+              {item.subject}
+            </p>
+            <p className="text-xs font-medium text-brand-text-muted leading-tight">
+              {item.topic}
+            </p>
+            <p className="text-[11px] font-semibold text-brand-text-subtle pt-0.5">
+              {item.educatorName}
+            </p>
+          </div>
+        </div>
+
+        {/* Educator Avatar Graphic */}
+        <div className="relative w-12 h-14 shrink-0 overflow-hidden rounded-xl bg-brand-charcoal/5 border border-brand-border/60 flex items-center justify-center">
+          {item.educatorAvatar && !imgError ? (
+            <img
+              src={item.educatorAvatar}
+              alt={item.educatorName || "Educator"}
+              className="w-full h-full object-cover rounded-xl shadow-xs"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-brand-orange/20 to-amber-100 flex items-center justify-center text-brand-orange font-black text-lg">
+              {item.educatorName ? item.educatorName.charAt(0) : "E"}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom Row: Scheduled Time & CTA */}
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-brand-border/40 gap-2">
+        <div className="flex items-center gap-1 text-[11px] font-bold text-brand-text-muted">
+          <Clock className="h-3.5 w-3.5 text-brand-orange" />
+          <span>{item.time}</span>
+        </div>
+
+        {item.isLive ? (
+          <Link
+            href={`/student/live/${item.id}`}
+            className="inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold shadow-xs transition-all duration-150"
+          >
+            Join Class
+          </Link>
+        ) : (
+          <button
+            onClick={onToggleReminder}
+            className={cn(
+              "inline-flex items-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150",
+              hasReminder
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-[#F4F6F8] hover:bg-[#EAEFF4] text-brand-charcoal"
+            )}
+          >
+            <Bell className={cn("h-3 w-3", hasReminder && "fill-emerald-600 text-emerald-600")} />
+            {hasReminder ? "Set" : "Reminder"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

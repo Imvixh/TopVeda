@@ -122,13 +122,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateErr.message || "Failed to activate live class." }, { status: 500 });
     }
 
-    const { stream_key: _k, ...sanitizedClass } = updatedClass;
+    const broadcastId = updatedClass.provider_session_id;
+    const isRealYt = broadcastId && !broadcastId.startsWith("dev_yt_");
+    const studioPublishUrl = isRealYt ? "https://www.youtube.com/webcam" : null;
+    const resolvedStreamRoomUrl = updatedClass.stream_room_url || studioPublishUrl || `/student/live/${updatedClass.id}`;
+
+    const { stream_key: _internalKey, ...sanitizedClass } = updatedClass;
 
     return NextResponse.json({
       success: true,
       message: "Live Class session started successfully.",
       liveClass: sanitizedClass,
-      streamRoomUrl: updatedClass.stream_room_url,
+      streamRoomUrl: resolvedStreamRoomUrl,
+      studioPublishUrl,
     });
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));

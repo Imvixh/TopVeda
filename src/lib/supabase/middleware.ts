@@ -60,8 +60,14 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
+    // Allow Educators and Super Admins to enter Live Classroom for monitoring and interaction moderation
+    const isLiveClassroom = pathname.startsWith("/student/live/");
+
     if (!profile || profile.role !== "STUDENT") {
       if (profile?.role === "SUPER_ADMIN") {
+        if (isLiveClassroom) {
+          return supabaseResponse;
+        }
         return NextResponse.redirect(new URL("/admin", request.url));
       }
 
@@ -75,6 +81,9 @@ export async function updateSession(request: NextRequest) {
           .maybeSingle();
 
         if (app) {
+          if (isLiveClassroom) {
+            return supabaseResponse;
+          }
           return NextResponse.redirect(new URL("/admin", request.url));
         }
 
