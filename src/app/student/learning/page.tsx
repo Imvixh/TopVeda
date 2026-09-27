@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
-import { createClient } from "@/lib/supabase/client";
 import { StudentSidebar } from "@/components/student/student-sidebar";
 import { StudentHeader } from "@/components/student/student-header";
 import { FloatingChatbot } from "@/components/student/floating-chatbot";
@@ -11,6 +10,7 @@ import {
   MyLearningData,
   EnrolledCourseCardData,
   RecommendedCourseCardData,
+  ContinueLearningCheckpoint,
 } from "@/types/student-learning.types";
 import {
   Calculator,
@@ -27,61 +27,69 @@ import {
   PlayCircle,
   ArrowRight,
   Loader2,
-  Lock,
+  User,
+  Clock,
+  Layers,
+  CheckCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Icon resolution helper for subject icons matching the reference visual style
-function getSubjectIcon(category: string, iconType?: string) {
+// Subject Theme Helper
+function getSubjectTheme(category: string, iconType?: string) {
   const cat = (category || "").toLowerCase();
   const type = (iconType || "").toLowerCase();
 
   if (cat.includes("math") || type.includes("math") || type.includes("calc")) {
     return {
       Icon: Calculator,
-      bg: "bg-[#EBF2FF] border border-[#D0E2FF] text-[#2F6BFF]",
-      barColor: "bg-[#059669]", // Emerald bar like reference
+      badgeBg: "bg-[#EBF2FF] border-[#D0E2FF] text-[#2F6BFF]",
+      barColor: "bg-[#059669]", // Emerald bar
+      accentBorder: "hover:border-[#2F6BFF]/40",
     };
   }
-  if (cat.includes("sci") || cat.includes("chem") || cat.includes("bio") || type.includes("flask")) {
+  if (cat.includes("sci") || cat.includes("chem") || cat.includes("bio") || cat.includes("phy") || type.includes("flask")) {
     return {
       Icon: FlaskConical,
-      bg: "bg-[#E6F8F0] border border-[#C1EED9] text-[#059669]",
-      barColor: "bg-[#0D9488]", // Teal/emerald bar
+      badgeBg: "bg-[#E6F8F0] border-[#C1EED9] text-[#059669]",
+      barColor: "bg-[#0D9488]",
+      accentBorder: "hover:border-[#059669]/40",
     };
   }
   if (cat.includes("eng") || cat.includes("comm") || type.includes("book")) {
     return {
       Icon: BookOpen,
-      bg: "bg-[#FFF4E8] border border-[#FFE2C2] text-[#F97316]",
-      barColor: "bg-[#6366F1]", // Indigo bar
+      badgeBg: "bg-[#FFF4E8] border-[#FFE2C2] text-[#F97316]",
+      barColor: "bg-[#6366F1]",
+      accentBorder: "hover:border-[#F97316]/40",
     };
   }
-  if (cat.includes("comp") || cat.includes("applic") || type.includes("tech")) {
+  if (cat.includes("comp") || cat.includes("applic") || type.includes("tech") || type.includes("tv")) {
     return {
       Icon: Tv,
-      bg: "bg-[#EAF5FF] border border-[#CDE7FE] text-[#0284C7]",
+      badgeBg: "bg-[#EAF5FF] border-[#CDE7FE] text-[#0284C7]",
       barColor: "bg-[#0284C7]",
+      accentBorder: "hover:border-[#0284C7]/40",
     };
   }
   if (cat.includes("social") || cat.includes("history") || cat.includes("geo")) {
     return {
       Icon: Globe,
-      bg: "bg-[#F3E8FF] border border-[#E4CEFF] text-[#9333EA]",
+      badgeBg: "bg-[#F3E8FF] border-[#E4CEFF] text-[#9333EA]",
       barColor: "bg-[#9333EA]",
+      accentBorder: "hover:border-[#9333EA]/40",
     };
   }
 
   return {
     Icon: Atom,
-    bg: "bg-[#FFF0EB] border border-[#FFD9CC] text-[#FF5722]",
+    badgeBg: "bg-[#FFF0EB] border-[#FFD9CC] text-[#FF5722]",
     barColor: "bg-[#FF5722]",
+    accentBorder: "hover:border-[#FF5722]/40",
   };
 }
 
 export default function MyLearningPage() {
-  const { user, profile, isLoading: isAuthLoading } = useAuth();
-  const supabase = React.useMemo(() => createClient(), []);
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   const [activeTab, setActiveTab] = React.useState<"enrolled" | "completed">("enrolled");
   const [learningData, setLearningData] = React.useState<MyLearningData | null>(null);
@@ -112,7 +120,7 @@ export default function MyLearningPage() {
     }
   }, [isAuthLoading, fetchMyLearning]);
 
-  // Handle explicit enrollment action from Recommended for You section
+  // Handle explicit enrollment action from Recommended section
   const handleEnrollCourse = async (courseId: string) => {
     try {
       setIsEnrollingId(courseId);
@@ -123,7 +131,6 @@ export default function MyLearningPage() {
       });
 
       if (res.ok) {
-        // Refresh learning data to reflect new enrollment
         await fetchMyLearning();
       } else {
         const err = await res.json();
@@ -139,6 +146,7 @@ export default function MyLearningPage() {
   const enrolledCourses = learningData?.enrolledCourses || [];
   const completedCourses = learningData?.completedCourses || [];
   const recommendedCourses = learningData?.recommendedCourses || [];
+  const continueItem = learningData?.continueLearningItem || null;
 
   return (
     <div className="min-h-screen bg-[#FDFDFC] text-brand-text-primary flex flex-col font-sans antialiased">
@@ -164,32 +172,96 @@ export default function MyLearningPage() {
           isSidebarCollapsed={isSidebarCollapsed}
         />
 
-        {/* My Learning Canvas (Faithfully reproducing the reference image layout) */}
-        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1000px] w-full mx-auto space-y-6">
+        {/* My Learning Canvas */}
+        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1120px] w-full mx-auto space-y-7">
           {/* Header Title & Subtitle */}
           <div className="space-y-1">
             <h1 className="text-xl sm:text-2xl font-black text-brand-charcoal tracking-tight">
               My Learning
             </h1>
             <p className="text-xs sm:text-sm font-medium text-brand-text-muted">
-              Your enrolled courses and learning progress
+              Your enrolled courses, batches, active checkpoints, and learning progress
             </p>
           </div>
 
-          {/* Tabs: Enrolled Courses & Completed */}
+          {/* Continue Learning Checkpoint Hero Card (If active lecture exists) */}
+          {!isLoading && continueItem && (
+            <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-[#FFF9F5] via-[#FFF3EC] to-[#FFEDE3] border border-orange-200/80 shadow-2xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand-orange text-white text-[10px] font-extrabold uppercase tracking-wider shadow-3xs">
+                    <Sparkles className="h-3 w-3" />
+                    <span>Continue Learning</span>
+                  </div>
+
+                  <h2 className="text-base sm:text-lg font-black text-brand-charcoal truncate">
+                    {continueItem.courseTitle}
+                  </h2>
+
+                  <p className="text-xs sm:text-sm font-semibold text-brand-charcoal/80 flex items-center gap-2 truncate">
+                    <PlayCircle className="h-4 w-4 text-brand-orange shrink-0" />
+                    <span className="truncate">
+                      {continueItem.chapterTitle ? `${continueItem.chapterTitle} • ` : ""}
+                      {continueItem.lectureTitle}
+                    </span>
+                  </p>
+
+                  <div className="flex items-center gap-4 text-[11px] text-brand-text-muted font-medium pt-0.5">
+                    {continueItem.educatorName && (
+                      <span className="flex items-center gap-1">
+                        <User className="h-3 w-3 text-brand-text-subtle" />
+                        {continueItem.educatorName}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-brand-text-subtle" />
+                      {continueItem.durationFormatted || "45 min"}
+                    </span>
+                    <span>{continueItem.boardName}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-start sm:items-end justify-center gap-2 shrink-0">
+                  <Link
+                    href={continueItem.resumeUrl}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-brand-orange hover:bg-brand-orange-hover text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all active:scale-[0.98]"
+                  >
+                    <span>Resume Lecture</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+
+                  <span className="text-[11px] font-bold text-brand-text-muted">
+                    {continueItem.progressPercent > 0
+                      ? `${continueItem.progressPercent}% Completed`
+                      : "Ready to Start"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full h-2 rounded-full bg-orange-200/50 overflow-hidden">
+                <div
+                  className="h-full bg-brand-orange rounded-full transition-all duration-700"
+                  style={{ width: `${Math.max(continueItem.progressPercent, 4)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Section Tabs: Enrolled Courses & Batches | Completed */}
           <div className="flex items-center gap-6 border-b border-gray-200/80 pt-1 pb-2">
             <button
               onClick={() => setActiveTab("enrolled")}
               className={cn(
-                "relative pb-2 text-xs sm:text-sm font-bold transition-colors cursor-pointer select-none",
+                "relative pb-2 text-xs sm:text-sm font-bold transition-colors cursor-pointer select-none flex items-center gap-2",
                 activeTab === "enrolled"
                   ? "text-brand-orange"
                   : "text-brand-text-muted hover:text-brand-charcoal"
               )}
             >
-              <span>Enrolled Courses</span>
+              <span>Enrolled Courses &amp; Batches</span>
               {enrolledCourses.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-brand-orange">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-brand-orange">
                   {enrolledCourses.length}
                 </span>
               )}
@@ -201,7 +273,7 @@ export default function MyLearningPage() {
             <button
               onClick={() => setActiveTab("completed")}
               className={cn(
-                "relative pb-2 text-xs sm:text-sm font-bold transition-colors cursor-pointer select-none",
+                "relative pb-2 text-xs sm:text-sm font-bold transition-colors cursor-pointer select-none flex items-center gap-2",
                 activeTab === "completed"
                   ? "text-brand-orange"
                   : "text-brand-text-muted hover:text-brand-charcoal"
@@ -209,7 +281,7 @@ export default function MyLearningPage() {
             >
               <span>Completed</span>
               {completedCourses.length > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-700">
                   {completedCourses.length}
                 </span>
               )}
@@ -219,116 +291,147 @@ export default function MyLearningPage() {
             </button>
           </div>
 
-          {/* Loading State */}
+          {/* Loading Skeleton */}
           {isLoading && (
-            <div className="space-y-4 py-8">
-              {[1, 2, 3].map((n) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-4">
+              {[1, 2, 3, 4].map((n) => (
                 <div
                   key={n}
-                  className="p-5 rounded-2xl bg-white border border-gray-100 shadow-2xs flex items-center justify-between gap-4 animate-pulse"
+                  className="p-5 rounded-3xl bg-white border border-gray-100 shadow-2xs space-y-4 animate-pulse"
                 >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="w-12 h-12 rounded-xl bg-gray-100" />
-                    <div className="space-y-2 flex-1 max-w-md">
-                      <div className="h-4 bg-gray-200 rounded w-1/2" />
-                      <div className="h-3 bg-gray-100 rounded w-1/4" />
-                      <div className="h-2 bg-gray-100 rounded w-3/4 mt-2" />
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gray-100" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-gray-200 rounded w-2/3" />
+                      <div className="h-3 bg-gray-100 rounded w-1/3" />
                     </div>
                   </div>
-                  <div className="w-24 h-9 bg-gray-100 rounded-full" />
+                  <div className="h-3 bg-gray-100 rounded w-full" />
+                  <div className="h-9 bg-gray-100 rounded-full w-full" />
                 </div>
               ))}
             </div>
           )}
 
-          {/* Active Tab 1: Enrolled Courses List */}
+          {/* TAB 1: Enrolled Courses & Batches Grid */}
           {!isLoading && activeTab === "enrolled" && (
-            <div className="space-y-4">
+            <div>
               {enrolledCourses.length > 0 ? (
-                enrolledCourses.map((course) => {
-                  const { Icon, bg, barColor } = getSubjectIcon(course.category, course.iconType);
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {enrolledCourses.map((item) => {
+                    const { Icon, badgeBg, barColor, accentBorder } = getSubjectTheme(
+                      item.category,
+                      item.iconType
+                    );
 
-                  return (
-                    <div
-                      key={course.id}
-                      className="group p-4 sm:p-5 rounded-2xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card hover:border-brand-orange/30 transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    >
-                      {/* Left: Subject Icon & Course Info */}
-                      <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 flex-1 min-w-0">
-                        {/* Square Subject Icon Badge */}
-                        <div
-                          className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-xs",
-                            bg
-                          )}
-                        >
-                          <Icon className="h-6 w-6 stroke-[2.2]" />
-                        </div>
-
-                        {/* Title, Board, Progress */}
-                        <div className="flex-1 min-w-0 space-y-1">
-                          <Link
-                            href={course.detailsUrl}
-                            className="group/title inline-flex items-center gap-1 text-sm sm:text-base font-black text-brand-charcoal hover:text-brand-orange transition-colors truncate max-w-full"
-                          >
-                            <span className="truncate">{course.title}</span>
-                            <ChevronRight className="h-4 w-4 text-gray-400 group-hover/title:text-brand-orange transition-transform group-hover/title:translate-x-0.5 shrink-0" />
-                          </Link>
-
-                          <p className="text-[11px] sm:text-xs font-semibold text-brand-text-muted/90">
-                            {course.boardName}
-                            {course.batchTitle ? ` · ${course.batchTitle}` : ""}
-                          </p>
-
-                          {/* Progress Row */}
-                          <div className="pt-1.5 flex items-center gap-3 max-w-sm sm:max-w-md">
-                            <span className="text-[11px] font-bold text-brand-text-muted/80 shrink-0">
-                              Progress
-                            </span>
-                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden relative">
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "group p-5 sm:p-6 rounded-3xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card transition-all duration-200 flex flex-col justify-between space-y-5",
+                          accentBorder
+                        )}
+                      >
+                        {/* Top Card Header */}
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3.5 min-w-0">
                               <div
-                                className={cn("h-full rounded-full transition-all duration-500", barColor)}
-                                style={{ width: `${Math.max(course.progressPercent, 4)}%` }}
-                              />
+                                className={cn(
+                                  "w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 shadow-3xs",
+                                  badgeBg
+                                )}
+                              >
+                                <Icon className="h-6 w-6 stroke-[2.2]" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-brand-text-muted">
+                                  {item.boardName}
+                                </span>
+                                <h3 className="text-sm sm:text-base font-black text-brand-charcoal truncate">
+                                  {item.title}
+                                </h3>
+                              </div>
                             </div>
-                            <span className="text-xs font-extrabold text-brand-charcoal tabular-nums shrink-0">
-                              {course.progressPercent}%
+
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 border border-orange-100 text-brand-orange shrink-0">
+                              Enrolled
                             </span>
                           </div>
+
+                          {/* Subtitle / Batch Name */}
+                          {(item.batchTitle || item.batchSubtitle) && (
+                            <p className="text-xs font-semibold text-brand-text-muted line-clamp-1">
+                              {item.batchTitle || item.batchSubtitle}
+                            </p>
+                          )}
+
+                          {/* Lead Educator / Faculty */}
+                          {item.educatorName && (
+                            <div className="flex items-center gap-2 text-xs font-semibold text-brand-charcoal/90 pt-0.5">
+                              <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center text-[10px] font-bold text-brand-orange shrink-0">
+                                {item.educatorName.charAt(0)}
+                              </div>
+                              <span className="text-[11px] text-brand-text-muted">Faculty:</span>
+                              <span className="text-[11px] font-bold text-brand-charcoal truncate">
+                                {item.educatorName}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Progress Section */}
+                        <div className="space-y-2 pt-1 border-t border-gray-100/90">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-brand-charcoal">
+                              Progress: {item.progressPercent}%
+                            </span>
+                            <span className="font-semibold text-brand-text-muted tabular-nums">
+                              {item.completedLectures} / {item.totalLectures} Lectures
+                            </span>
+                          </div>
+
+                          <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden relative">
+                            <div
+                              className={cn("h-full rounded-full transition-all duration-500", barColor)}
+                              style={{ width: `${Math.max(item.progressPercent, 3)}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2.5 pt-1">
+                          <Link
+                            href={item.resumeUrl}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-brand-orange hover:bg-brand-orange-hover text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-md transition-all active:scale-[0.98]"
+                          >
+                            <span>Continue Learning</span>
+                            <ChevronRight className="h-4 w-4" />
+                          </Link>
+
+                          <Link
+                            href={item.detailsUrl}
+                            className="px-4 py-2.5 rounded-full border border-gray-200 hover:border-brand-orange hover:bg-orange-50 text-xs font-bold text-brand-text-muted hover:text-brand-orange transition-colors"
+                          >
+                            Details
+                          </Link>
                         </div>
                       </div>
-
-                      {/* Right: Continue & View Details Actions */}
-                      <div className="flex sm:flex-col items-center sm:items-end justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                        <Link
-                          href={course.resumeUrl}
-                          className="flex-1 sm:flex-initial inline-flex items-center justify-center px-6 py-2 sm:py-2.5 rounded-full bg-brand-orange hover:bg-brand-orange-hover text-white text-xs sm:text-sm font-bold shadow-xs hover:shadow-md transition-all active:scale-[0.98]"
-                        >
-                          Continue
-                        </Link>
-
-                        <Link
-                          href={course.detailsUrl}
-                          className="flex-1 sm:flex-initial inline-flex items-center justify-center px-4 py-1.5 rounded-full text-xs font-semibold text-brand-text-muted hover:text-brand-orange hover:bg-orange-50 transition-colors"
-                        >
-                          View Details
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               ) : (
                 /* Empty State for Enrolled Courses */
                 <div className="p-8 sm:p-12 rounded-3xl bg-white border border-brand-border/80 shadow-2xs text-center space-y-4">
                   <div className="mx-auto w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-brand-orange">
                     <GraduationCap className="h-7 w-7" />
                   </div>
-                  <div className="space-y-1 max-w-md mx-auto">
+                  <div className="space-y-1.5 max-w-md mx-auto">
                     <h3 className="text-base sm:text-lg font-black text-brand-charcoal">
                       You haven&apos;t enrolled in any courses yet
                     </h3>
                     <p className="text-xs sm:text-sm font-medium text-brand-text-muted">
-                      Explore our published board curricula below and enroll with a single click to start learning.
+                      Explore our published curricula below and enroll to start your structured learning journey.
                     </p>
                   </div>
                 </div>
@@ -336,66 +439,89 @@ export default function MyLearningPage() {
             </div>
           )}
 
-          {/* Active Tab 2: Completed Courses List */}
+          {/* TAB 2: Completed Courses Section */}
           {!isLoading && activeTab === "completed" && (
-            <div className="space-y-4">
+            <div>
               {completedCourses.length > 0 ? (
-                completedCourses.map((course) => {
-                  const { Icon, bg } = getSubjectIcon(course.category, course.iconType);
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {completedCourses.map((item) => {
+                    const { Icon, badgeBg } = getSubjectTheme(item.category, item.iconType);
 
-                  return (
-                    <div
-                      key={course.id}
-                      className="p-4 sm:p-5 rounded-2xl bg-white border border-emerald-100 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    >
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div
-                          className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-xs",
-                            bg
-                          )}
-                        >
-                          <Icon className="h-6 w-6" />
-                        </div>
-                        <div className="space-y-1 flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm sm:text-base font-black text-brand-charcoal truncate">
-                              {course.title}
-                            </span>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 shrink-0">
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-5 sm:p-6 rounded-3xl bg-white border border-emerald-200/80 shadow-2xs flex flex-col justify-between space-y-5"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div
+                                className={cn(
+                                  "w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 shadow-3xs",
+                                  badgeBg
+                                )}
+                              >
+                                <Icon className="h-6 w-6" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">
+                                  {item.boardName}
+                                </span>
+                                <h3 className="text-sm sm:text-base font-black text-brand-charcoal truncate">
+                                  {item.title}
+                                </h3>
+                              </div>
+                            </div>
+
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 border border-emerald-200 text-emerald-800 shrink-0">
                               <CheckCircle2 className="h-3 w-3" />
-                              Completed
+                              100% Completed
                             </span>
                           </div>
-                          <p className="text-xs font-semibold text-brand-text-muted">
-                            {course.boardName}
-                          </p>
+
+                          {item.educatorName && (
+                            <p className="text-xs font-semibold text-brand-text-muted">
+                              Faculty: {item.educatorName}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* 100% Progress Confirmation */}
+                        <div className="space-y-1.5 pt-1 border-t border-emerald-100">
+                          <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                            <span>Status: Completed</span>
+                            <span>{item.totalLectures} / {item.totalLectures} Lectures</span>
+                          </div>
+                          <div className="w-full h-2 rounded-full bg-emerald-100 overflow-hidden">
+                            <div className="h-full bg-emerald-600 rounded-full w-full" />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <Link
+                            href={item.detailsUrl}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full border border-gray-200 hover:border-brand-orange hover:bg-orange-50 text-xs sm:text-sm font-bold text-brand-charcoal hover:text-brand-orange transition-colors"
+                          >
+                            <span>Review Syllabus</span>
+                            <ArrowRight className="h-4 w-4" />
+                          </Link>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Link
-                          href={course.detailsUrl}
-                          className="px-5 py-2 rounded-full border border-gray-200 hover:border-brand-orange text-xs font-bold text-brand-text-primary hover:text-brand-orange transition-colors"
-                        >
-                          Review Syllabus
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               ) : (
-                /* Empty State for Completed Courses */
+                /* Empty State for Completed */
                 <div className="p-8 sm:p-12 rounded-3xl bg-white border border-brand-border/80 shadow-2xs text-center space-y-4">
                   <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
                     <Award className="h-7 w-7" />
                   </div>
-                  <div className="space-y-1 max-w-md mx-auto">
+                  <div className="space-y-1.5 max-w-md mx-auto">
                     <h3 className="text-base sm:text-lg font-black text-brand-charcoal">
                       No completed courses yet
                     </h3>
                     <p className="text-xs sm:text-sm font-medium text-brand-text-muted">
-                      Watch all published lectures in your enrolled courses to achieve 100% completion.
+                      Watch all published lectures in your enrolled courses to achieve 100% completion certificates.
                     </p>
                   </div>
                 </div>
@@ -403,68 +529,87 @@ export default function MyLearningPage() {
             </div>
           )}
 
-          {/* Section: Recommended for You (Faithful to Reference Image Layout) */}
+          {/* Section: Recommended For You (Real Database Offerings) */}
           {!isLoading && recommendedCourses.length > 0 && (
             <div className="pt-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base sm:text-lg font-black text-brand-charcoal tracking-tight">
-                  Recommended for You
-                </h2>
-                <span className="text-[11px] font-semibold text-brand-text-muted">
-                  Based on your academic profile
-                </span>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-brand-charcoal tracking-tight">
+                    Recommended For You
+                  </h2>
+                  <p className="text-xs font-medium text-brand-text-muted">
+                    Curated courses and batches available for enrollment
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-3.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {recommendedCourses.map((rec) => {
-                  const { Icon, bg } = getSubjectIcon(rec.category, rec.iconType);
-                  const isEnrolling = isEnrollingId === rec.id;
+                  const { Icon, badgeBg, accentBorder } = getSubjectTheme(rec.category, rec.iconType);
+                  const isEnrolling = isEnrollingId === (rec.courseId || rec.id);
 
                   return (
                     <div
                       key={rec.id}
-                      className="p-4 sm:p-5 rounded-2xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card hover:border-brand-orange/30 transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      className={cn(
+                        "p-5 rounded-3xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card transition-all duration-200 flex flex-col justify-between space-y-4",
+                        accentBorder
+                      )}
                     >
-                      {/* Left: Icon & Info */}
-                      <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 flex-1 min-w-0">
+                      <div className="flex items-start gap-3.5">
                         <div
                           className={cn(
-                            "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-xs",
-                            bg
+                            "w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 shadow-3xs",
+                            badgeBg
                           )}
                         >
-                          <Icon className="h-6 w-6 stroke-[2.2]" />
+                          <Icon className="h-5 w-5 stroke-[2.2]" />
                         </div>
-
-                        <div className="space-y-0.5 flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-text-muted">
+                            {rec.boardName}
+                          </span>
                           <h3 className="text-sm sm:text-base font-black text-brand-charcoal truncate">
                             {rec.title}
                           </h3>
-                          <p className="text-[11px] sm:text-xs font-medium text-brand-text-muted truncate">
-                            {rec.topicsSubtitle || rec.boardName}
+                          <p className="text-xs font-medium text-brand-text-muted line-clamp-2">
+                            {rec.topicsSubtitle || "Comprehensive curriculum coverage, notes & practice tests."}
                           </p>
+                          {rec.educatorName && (
+                            <p className="text-[11px] font-semibold text-brand-charcoal/80 pt-0.5">
+                              Faculty: {rec.educatorName}
+                            </p>
+                          )}
                         </div>
                       </div>
 
-                      {/* Right: Explore / Enroll Action Button */}
-                      <div className="flex items-center justify-end gap-2 shrink-0">
-                        <button
-                          onClick={() => handleEnrollCourse(rec.id)}
-                          disabled={isEnrolling}
-                          className={cn(
-                            "inline-flex items-center justify-center px-6 py-2 rounded-full border border-orange-200 hover:border-brand-orange bg-white hover:bg-orange-50 text-brand-orange text-xs sm:text-sm font-bold shadow-2xs transition-all active:scale-[0.98] cursor-pointer",
-                            isEnrolling && "opacity-70 cursor-wait"
-                          )}
+                      <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+                        {rec.courseId ? (
+                          <button
+                            onClick={() => handleEnrollCourse(rec.courseId!)}
+                            disabled={isEnrolling}
+                            className={cn(
+                              "inline-flex items-center justify-center px-5 py-2 rounded-full border border-orange-200 hover:border-brand-orange bg-white hover:bg-orange-50 text-brand-orange text-xs font-bold shadow-2xs transition-all active:scale-[0.98] cursor-pointer",
+                              isEnrolling && "opacity-70 cursor-wait"
+                            )}
+                          >
+                            {isEnrolling ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                <span>Enrolling...</span>
+                              </>
+                            ) : (
+                              <span>Enroll Now</span>
+                            )}
+                          </button>
+                        ) : null}
+
+                        <Link
+                          href={rec.exploreUrl}
+                          className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-brand-charcoal hover:bg-brand-charcoal/90 text-white text-xs font-bold transition-colors"
                         >
-                          {isEnrolling ? (
-                            <>
-                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                              <span>Enrolling...</span>
-                            </>
-                          ) : (
-                            <span>Explore</span>
-                          )}
-                        </button>
+                          Explore
+                        </Link>
                       </div>
                     </div>
                   );

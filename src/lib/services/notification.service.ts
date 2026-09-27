@@ -1,7 +1,8 @@
 /**
- * TopVeda In-App & Transactional Notification Service (Phase 4.1 Step 5J + Phase 5G)
+ * TopVeda In-App & Transactional Notification Service (Phase 4.1 Step 5J + Phase 5G & Personalization Polish)
  * Governs notifications for Super Admins, Teachers, and Students.
  * Unified storage table: cms_notifications.
+ * Strict relationship-based student targeting, category isolation, and duplicate prevention.
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
@@ -12,8 +13,6 @@ import {
 } from "@/types/cms.types";
 import {
   formatLiveTimeDisplay,
-  formatLiveDateIST,
-  formatLiveTimeIST,
 } from "@/lib/utils/timezone";
 
 export class NotificationService {
@@ -45,6 +44,21 @@ export class NotificationService {
     }
   ): Promise<{ data: CmsNotification | null; error: Error | null }> {
     try {
+      // Duplicate prevention for targeted notifications
+      if (payload.recipientId && payload.entityId && payload.type) {
+        const { data: existing } = await supabase
+          .from("cms_notifications")
+          .select("id")
+          .eq("recipient_id", payload.recipientId)
+          .eq("type", payload.type)
+          .eq("entity_id", payload.entityId)
+          .maybeSingle();
+
+        if (existing) {
+          return { data: existing as CmsNotification, error: null };
+        }
+      }
+
       const { data, error } = await supabase
         .from("cms_notifications")
         .insert({
@@ -72,11 +86,11 @@ export class NotificationService {
   }
 
   // ============================================================================
-  // STUDENT NOTIFICATION METHODS (Phase 5G)
+  // STUDENT NOTIFICATION METHODS (Targeted & Category-Filtered)
   // ============================================================================
 
   /**
-   * Fetch notifications and unread count for a student
+   * Fetch notifications and unread count for a student with strict category filtering
    */
   public static async getStudentNotifications(
     supabase: SupabaseClient,
@@ -96,7 +110,7 @@ export class NotificationService {
           );
         } else if (filterCategory === "TESTS") {
           query = query.or(
-            "category.eq.TESTS,type.in.(TEST_RESULT_AVAILABLE,TEST_UPCOMING,TEST_SUBMITTED,NEW_TEST)"
+            "category.eq.TESTS,type.in.(TEST_RESULT_AVAILABLE,TEST_UPCOMING,TEST_SUBMITTED,NEW_TEST,NEW_QUIZ)"
           );
         } else if (filterCategory === "ANNOUNCEMENTS") {
           query = query.or(
@@ -136,7 +150,7 @@ export class NotificationService {
   }
 
   /**
-   * Get unread count for badge indicators
+   * Get unread count for student badge indicators
    */
   public static async getStudentUnreadCount(
     supabase: SupabaseClient,
@@ -177,26 +191,44 @@ export class NotificationService {
   }
 
   // ============================================================================
-  // EVENT-DRIVEN STUDENT NOTIFICATION DISPATCHERS (Phase 5G Event Integration)
+  // RELATIONSHIP-BASED STUDENT NOTIFICATION DISPATCHERS
   // ============================================================================
 
   /**
-   * Find students enrolled in a course or batch
+   * Find students actively enrolled in a course or batch.
+   * Ensures students in Batch A do not receive alerts for Batch B.
    */
-  private static async getEnrolledStudentIds(
+  public static async getEnrolledStudentIds(
     supabase: SupabaseClient,
-    target: { courseId?: string; batchId?: string }
+    target: { courseId?: string | null; batchId?: string | null }
   ): Promise<string[]> {
     try {
+      if (!target.batchId && !target.courseId) return [];
+
+      let resolvedCourseId = target.courseId || null;
+      if (target.batchId && !resolvedCourseId) {
+        const { data: batchData } = await supabase
+          .from("cms_batches")
+          .select("course_id")
+          .eq("id", target.batchId)
+          .maybeSingle();
+
+        if (batchData?.course_id) {
+          resolvedCourseId = batchData.course_id;
+        }
+      }
+
       let query = supabase
         .from("student_enrollments")
-        .select("student_id")
+        .select("student_id, course_id, batch_id")
         .eq("status", "ACTIVE");
 
-      if (target.batchId) {
+      if (target.batchId && resolvedCourseId) {
+        query = query.or(`batch_id.eq.${target.batchId},course_id.eq.${resolvedCourseId}`);
+      } else if (target.batchId) {
         query = query.eq("batch_id", target.batchId);
-      } else if (target.courseId) {
-        query = query.eq("course_id", target.courseId);
+      } else if (resolvedCourseId) {
+        query = query.eq("course_id", resolvedCourseId);
       }
 
       const { data, error } = await query;
@@ -208,15 +240,16 @@ export class NotificationService {
   }
 
   /**
-   * Notify enrolled students when a new lecture is published
+   * Notify enrolled students when a new lecture is published.
+   * Includes duplicate prevention.
    */
   public static async notifyStudentsLecturePublished(
     supabase: SupabaseClient,
     params: {
       lectureId: string;
       title: string;
-      courseId: string;
-      batchId?: string;
+      courseId?: string | null;
+      batchId?: string | null;
       subjectName?: string;
     }
   ): Promise<void> {
@@ -227,13 +260,25 @@ export class NotificationService {
 
     if (studentIds.length === 0) return;
 
-    const inserts = studentIds.map((studentId) => ({
+    // Duplicate check: query existing notifications for this lecture
+    const { data: existingNotifs } = await supabase
+      .from("cms_notifications")
+      .select("recipient_id")
+      .eq("type", "NEW_LECTURE")
+      .eq("entity_id", params.lectureId);
+
+    const alreadyNotified = new Set((existingNotifs || []).map((n) => n.recipient_id));
+    const targetStudentIds = studentIds.filter((id) => !alreadyNotified.has(id));
+
+    if (targetStudentIds.length === 0) return;
+
+    const inserts = targetStudentIds.map((studentId) => ({
       recipient_id: studentId,
       recipient_role: "STUDENT",
       type: "NEW_LECTURE",
       category: "CLASSES",
       title: "New Lecture Added",
-      message: `${params.subjectName ? `${params.subjectName} — ` : ""}${params.title} is now available.`,
+      message: `${params.subjectName ? `${params.subjectName} — ` : ""}${params.title} is now available in your enrolled curriculum.`,
       entity_type: "LECTURE",
       entity_id: params.lectureId,
       is_read: false,
@@ -248,7 +293,8 @@ export class NotificationService {
   }
 
   /**
-   * Notify enrolled students when a new study material is published
+   * Notify enrolled students when a new study material is published.
+   * Includes duplicate prevention.
    */
   public static async notifyStudentsStudyMaterialPublished(
     supabase: SupabaseClient,
@@ -256,27 +302,42 @@ export class NotificationService {
       materialId: string;
       title: string;
       batchId: string;
+      courseId?: string;
       materialType?: string;
     }
   ): Promise<void> {
     const studentIds = await this.getEnrolledStudentIds(supabase, {
       batchId: params.batchId,
+      courseId: params.courseId,
     });
 
     if (studentIds.length === 0) return;
 
-    const inserts = studentIds.map((studentId) => ({
+    // Duplicate check
+    const { data: existingNotifs } = await supabase
+      .from("cms_notifications")
+      .select("recipient_id")
+      .eq("type", "NEW_STUDY_MATERIAL")
+      .eq("entity_id", params.materialId);
+
+    const alreadyNotified = new Set((existingNotifs || []).map((n) => n.recipient_id));
+    const targetStudentIds = studentIds.filter((id) => !alreadyNotified.has(id));
+
+    if (targetStudentIds.length === 0) return;
+
+    const inserts = targetStudentIds.map((studentId) => ({
       recipient_id: studentId,
       recipient_role: "STUDENT",
       type: "NEW_STUDY_MATERIAL",
       category: "STUDY_MATERIAL",
       title: "New Study Material",
-      message: `A new ${params.materialType || "resource"} ("${params.title}") has been added to your batch.`,
+      message: `A new ${params.materialType || "resource"} ("${params.title}") has been uploaded for your enrolled batch.`,
       entity_type: "STUDY_MATERIAL",
       entity_id: params.materialId,
       is_read: false,
       metadata: {
         batchId: params.batchId,
+        courseId: params.courseId,
         materialId: params.materialId,
       },
     }));
@@ -285,7 +346,8 @@ export class NotificationService {
   }
 
   /**
-   * Notify enrolled students about an upcoming or rescheduled Live Class
+   * Notify enrolled students about an upcoming Live Class.
+   * Includes duplicate prevention.
    */
   public static async notifyStudentsLiveClassCreated(
     supabase: SupabaseClient,
@@ -304,14 +366,26 @@ export class NotificationService {
 
     if (studentIds.length === 0) return;
 
+    // Duplicate check
+    const { data: existingNotifs } = await supabase
+      .from("cms_notifications")
+      .select("recipient_id")
+      .eq("type", "LIVE_CLASS_CREATED")
+      .eq("entity_id", params.liveClassId);
+
+    const alreadyNotified = new Set((existingNotifs || []).map((n) => n.recipient_id));
+    const targetStudentIds = studentIds.filter((id) => !alreadyNotified.has(id));
+
+    if (targetStudentIds.length === 0) return;
+
     const formattedTime = formatLiveTimeDisplay(params.scheduledStart);
 
-    const inserts = studentIds.map((studentId) => ({
+    const inserts = targetStudentIds.map((studentId) => ({
       recipient_id: studentId,
       recipient_role: "STUDENT",
       type: "LIVE_CLASS_CREATED",
       category: "CLASSES",
-      title: "Live Class Starting Soon",
+      title: "Live Class Scheduled",
       message: `Your live class "${params.title}" is scheduled for ${formattedTime}.`,
       entity_type: "LIVE_CLASS",
       entity_id: params.liveClassId,
@@ -326,7 +400,61 @@ export class NotificationService {
   }
 
   /**
-   * Notify a student that their test result is available
+   * Notify enrolled students about a new quiz or test published.
+   * Includes duplicate prevention.
+   */
+  public static async notifyStudentsQuizPublished(
+    supabase: SupabaseClient,
+    params: {
+      testId: string;
+      title: string;
+      courseId?: string;
+      batchId?: string;
+      subjectName?: string;
+    }
+  ): Promise<void> {
+    const studentIds = await this.getEnrolledStudentIds(supabase, {
+      courseId: params.courseId,
+      batchId: params.batchId,
+    });
+
+    if (studentIds.length === 0) return;
+
+    // Duplicate check
+    const { data: existingNotifs } = await supabase
+      .from("cms_notifications")
+      .select("recipient_id")
+      .eq("type", "NEW_TEST")
+      .eq("entity_id", params.testId);
+
+    const alreadyNotified = new Set((existingNotifs || []).map((n) => n.recipient_id));
+    const targetStudentIds = studentIds.filter((id) => !alreadyNotified.has(id));
+
+    if (targetStudentIds.length === 0) return;
+
+    const inserts = targetStudentIds.map((studentId) => ({
+      recipient_id: studentId,
+      recipient_role: "STUDENT",
+      type: "NEW_TEST",
+      category: "TESTS",
+      title: "New Test Available",
+      message: `A new assessment "${params.title}"${params.subjectName ? ` (${params.subjectName})` : ""} is now active for your batch.`,
+      entity_type: "TEST",
+      entity_id: params.testId,
+      is_read: false,
+      metadata: {
+        testId: params.testId,
+        courseId: params.courseId,
+        batchId: params.batchId,
+      },
+    }));
+
+    await supabase.from("cms_notifications").insert(inserts);
+  }
+
+  /**
+   * Notify a student that their test result is available.
+   * Targeted to exact student with duplicate check.
    */
   public static async notifyStudentTestResultAvailable(
     supabase: SupabaseClient,
@@ -338,25 +466,29 @@ export class NotificationService {
       maxScore: number;
     }
   ): Promise<void> {
+    const pct = params.maxScore > 0 ? Math.round((params.score / params.maxScore) * 100) : 0;
+
     await this.createNotification(supabase, {
       recipientId: params.studentId,
       recipientRole: "STUDENT",
       type: "TEST_RESULT_AVAILABLE",
       category: "TESTS",
-      title: "Test Result Available",
-      message: `Your score for "${params.testTitle}" is ${params.score}/${params.maxScore}. Check detailed analytics.`,
+      title: "Test Score Evaluated",
+      message: `Your score for "${params.testTitle}" is ${params.score}/${params.maxScore} (${pct}%). Detailed solutions are available.`,
       entityType: "TEST",
       entityId: params.testId,
       metadata: {
         testId: params.testId,
         score: params.score,
         maxScore: params.maxScore,
+        percentage: pct,
       },
     });
   }
 
   /**
-   * Notify students when a general announcement is published
+   * Notify students when a general announcement is published by Super Admin.
+   * Kept separate under ANNOUNCEMENTS category.
    */
   public static async notifyStudentsAnnouncementPublished(
     supabase: SupabaseClient,
@@ -366,7 +498,6 @@ export class NotificationService {
       message: string;
     }
   ): Promise<void> {
-    // Fetch active student IDs (limited to 500 for broadcast efficiency)
     const { data: students, error } = await supabase
       .from("profiles")
       .select("id")
@@ -375,12 +506,24 @@ export class NotificationService {
 
     if (error || !students || students.length === 0) return;
 
-    const inserts = students.map((s: { id: string }) => ({
+    // Duplicate check
+    const { data: existingNotifs } = await supabase
+      .from("cms_notifications")
+      .select("recipient_id")
+      .eq("type", "ANNOUNCEMENT_PUBLISHED")
+      .eq("entity_id", params.hubItemId);
+
+    const alreadyNotified = new Set((existingNotifs || []).map((n) => n.recipient_id));
+    const targetStudents = students.filter((s: { id: string }) => !alreadyNotified.has(s.id));
+
+    if (targetStudents.length === 0) return;
+
+    const inserts = targetStudents.map((s: { id: string }) => ({
       recipient_id: s.id,
       recipient_role: "STUDENT",
       type: "ANNOUNCEMENT_PUBLISHED",
       category: "ANNOUNCEMENTS",
-      title: params.title || "Announcement",
+      title: params.title || "Official Announcement",
       message: params.message || "TopVeda has published a new announcement.",
       entity_type: "ANNOUNCEMENT",
       entity_id: params.hubItemId,
@@ -394,7 +537,7 @@ export class NotificationService {
   }
 
   // ============================================================================
-  // ADMIN & TEACHER NOTIFICATION METHODS (Step 5J Preserved)
+  // ADMIN & TEACHER NOTIFICATION METHODS (Preserved)
   // ============================================================================
 
   public static async notifySuperAdminLiveClassCreated(

@@ -30,12 +30,24 @@ export async function GET(request: NextRequest) {
         totalEnrolledCourses: 0,
         lecturesWatched: 0,
         totalAccessibleLectures: 0,
+        liveClassesAttended: 0,
+        totalLiveClassesScheduled: 0,
+        liveAttendancePercent: 0,
         testsAttempted: 0,
         quizzesAttempted: 0,
-        liveClassesAttended: 0,
+        averageTestScorePercent: null,
+        bestTestScorePercent: null,
+        courseProgress: [],
         subjectProgress: [],
         recentTestResults: [],
         areasToImprove: [],
+        detailedFocusAreas: [],
+        learningConfidence: {
+          level: "BUILDING_PROFILE",
+          label: "Building Your Profile",
+          description: "Sign in to track your personalized learning progress.",
+          scoreSignal: "Sign In Required",
+        },
       });
     }
 

@@ -1,18 +1,22 @@
 /**
- * TopVeda Student Progress Service (Phase 5B)
+ * TopVeda Student Progress Service (Phase 5B & Personalization Polish)
  * Core business engine for Overall Learning Progress (Lecture-Weighted Metric),
- * Subject-Wise Progress Aggregation, Server-Authoritative Live Attendance Tracking,
- * and Dynamic Focus Areas.
+ * Course/Batch Progress Breakdown, Subject-Wise Progress Aggregation,
+ * Server-Authoritative Live Attendance Tracking, Assessment Analytics,
+ * Learning Confidence Signal, and Dynamic Actionable Focus Areas.
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
 import {
   StudentProgressSummary,
+  CourseBatchProgressItem,
   SubjectProgressItem,
   RecentTestResultItem,
+  FocusAreaItem,
+  LearningConfidenceSignal,
 } from "@/types/student-learning.types";
 
-// Subject Visual Style Resolver matching the Reference Image Palette
+// Subject Visual Style Resolver matching the TopVeda Reference Palette
 function getSubjectTheme(subjectName: string) {
   const name = (subjectName || "").toLowerCase();
 
@@ -56,44 +60,68 @@ function getSubjectTheme(subjectName: string) {
 export class StudentProgressService {
   /**
    * Aggregates factual, non-fake student learning progress metrics.
-   * Overall Progress is mathematically calculated as a lecture-weighted completion percentage.
+   * Computes exact lecture weights, real attendance, test statistics, and confidence signals.
    */
   public static async getProgressSummary(
     supabase: SupabaseClient,
     userId: string
   ): Promise<StudentProgressSummary> {
     try {
-      // 1. Fetch Student Enrollments
-      const { data: enrollments } = await supabase
+      // 1. Fetch Student Enrollments with joined course and batch data
+      const { data: enrollments, error: enrollError } = await supabase
         .from("student_enrollments")
         .select(`
           id,
           course_id,
+          batch_id,
           status,
+          enrolled_at,
+          last_accessed_at,
           course:cms_courses(
             id,
             title,
             category,
             subject_id,
-            subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
+            board:cms_boards(id, name, code),
+            subject:cms_subjects(id, name, code),
+            class_level:cms_class_levels(id, name, code)
+          ),
+          batch:cms_batches(
+            id,
+            title,
+            board_label,
+            subtitle,
+            educator_name,
+            batch_teachers:cms_batch_teachers(
+              display_order,
+              teacher:profiles(id, full_name)
+            )
           )
         `)
         .eq("student_id", userId);
 
+      if (enrollError) {
+        console.warn("[StudentProgressService] Enrollments fetch warning:", enrollError.message);
+      }
+
       const enrolledList = enrollments || [];
       const enrolledCourseIds = enrolledList
-        .map((e) => (e.course as { id?: string })?.id)
+        .map((e) => (e.course as { id?: string })?.id || e.course_id)
+        .filter(Boolean) as string[];
+      const enrolledBatchIds = enrolledList
+        .map((e) => (e.batch as { id?: string })?.id || e.batch_id)
         .filter(Boolean) as string[];
 
-      const coursesCompletedCount = enrolledList.filter((e) => e.status === "COMPLETED").length;
-
-      // 2. Fetch Published Chapters & Lectures for Enrolled Courses
+      // 2. Fetch Published Lectures
       const { data: allLectures } = await supabase
         .from("cms_lectures")
         .select(`
           id,
           title,
           subject,
+          duration_seconds,
+          batch_id,
+          chapter_id,
           chapter:cms_chapters(
             id,
             title,
@@ -103,18 +131,17 @@ export class StudentProgressService {
         .eq("status", "PUBLISHED")
         .eq("is_visible", true);
 
-      // Group published lectures by course and by subject
-      const courseLecturesMap = new Map<string, string[]>(); // courseId -> lectureIds
-      const subjectCourseMap = new Map<string, { subjectId: string; subjectName: string; courseIds: Set<string> }>();
+      const courseLecturesMap = new Map<string, any[]>();
+      const batchLecturesMap = new Map<string, any[]>();
       const chapterList: { id: string; title: string; courseId: string; subjectName: string }[] = [];
 
       (allLectures || []).forEach((lec) => {
         const chapter = lec.chapter as { id?: string; title?: string; course_id?: string };
         const courseId = chapter?.course_id;
 
-        if (courseId && enrolledCourseIds.includes(courseId)) {
+        if (courseId) {
           const list = courseLecturesMap.get(courseId) || [];
-          list.push(lec.id);
+          list.push(lec);
           courseLecturesMap.set(courseId, list);
 
           if (chapter.id && chapter.title) {
@@ -126,99 +153,33 @@ export class StudentProgressService {
             });
           }
         }
-      });
 
-      // Map subjects across enrolled courses
-      enrolledList.forEach((e) => {
-        const course = e.course as any;
-        if (course) {
-          const subId = course.subject_id || course.category;
-          const subName = course.subject?.name || course.category;
-
-          const existing = subjectCourseMap.get(subName) || {
-            subjectId: subId,
-            subjectName: subName,
-            courseIds: new Set<string>(),
-          };
-          existing.courseIds.add(course.id);
-          subjectCourseMap.set(subName, existing);
+        if (lec.batch_id) {
+          const bList = batchLecturesMap.get(lec.batch_id) || [];
+          bList.push(lec);
+          batchLecturesMap.set(lec.batch_id, bList);
         }
       });
 
       // 3. Fetch Student Lecture Progress
       const { data: progressRecords } = await supabase
         .from("student_lecture_progress")
-        .select("id, lecture_id, course_id, watch_duration_seconds, is_completed")
+        .select("id, lecture_id, course_id, watch_duration_seconds, last_position_seconds, is_completed")
         .eq("student_id", userId);
 
       const completedLectureIds = new Set<string>();
-      let lecturesWatchedCount = 0;
+      const inProgressLectureIds = new Set<string>();
 
       (progressRecords || []).forEach((prog) => {
-        if (prog.watch_duration_seconds > 0 || prog.is_completed) {
-          lecturesWatchedCount++;
+        if (prog.watch_duration_seconds > 0 || prog.last_position_seconds > 0) {
+          inProgressLectureIds.add(prog.lecture_id);
         }
         if (prog.is_completed) {
           completedLectureIds.add(prog.lecture_id);
         }
       });
 
-      // 4. Calculate Lecture-Weighted Overall Progress
-      let totalAccessibleLectures = 0;
-      let totalCompletedLectures = 0;
-
-      enrolledCourseIds.forEach((cid) => {
-        const lecs = courseLecturesMap.get(cid) || [];
-        totalAccessibleLectures += lecs.length;
-        lecs.forEach((lid) => {
-          if (completedLectureIds.has(lid)) {
-            totalCompletedLectures++;
-          }
-        });
-      });
-
-      const overallProgressPercent =
-        totalAccessibleLectures > 0
-          ? Math.round((totalCompletedLectures / totalAccessibleLectures) * 100)
-          : 0;
-
-      // 5. Calculate Subject-Wise Progress
-      const subjectProgress: SubjectProgressItem[] = [];
-
-      subjectCourseMap.forEach((subData, subName) => {
-        let subTotalLectures = 0;
-        let subCompletedLectures = 0;
-
-        subData.courseIds.forEach((cid) => {
-          const lecs = courseLecturesMap.get(cid) || [];
-          subTotalLectures += lecs.length;
-          lecs.forEach((lid) => {
-            if (completedLectureIds.has(lid)) {
-              subCompletedLectures++;
-            }
-          });
-        });
-
-        const subProgressPercent =
-          subTotalLectures > 0
-            ? Math.round((subCompletedLectures / subTotalLectures) * 100)
-            : 0;
-
-        const theme = getSubjectTheme(subName);
-
-        subjectProgress.push({
-          subjectId: subData.subjectId,
-          subjectName: subName,
-          iconBg: theme.iconBg,
-          iconColor: "",
-          barColor: theme.barColor,
-          progressPercent: subProgressPercent,
-          totalLectures: subTotalLectures,
-          completedLectures: subCompletedLectures,
-        });
-      });
-
-      // 6. Fetch Server-Authoritative Live Class Attendance
+      // 4. Fetch Server-Authoritative Live Class Attendance & Scheduled Counts
       let liveClassesAttended = 0;
       try {
         const { count } = await supabase
@@ -229,7 +190,6 @@ export class StudentProgressService {
 
         liveClassesAttended = count || 0;
       } catch {
-        // Fallback to learning activity log if table is newly provisioned
         const { count } = await supabase
           .from("student_learning_activity")
           .select("id", { count: "exact", head: true })
@@ -239,10 +199,39 @@ export class StudentProgressService {
         liveClassesAttended = count || 0;
       }
 
-      // 7. Assessment / Test Performance (Factual Query from student_test_attempts)
+      // Fetch past / completed live classes accessible to the student
+      let totalLiveClassesScheduled = 0;
+      try {
+        let liveQuery = supabase
+          .from("cms_live_classes")
+          .select("id", { count: "exact", head: true })
+          .in("live_status", ["COMPLETED", "TERMINATED", "LIVE", "SCHEDULED"]);
+
+        if (enrolledBatchIds.length > 0) {
+          liveQuery = liveQuery.in("batch_id", enrolledBatchIds);
+        }
+
+        const { count: liveCount } = await liveQuery;
+        totalLiveClassesScheduled = liveCount || 0;
+      } catch (liveErr) {
+        console.warn("[StudentProgressService] Non-blocking live count warning:", liveErr);
+      }
+
+      const liveAttendancePercent =
+        totalLiveClassesScheduled > 0
+          ? Math.min(100, Math.round((liveClassesAttended / totalLiveClassesScheduled) * 100))
+          : liveClassesAttended > 0
+          ? 100
+          : 0;
+
+      // 5. Fetch Assessment / Test Performance from student_test_attempts
       let testsAttempted = 0;
       let quizzesAttempted = 0;
+      let scoreSumPercent = 0;
+      let scoreCount = 0;
+      let bestTestScorePercent: number | null = null;
       const recentTestResults: RecentTestResultItem[] = [];
+      const testAttemptsByCourse = new Map<string, number>();
 
       try {
         const { data: attempts } = await supabase
@@ -258,7 +247,9 @@ export class StudentProgressService {
               id,
               title,
               subject_name,
-              test_type
+              test_type,
+              course_id,
+              batch_id
             )
           `)
           .eq("student_id", userId)
@@ -266,71 +257,304 @@ export class StudentProgressService {
           .order("created_at", { ascending: false });
 
         (attempts || []).forEach((att) => {
-          const testData = att.test as { id?: string; title?: string; subject_name?: string; test_type?: string } | null;
+          const testData = att.test as {
+            id?: string;
+            title?: string;
+            subject_name?: string;
+            test_type?: string;
+            course_id?: string;
+            batch_id?: string;
+          } | null;
+
           testsAttempted++;
-          if (testData?.test_type === "chapter_quiz") {
+          if (testData?.test_type === "chapter_quiz" || testData?.test_type === "quiz") {
             quizzesAttempted++;
           }
 
-          if (recentTestResults.length < 5) {
+          if (testData?.course_id) {
+            testAttemptsByCourse.set(
+              testData.course_id,
+              (testAttemptsByCourse.get(testData.course_id) || 0) + 1
+            );
+          }
+
+          const maxSc = att.max_score || 100;
+          const obtSc = att.score_obtained || 0;
+          const attemptPct = maxSc > 0 ? Math.round((obtSc / maxSc) * 100) : 0;
+
+          scoreSumPercent += attemptPct;
+          scoreCount++;
+
+          if (bestTestScorePercent === null || attemptPct > bestTestScorePercent) {
+            bestTestScorePercent = attemptPct;
+          }
+
+          if (recentTestResults.length < 6) {
             recentTestResults.push({
               id: att.id,
-              testTitle: testData?.title || "Academic Test",
+              testTitle: testData?.title || "Academic Assessment",
               subjectName: testData?.subject_name || "General",
-              scoreObtained: att.score_obtained,
-              maxScore: att.max_score,
-              passed: att.passed,
+              scoreObtained: obtSc,
+              maxScore: maxSc,
+              percentage: attemptPct,
+              passed: !!att.passed,
               attemptedAt: att.created_at,
             });
           }
         });
       } catch (testErr) {
-        console.warn("[StudentProgressService] Non-blocking attempt fetch error:", testErr);
+        console.warn("[StudentProgressService] Non-blocking test attempts fetch warning:", testErr);
       }
 
-      // 8. Dynamic Focus Areas to Improve (Derived from enrolled subjects with lowest completion)
-      const areasToImprove: string[] = [];
+      const averageTestScorePercent =
+        scoreCount > 0 ? Math.round(scoreSumPercent / scoreCount) : null;
 
-      // Sort subjects by lowest progress first
+      // 6. Build Course / Batch Progress Breakdown
+      const courseProgress: CourseBatchProgressItem[] = [];
+      const distinctAccessibleLectureIds = new Set<string>();
+      let totalAccessibleLectures = 0;
+      let totalCompletedLectures = 0;
+
+      // Subject aggregation map
+      const subjectAggregationMap = new Map<
+        string,
+        { subjectName: string; totalLecs: number; completedLecs: number; lectureIds: Set<string> }
+      >();
+
+      enrolledList.forEach((e) => {
+        const course = e.course as any;
+        const batch = e.batch as any;
+        const courseId = course?.id || e.course_id;
+        const batchId = batch?.id || e.batch_id || null;
+
+        // Distinct accessible lectures for this enrollment
+        const enrollmentLectureIds = new Set<string>();
+        if (courseId && courseLecturesMap.has(courseId)) {
+          courseLecturesMap.get(courseId)!.forEach((l) => enrollmentLectureIds.add(l.id));
+        }
+        if (batchId && batchLecturesMap.has(batchId)) {
+          batchLecturesMap.get(batchId)!.forEach((l) => enrollmentLectureIds.add(l.id));
+        }
+
+        const enrollmentTotalLecs = enrollmentLectureIds.size;
+        let enrollmentCompletedLecs = 0;
+
+        enrollmentLectureIds.forEach((lid) => {
+          distinctAccessibleLectureIds.add(lid);
+          if (completedLectureIds.has(lid)) {
+            enrollmentCompletedLecs++;
+            totalCompletedLectures++;
+          }
+        });
+
+        const progressPercent =
+          enrollmentTotalLecs > 0
+            ? Math.round((enrollmentCompletedLecs / enrollmentTotalLecs) * 100)
+            : 0;
+
+        const isCompleted = e.status === "COMPLETED" || (enrollmentTotalLecs > 0 && enrollmentCompletedLecs >= enrollmentTotalLecs);
+
+        // Faculty name
+        let educatorName = batch?.educator_name || null;
+        if (batch?.batch_teachers && batch.batch_teachers.length > 0) {
+          educatorName = batch.batch_teachers[0]?.teacher?.full_name || educatorName;
+        }
+
+        const classTitle = course?.class_level?.name || course?.title || batch?.title || "Academic Course";
+        const subjectTitle = course?.subject?.name || course?.category || "Comprehensive";
+        const formattedTitle = course ? `${classTitle} – ${subjectTitle}` : batch?.title || "Batch Enrollment";
+        const boardLabel = course?.board?.name ? `${course.board.name} Board` : batch?.board_label || "TopVeda Board";
+
+        const resumeUrl = courseId ? `/student/courses/${courseId}` : `/student/batches/${batchId}`;
+
+        courseProgress.push({
+          enrollmentId: e.id,
+          courseId,
+          batchId,
+          title: formattedTitle,
+          boardLabel,
+          subjectName: subjectTitle,
+          educatorName,
+          progressPercent,
+          completedLectures: enrollmentCompletedLecs,
+          totalLectures: enrollmentTotalLecs,
+          liveClassesAttended: liveClassesAttended,
+          liveClassesTotal: totalLiveClassesScheduled,
+          testsAttempted: testAttemptsByCourse.get(courseId) || 0,
+          quizzesAttempted: 0,
+          resumeUrl,
+          isCompleted,
+        });
+
+        // Add to subject aggregation map
+        const subName = course?.subject?.name || course?.category || "General";
+        const existingSub = subjectAggregationMap.get(subName) || {
+          subjectName: subName,
+          totalLecs: 0,
+          completedLecs: 0,
+          lectureIds: new Set<string>(),
+        };
+
+        enrollmentLectureIds.forEach((lid) => {
+          if (!existingSub.lectureIds.has(lid)) {
+            existingSub.lectureIds.add(lid);
+            existingSub.totalLecs++;
+            if (completedLectureIds.has(lid)) {
+              existingSub.completedLecs++;
+            }
+          }
+        });
+        subjectAggregationMap.set(subName, existingSub);
+      });
+
+      totalAccessibleLectures = distinctAccessibleLectureIds.size;
+      const overallProgressPercent =
+        totalAccessibleLectures > 0
+          ? Math.round((completedLectureIds.size / totalAccessibleLectures) * 100)
+          : 0;
+
+      const coursesCompletedCount = courseProgress.filter((c) => c.isCompleted).length;
+
+      // 7. Calculate Subject-Wise Progress
+      const subjectProgress: SubjectProgressItem[] = [];
+      subjectAggregationMap.forEach((subData, subName) => {
+        const subProgressPercent =
+          subData.totalLecs > 0
+            ? Math.round((subData.completedLecs / subData.totalLecs) * 100)
+            : 0;
+
+        const theme = getSubjectTheme(subName);
+
+        subjectProgress.push({
+          subjectId: subName,
+          subjectName: subName,
+          iconBg: theme.iconBg,
+          iconColor: "",
+          barColor: theme.barColor,
+          progressPercent: subProgressPercent,
+          totalLectures: subData.totalLecs,
+          completedLectures: subData.completedLecs,
+        });
+      });
+
+      // Sort subjects by lowest progress first to identify improvement areas
       const sortedSubjects = [...subjectProgress].sort(
         (a, b) => a.progressPercent - b.progressPercent
       );
 
+      // 8. Areas to Improve & Detailed Focus Areas (Strictly based on measurable learning signals)
+      const areasToImprove: string[] = [];
+      const detailedFocusAreas: FocusAreaItem[] = [];
+
       sortedSubjects.forEach((sub) => {
         if (sub.progressPercent < 100) {
-          // Find chapter names for this subject
-          const chapters = chapterList.filter(
-            (ch) => ch.subjectName.toLowerCase() === sub.subjectName.toLowerCase()
-          );
-          chapters.slice(0, 2).forEach((ch) => {
-            if (!areasToImprove.includes(ch.title)) {
-              areasToImprove.push(ch.title);
-            }
+          const remainingLecs = sub.totalLectures - sub.completedLectures;
+          const desc = remainingLecs > 0
+            ? `${remainingLecs} lecture${remainingLecs > 1 ? "s" : ""} remaining to complete syllabus.`
+            : `Complete subject chapters and attempt practice tests.`;
+
+          areasToImprove.push(`${sub.subjectName}: ${desc}`);
+          detailedFocusAreas.push({
+            subject: sub.subjectName,
+            reason: desc,
+            actionLabel: "Watch Next Lecture",
+            actionUrl: "/student/learning",
           });
         }
       });
 
-      // Fallback sensible topic focus if no chapters available yet
+      if (averageTestScorePercent !== null && averageTestScorePercent < 70) {
+        areasToImprove.push(`Assessment: Overall test average is ${averageTestScorePercent}%. Practice chapter quizzes to strengthen accuracy.`);
+        detailedFocusAreas.push({
+          subject: "Assessment Practice",
+          reason: `Current test score average is ${averageTestScorePercent}%. Revision quizzes recommended.`,
+          actionLabel: "Take Practice Test",
+          actionUrl: "/student/tests",
+        });
+      }
+
+      if (totalLiveClassesScheduled > 0 && liveAttendancePercent < 75) {
+        areasToImprove.push(`Live Classes: Attendance is ${liveAttendancePercent}%. Join live sessions for interactive doubt resolution.`);
+      }
+
       if (areasToImprove.length === 0) {
         if (enrolledList.length > 0) {
-          areasToImprove.push("Formula Revision", "Concept Practice", "Daily Problem Sets");
+          areasToImprove.push("All enrolled syllabus on track. Keep revising formulas and practicing tests.");
+          detailedFocusAreas.push({
+            subject: "Daily Revision",
+            reason: "All current coursework is progressing well. Maintain your daily study streak.",
+            actionLabel: "Explore Practice Tests",
+            actionUrl: "/student/tests",
+          });
         } else {
-          areasToImprove.push("Explore Courses", "Begin Chapter 1", "Daily Study Habit");
+          areasToImprove.push("Enroll in your target class and board courses to start your personalized progress tracker.");
+          detailedFocusAreas.push({
+            subject: "Course Enrollment",
+            reason: "No active enrollments found. Choose your course to begin.",
+            actionLabel: "Browse Courses",
+            actionUrl: "/student/learning",
+          });
         }
+      }
+
+      // 9. TopVeda Learning Confidence Signal (Clearly defined educational signal)
+      let learningConfidence: LearningConfidenceSignal;
+
+      if (enrolledList.length === 0 || (completedLectureIds.size === 0 && testsAttempted === 0)) {
+        learningConfidence = {
+          level: "BUILDING_PROFILE",
+          label: "Building Your Profile",
+          description: "Watch lectures and attempt chapter quizzes to establish your initial learning velocity and confidence benchmark.",
+          scoreSignal: "Awaiting Initial Activity",
+        };
+      } else if (
+        overallProgressPercent >= 65 &&
+        (averageTestScorePercent === null || averageTestScorePercent >= 70)
+      ) {
+        learningConfidence = {
+          level: "HIGH",
+          label: "High Concept Confidence",
+          description: "Outstanding lecture completion pace and strong assessment retention across your enrolled subjects.",
+          scoreSignal: `${overallProgressPercent}% Syllabus Covered`,
+        };
+      } else if (
+        overallProgressPercent >= 30 ||
+        (averageTestScorePercent !== null && averageTestScorePercent >= 50)
+      ) {
+        learningConfidence = {
+          level: "MEDIUM",
+          label: "Steady Learning Momentum",
+          description: "Consistent progress across lecture chapters. Completing remaining lectures and weekly tests will elevate confidence to High.",
+          scoreSignal: `${overallProgressPercent}% Completion Pace`,
+        };
+      } else {
+        learningConfidence = {
+          level: "DEVELOPING",
+          label: "Foundational Progress",
+          description: "Early phase of curriculum coverage. Build regular study habits by watching scheduled lectures and attempting practice sets.",
+          scoreSignal: `${overallProgressPercent}% Progress`,
+        };
       }
 
       return {
         overallProgressPercent,
         coursesCompleted: coursesCompletedCount,
         totalEnrolledCourses: enrolledList.length,
-        lecturesWatched: lecturesWatchedCount,
+        lecturesWatched: completedLectureIds.size + inProgressLectureIds.size,
         totalAccessibleLectures,
+        liveClassesAttended,
+        totalLiveClassesScheduled,
+        liveAttendancePercent,
         testsAttempted,
         quizzesAttempted,
-        liveClassesAttended,
+        averageTestScorePercent,
+        bestTestScorePercent,
+        courseProgress,
         subjectProgress,
         recentTestResults,
         areasToImprove: areasToImprove.slice(0, 5),
+        detailedFocusAreas: detailedFocusAreas.slice(0, 4),
+        learningConfidence,
       };
     } catch (err) {
       console.error("[StudentProgressService] Error in getProgressSummary:", err);
@@ -340,12 +564,24 @@ export class StudentProgressService {
         totalEnrolledCourses: 0,
         lecturesWatched: 0,
         totalAccessibleLectures: 0,
+        liveClassesAttended: 0,
+        totalLiveClassesScheduled: 0,
+        liveAttendancePercent: 0,
         testsAttempted: 0,
         quizzesAttempted: 0,
-        liveClassesAttended: 0,
+        averageTestScorePercent: null,
+        bestTestScorePercent: null,
+        courseProgress: [],
         subjectProgress: [],
         recentTestResults: [],
-        areasToImprove: ["Explore Courses", "Begin Chapter 1"],
+        areasToImprove: ["Enroll in courses to start tracking your learning progress."],
+        detailedFocusAreas: [],
+        learningConfidence: {
+          level: "BUILDING_PROFILE",
+          label: "Building Your Profile",
+          description: "Begin watching lectures and attempting tests to establish your performance profile.",
+          scoreSignal: "No Activity",
+        },
       };
     }
   }

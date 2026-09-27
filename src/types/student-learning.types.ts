@@ -1,6 +1,7 @@
 /**
- * TopVeda Phase 5: Student Learning Platform Domain Types
- * Defines data structures for My Learning, Content Access, Enrollments, Progress, Entitlements, and Live Attendance.
+ * TopVeda Phase 5 & Personalization Polish: Student Learning Platform Domain Types
+ * Defines factual, database-backed data structures for My Learning, Content Access,
+ * Enrollments, Dynamic Progress Tracker, Performance Dashboards, and Live Attendance.
  */
 
 export type ContentAccessTier = "FREE" | "PAID_ONLY" | "PREMIUM_INCLUDED";
@@ -93,16 +94,42 @@ export interface StudentLearningActivity {
 }
 
 /**
- * Enrolled Course Card Presentation Data (Used by My Learning UI)
+ * Continue Learning Checkpoint (Most relevant active/next lecture for student)
+ */
+export interface ContinueLearningCheckpoint {
+  courseId: string;
+  batchId?: string | null;
+  courseTitle: string;
+  batchTitle?: string | null;
+  boardName: string;
+  subjectName: string;
+  chapterTitle?: string | null;
+  lectureId: string;
+  lectureTitle: string;
+  educatorName?: string | null;
+  lastPositionSeconds: number;
+  totalDurationSeconds: number;
+  durationFormatted?: string;
+  progressPercent: number;
+  resumeUrl: string;
+  thumbnailUrl?: string | null;
+}
+
+/**
+ * Enrolled Course / Batch Card Presentation Data (Used by My Learning UI)
  */
 export interface EnrolledCourseCardData {
   id: string; // Enrollment ID
   courseId: string;
+  batchId?: string | null;
   title: string;
   category: string;
   boardName: string;
   subjectName: string;
   batchTitle?: string | null;
+  batchSubtitle?: string | null;
+  educatorName?: string | null;
+  educatorAvatarUrl?: string | null;
   progressPercent: number;
   totalLectures: number;
   completedLectures: number;
@@ -121,15 +148,19 @@ export interface EnrolledCourseCardData {
 }
 
 /**
- * Recommended Course Card Presentation Data (Used by My Learning UI)
+ * Recommended Course / Batch Card Presentation Data (Used by My Learning UI)
  */
 export interface RecommendedCourseCardData {
-  id: string; // Course ID
+  id: string; // Course ID or Batch ID
+  courseId?: string;
+  batchId?: string | null;
   title: string;
   category: string;
   boardName: string;
   subjectName: string;
   topicsSubtitle?: string;
+  educatorName?: string | null;
+  educatorAvatarUrl?: string | null;
   iconType: string;
   iconBg: string;
   iconColor: string;
@@ -144,6 +175,29 @@ export interface MyLearningData {
   enrolledCourses: EnrolledCourseCardData[];
   completedCourses: EnrolledCourseCardData[];
   recommendedCourses: RecommendedCourseCardData[];
+  continueLearningItem?: ContinueLearningCheckpoint | null;
+}
+
+/**
+ * Individual Enrolled Course / Batch Detailed Progress Card (Phase 5B Progress Tracker)
+ */
+export interface CourseBatchProgressItem {
+  enrollmentId: string;
+  courseId: string;
+  batchId?: string | null;
+  title: string;
+  boardLabel: string;
+  subjectName: string;
+  educatorName?: string | null;
+  progressPercent: number;
+  completedLectures: number;
+  totalLectures: number;
+  liveClassesAttended: number;
+  liveClassesTotal: number;
+  testsAttempted: number;
+  quizzesAttempted: number;
+  resumeUrl: string;
+  isCompleted: boolean;
 }
 
 /**
@@ -171,9 +225,31 @@ export interface RecentTestResultItem {
   subjectName: string;
   scoreObtained: number;
   maxScore: number;
+  percentage: number;
   passed: boolean;
   attemptedAt: string;
   iconBg?: string;
+}
+
+/**
+ * TopVeda Learning Confidence Signal (Strictly educational metric)
+ */
+export interface LearningConfidenceSignal {
+  level: "HIGH" | "MEDIUM" | "DEVELOPING" | "BUILDING_PROFILE";
+  label: string;
+  description: string;
+  scoreSignal: string;
+}
+
+/**
+ * Detailed Focus Area for Student Progress
+ */
+export interface FocusAreaItem {
+  subject: string;
+  topicOrChapter?: string;
+  reason: string;
+  actionLabel: string;
+  actionUrl: string;
 }
 
 /**
@@ -185,12 +261,19 @@ export interface StudentProgressSummary {
   totalEnrolledCourses: number;
   lecturesWatched: number;
   totalAccessibleLectures: number;
+  liveClassesAttended: number;
+  totalLiveClassesScheduled: number;
+  liveAttendancePercent: number;
   testsAttempted: number;
   quizzesAttempted: number;
-  liveClassesAttended: number;
+  averageTestScorePercent: number | null;
+  bestTestScorePercent: number | null;
+  courseProgress: CourseBatchProgressItem[];
   subjectProgress: SubjectProgressItem[];
   recentTestResults: RecentTestResultItem[];
   areasToImprove: string[];
+  detailedFocusAreas: FocusAreaItem[];
+  learningConfidence: LearningConfidenceSignal;
 }
 
 /**

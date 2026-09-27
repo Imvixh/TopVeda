@@ -12,7 +12,6 @@ import {
   Megaphone,
   FileText,
   Clock,
-  Sparkles,
   ChevronRight,
   Filter,
 } from "lucide-react";
@@ -57,7 +56,7 @@ function getNotificationIcon(type: string, entityType?: string | null) {
   if (type.includes("LECTURE") || entityType === "LECTURE") {
     return { icon: BookOpen, color: "text-amber-600", bg: "bg-amber-500/10 border-amber-500/20" };
   }
-  if (type.includes("TEST") || entityType === "TEST") {
+  if (type.includes("TEST") || type.includes("QUIZ") || entityType === "TEST") {
     return { icon: FileCheck2, color: "text-purple-600", bg: "bg-purple-500/10 border-purple-500/20" };
   }
   if (type.includes("STUDY_MATERIAL") || entityType === "STUDY_MATERIAL") {
@@ -74,12 +73,10 @@ function getTargetUrl(notif: CmsNotification): string | null {
     return "/student/live";
   }
   if (notif.entity_type === "LECTURE" || notif.type.includes("LECTURE")) {
-    return notif.metadata?.courseId
-      ? `/student/learning?courseId=${notif.metadata.courseId}`
-      : "/student/learning";
+    return notif.entity_id ? `/student/lectures/${notif.entity_id}` : "/student/learning";
   }
-  if (notif.entity_type === "TEST" || notif.type.includes("TEST")) {
-    return notif.entity_id ? `/student/tests` : "/student/tests";
+  if (notif.entity_type === "TEST" || notif.type.includes("TEST") || notif.type.includes("QUIZ")) {
+    return "/student/tests";
   }
   if (notif.entity_type === "STUDY_MATERIAL" || notif.type.includes("STUDY_MATERIAL")) {
     return "/student/study-material";
@@ -124,7 +121,6 @@ export default function StudentNotificationsPage() {
   const handleMarkAsRead = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
-      // Optimistic update
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
       );
@@ -134,7 +130,6 @@ export default function StudentNotificationsPage() {
         method: "PATCH",
       });
     } catch {
-      // Revert if needed
       fetchNotifications(activeTab);
     }
   };
@@ -190,12 +185,12 @@ export default function StudentNotificationsPage() {
         />
 
         {/* Notifications Canvas */}
-        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1200px] w-full mx-auto space-y-6">
+        <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-[1120px] w-full mx-auto space-y-6">
           {/* Header Container */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center text-brand-orange">
+                <div className="h-10 w-10 rounded-2xl bg-brand-orange/10 border border-brand-orange/20 flex items-center justify-center text-brand-orange">
                   <Bell className="h-5 w-5" />
                 </div>
                 <div>
@@ -208,7 +203,7 @@ export default function StudentNotificationsPage() {
                     )}
                   </h1>
                   <p className="text-xs sm:text-sm text-brand-text-muted mt-0.5">
-                    Stay updated with your live schedules, lecture releases, test alerts, and announcements.
+                    Real-time alerts for your enrolled batch lectures, live schedules, test results, and announcements
                   </p>
                 </div>
               </div>
@@ -218,7 +213,7 @@ export default function StudentNotificationsPage() {
               <button
                 onClick={handleMarkAllAsRead}
                 disabled={isMarkingAll}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-brand-charcoal bg-white hover:bg-brand-bg-peach border border-brand-border rounded-xl shadow-2xs transition-all disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-brand-charcoal bg-white hover:bg-brand-bg-peach border border-brand-border rounded-xl shadow-2xs transition-all disabled:opacity-50 cursor-pointer"
               >
                 <CheckCheck className="h-4 w-4 text-brand-orange" />
                 {isMarkingAll ? "Marking..." : "Mark all as read"}
@@ -235,7 +230,7 @@ export default function StudentNotificationsPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={cn(
-                    "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 border",
+                    "px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 border cursor-pointer",
                     isActive
                       ? "bg-brand-charcoal text-white border-brand-charcoal shadow-xs"
                       : "bg-white text-brand-text-muted hover:text-brand-text-primary hover:bg-brand-bg-warm border-brand-border/70"
@@ -266,12 +261,12 @@ export default function StudentNotificationsPage() {
                 No notifications in this category
               </h3>
               <p className="text-xs text-brand-text-muted mb-6">
-                When your teachers schedule live classes, release lectures, or publish test results, they will show up here.
+                When your teachers release lectures, schedule live classes, or evaluate test results for your enrolled batches, they will appear here.
               </p>
               {activeTab !== "ALL" && (
                 <button
                   onClick={() => setActiveTab("ALL")}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-orange text-white text-xs font-bold rounded-xl shadow-xs hover:bg-brand-orange-hover transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-orange text-white text-xs font-bold rounded-xl shadow-xs hover:bg-brand-orange-hover transition-colors cursor-pointer"
                 >
                   <Filter className="h-3.5 w-3.5" />
                   View all notifications
@@ -298,7 +293,7 @@ export default function StudentNotificationsPage() {
                     {/* Notification Icon */}
                     <div
                       className={cn(
-                        "h-10 w-10 sm:h-11 sm:w-11 rounded-xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105",
+                        "h-10 w-10 sm:h-11 sm:w-11 rounded-2xl border flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-3xs",
                         bg
                       )}
                     >
@@ -355,7 +350,7 @@ export default function StudentNotificationsPage() {
                     {!notif.is_read && (
                       <button
                         onClick={(e) => handleMarkAsRead(notif.id, e)}
-                        className="p-1.5 rounded-lg text-brand-text-muted hover:text-brand-orange hover:bg-brand-orange/10 transition-colors shrink-0"
+                        className="p-1.5 rounded-lg text-brand-text-muted hover:text-brand-orange hover:bg-brand-orange/10 transition-colors shrink-0 cursor-pointer"
                         title="Mark as read"
                       >
                         <CheckCheck className="h-4 w-4" />
