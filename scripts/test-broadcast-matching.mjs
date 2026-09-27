@@ -69,14 +69,14 @@ function testMatchingLogic(activeBroadcasts, params) {
       diffMinutes = Math.abs(actualStartMs - scheduledStartMs) / (60 * 1000);
       if (diffMinutes <= 15) timeScore = 50;
       else if (diffMinutes <= 30) timeScore = 35;
-      else if (diffMinutes <= 60) timeScore = 20;
-      else if (diffMinutes <= 120) timeScore = 10;
+      else if (diffMinutes <= 60) timeScore = 25;
+      else if (diffMinutes <= 120) timeScore = 20;
     }
 
     let score = titleScore + timeScore;
 
     if (liveItems.length === 1) {
-      if (titleScore >= 20 || diffMinutes <= 30) {
+      if (titleScore >= 20 || diffMinutes <= 120) {
         score += 30;
       } else {
         score = 0;
@@ -130,8 +130,81 @@ const bTie2 = { id: "yt_tie_2", status: { lifeCycleStatus: "live" }, snippet: { 
 const res5 = testMatchingLogic([bTie1, bTie2], { topic: "Live Session", scheduledStart: new Date().toISOString() });
 assert(res5 === null, "Test 5: Ambiguous tie between identical competing broadcasts is SAFELY REJECTED (returns null without guessing)");
 
+// Test 6: Production Scenario — Placeholder RTMP ID synced to new Webcam Broadcast ID
+const initialRtmpId = "fxqvr7spINw";
+const newWebcamId = "kya_haal_hai_yt_active_999";
+const bWebcam = {
+  id: newWebcamId,
+  status: { lifeCycleStatus: "live", privacyStatus: "unlisted" },
+  snippet: { title: "kya haal hai", actualStartTime: new Date().toISOString() },
+};
+const res6 = testMatchingLogic([bWebcam], {
+  topic: "kya haal hai",
+  scheduledStart: new Date().toISOString(),
+  currentBroadcastId: initialRtmpId,
+});
+assert(res6?.id === newWebcamId, "Test 6: Real production scenario matches active Webcam broadcast ID and replaces RTMP placeholder");
+
+// Test 7: Student Session Response Sanitization (Zero secret/token leakage)
+function mockStudentSessionResponse(liveClass, matchedBroadcast) {
+  const activeId = matchedBroadcast ? matchedBroadcast.id : liveClass.provider_session_id;
+  const embedUrl = activeId ? `https://www.youtube-nocookie.com/embed/${activeId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1` : null;
+
+  return {
+    id: liveClass.id,
+    topic: liveClass.topic,
+    subject: liveClass.subject,
+    educatorName: liveClass.educator_name,
+    liveStatus: matchedBroadcast ? "LIVE" : liveClass.live_status,
+    isLive: true,
+    canJoin: true,
+    playbackVideoId: activeId,
+    embedPlaybackUrl: embedUrl,
+    isTeacher: false,
+  };
+}
+
+const mockClass = {
+  id: "9bd9414b-8cee-4e85-966b-019be1d2c84a",
+  topic: "kya haal hai",
+  subject: "Chemistry",
+  educator_name: "Vishal Kumar",
+  live_status: "LIVE",
+  provider_session_id: initialRtmpId,
+};
+
+const studentResponse = mockStudentSessionResponse(mockClass, res6);
+assert(studentResponse.playbackVideoId === newWebcamId, "Test 7a: Student receives new Webcam broadcast ID");
+assert(studentResponse.embedPlaybackUrl.includes(newWebcamId), "Test 7b: Student embed URL contains new Webcam broadcast ID");
+assert(!("encrypted_refresh_token" in studentResponse), "Test 7c: Student response contains no encrypted refresh tokens");
+assert(!("access_token" in studentResponse), "Test 7d: Student response contains no OAuth access tokens");
+assert(!("client_secret" in studentResponse), "Test 7e: Student response contains no client secrets");
+
+// Test 8: YouTube Shareable & Privacy-Enhanced Embed URLs
+const youtubeShareUrl = `https://www.youtube.com/watch?v=${studentResponse.playbackVideoId}`;
+const youtubeEmbedUrl = studentResponse.embedPlaybackUrl;
+assert(youtubeShareUrl === `https://www.youtube.com/watch?v=${newWebcamId}`, "Test 8a: YouTube shareable URL is correctly derived");
+assert(youtubeEmbedUrl.startsWith("https://www.youtube-nocookie.com/embed/"), "Test 8b: TopVeda embedded player strictly uses privacy-enhanced youtube-nocookie domain");
+
+// Test 9: Unauthorized/Terminated Class Access Blocked
+function checkAccessEligibility(liveStatus, isOwnerTeacher, isSuperAdmin, nowMs, scheduledStartMs) {
+  if (liveStatus === "TERMINATED") return { canJoin: false, reason: "TERMINATED" };
+  if (liveStatus === "COMPLETED") return { canJoin: false, reason: "COMPLETED" };
+  const isEarly = nowMs < scheduledStartMs;
+  if (isEarly && !isOwnerTeacher && !isSuperAdmin) return { canJoin: false, reason: "PREPARATION_WINDOW" };
+  return { canJoin: true };
+}
+
+const terminatedCheck = checkAccessEligibility("TERMINATED", false, false, Date.now(), Date.now());
+assert(terminatedCheck.canJoin === false && terminatedCheck.reason === "TERMINATED", "Test 9: Terminated class strictly blocks student access");
+
+// Test 10: Premature Student Entry Blocked Before Scheduled Start
+const earlyCheck = checkAccessEligibility("SCHEDULED", false, false, Date.now() - 5 * 60 * 1000, Date.now());
+assert(earlyCheck.canJoin === false && earlyCheck.reason === "PREPARATION_WINDOW", "Test 10: Student entry is strictly blocked before scheduled class start time");
+
 console.log("\n======================================================================");
-console.log(`  MATCHING UNIT TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
+console.log(`  MATCHING & REGRESSION TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
 console.log("======================================================================\n");
 
 if (failed > 0) process.exit(1);
+

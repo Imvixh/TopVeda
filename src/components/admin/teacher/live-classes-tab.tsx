@@ -648,12 +648,7 @@ export function LiveClassesTab({
                       <Button
                         size="sm"
                         onClick={() => {
-                          const broadcastId = lc.provider_session_id;
-                          const isRealYt = broadcastId && !broadcastId.startsWith("dev_yt_");
-                          const studioUrl = isRealYt ? "https://www.youtube.com/webcam" : null;
-                          const targetUrl = isSuperAdmin
-                            ? `/student/live/${lc.id}`
-                            : (studioUrl || lc.stream_room_url || `/student/live/${lc.id}`);
+                          const targetUrl = `/student/live/${lc.id}`;
                           window.open(targetUrl, "_blank");
                         }}
                         className="flex-1 bg-brand-orange hover:bg-brand-orange-hover text-white font-bold text-xs shadow-xs"

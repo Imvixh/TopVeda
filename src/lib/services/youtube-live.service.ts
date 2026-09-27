@@ -300,14 +300,14 @@ export class YouTubeLiveService {
 
   /**
    * Retrieves all currently active broadcasts on the connected YouTube channel.
-   * Endpoint: GET /youtube/v3/liveBroadcasts?part=id,snippet,status,contentDetails&broadcastStatus=active&mine=true
+   * Endpoint: GET /youtube/v3/liveBroadcasts?part=id,snippet,status,contentDetails&broadcastType=all&mine=true
    */
   public static async getActiveBroadcasts(
     client?: SupabaseClient
   ): Promise<YouTubeLiveBroadcast[]> {
     try {
       const accessToken = await this.getValidAccessToken(client);
-      const url = `${this.YOUTUBE_API_BASE}/liveBroadcasts?part=id,snippet,status,contentDetails&broadcastStatus=active&mine=true&maxResults=25`;
+      const url = `${this.YOUTUBE_API_BASE}/liveBroadcasts?part=id,snippet,status,contentDetails&broadcastType=all&mine=true&maxResults=25`;
       const res = await fetch(url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -412,9 +412,9 @@ export class YouTubeLiveService {
         } else if (diffMinutes <= 30) {
           timeScore = 35;
         } else if (diffMinutes <= 60) {
-          timeScore = 20;
+          timeScore = 25;
         } else if (diffMinutes <= 120) {
-          timeScore = 10;
+          timeScore = 20;
         }
       }
 
@@ -422,9 +422,9 @@ export class YouTubeLiveService {
 
       // C. Safe Single-Stream Verification:
       // If only 1 broadcast is live on the channel:
-      // Must EITHER have title relevance (titleScore >= 20) OR start within the tight class prep/start window (diffMinutes <= 30)
+      // Must EITHER have title relevance (titleScore >= 20) OR start within the active class duration window (diffMinutes <= 120)
       if (liveItems.length === 1) {
-        if (titleScore >= 20 || diffMinutes <= 30) {
+        if (titleScore >= 20 || diffMinutes <= 120) {
           score += 30;
         } else {
           // Unrelated stream left running from hours ago with zero title match: reject

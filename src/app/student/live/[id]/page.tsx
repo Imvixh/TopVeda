@@ -34,6 +34,8 @@ import {
   EyeOff,
   Check,
   Award,
+  Users,
+  StopCircle,
 } from "lucide-react";
 
 export default function StudentLiveRoomPage() {
@@ -46,6 +48,7 @@ export default function StudentLiveRoomPage() {
   const [sessionData, setSessionData] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [countdown, setCountdown] = React.useState<number | null>(null);
+  const [presenceCount, setPresenceCount] = React.useState<number>(0);
 
   // Interaction Tabs: "CHAT" | "POLLS" | "QUIZZES"
   const [activeTab, setActiveTab] = React.useState<"CHAT" | "POLLS" | "QUIZZES">("CHAT");
@@ -166,12 +169,36 @@ export default function StudentLiveRoomPage() {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  // Supabase Realtime Subscriptions for Chat, Polls & Quizzes
+  // Supabase Realtime Subscriptions for Presence, Chat, Polls & Quizzes
   React.useEffect(() => {
     if (!liveClassId) return;
 
+    const presenceKey = user?.id || `anon_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-      .channel(`live-class-room-${liveClassId}`)
+      .channel(`live-class-room-${liveClassId}`, {
+        config: {
+          presence: { key: presenceKey },
+        },
+      })
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState<{ role?: string; user_id?: string }>();
+        let studentCount = 0;
+        const countedStudentIds = new Set<string>();
+
+        Object.values(state).forEach((presences) => {
+          presences.forEach((p) => {
+            const role = (p.role || "").toUpperCase();
+            const isStudent = role !== "ADMIN" && role !== "SUPER_ADMIN";
+            const uid = p.user_id || "anon";
+            if (isStudent && !countedStudentIds.has(uid)) {
+              countedStudentIds.add(uid);
+              studentCount++;
+            }
+          });
+        });
+
+        setPresenceCount(studentCount);
+      })
       .on(
         "postgres_changes",
         {
@@ -236,12 +263,32 @@ export default function StudentLiveRoomPage() {
           void loadQuizzes();
         }
       )
-      .subscribe();
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "cms_live_classes",
+          filter: `id=eq.${liveClassId}`,
+        },
+        () => {
+          void loadSession();
+        }
+      )
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({
+            online_at: new Date().toISOString(),
+            user_id: user?.id || `guest_${Math.random().toString(36).substring(7)}`,
+            role: profile?.role || (isTeacherOrAdmin ? "ADMIN" : "STUDENT"),
+          });
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [liveClassId, supabase, loadPolls, loadQuizzes]);
+  }, [liveClassId, supabase, user?.id, profile?.role, isTeacherOrAdmin, loadSession, loadPolls, loadQuizzes]);
 
   // Server-Authoritative Live Attendance Heartbeat Tracker
   React.useEffect(() => {
@@ -437,6 +484,36 @@ export default function StudentLiveRoomPage() {
     }
   };
 
+  // Handle Close Poll (Teacher)
+  const handleClosePoll = async () => {
+    if (!activePoll || !isTeacherOrAdmin) return;
+    try {
+      await fetch(`/api/teacher/live/${liveClassId}/polls/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pollId: activePoll.id }),
+      });
+      void loadPolls();
+    } catch (err) {
+      console.error("Failed to close poll:", err);
+    }
+  };
+
+  // Handle Close Quiz (Teacher)
+  const handleCloseQuiz = async () => {
+    if (!activeQuiz || !isTeacherOrAdmin) return;
+    try {
+      await fetch(`/api/teacher/live/${liveClassId}/quizzes/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quizId: activeQuiz.id }),
+      });
+      void loadQuizzes();
+    } catch (err) {
+      console.error("Failed to close quiz:", err);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-brand-bg-warm flex items-center justify-center">
@@ -452,6 +529,11 @@ export default function StudentLiveRoomPage() {
   const isCompleted = sessionData?.liveStatus === "COMPLETED" || sessionData?.isCompleted;
   const isLive = Boolean(sessionData?.isLive && sessionData?.canJoin);
   const isPreparationWindow = Boolean(sessionData?.isPreparationWindow);
+
+  const activeStudentCount = Math.max(presenceCount, sessionData?.activeViewerCount || 0);
+  const displayStudentCount = isTeacherOrAdmin
+    ? activeStudentCount
+    : Math.max(activeStudentCount, isLive ? 1 : 0);
 
   const formatCountdown = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -496,6 +578,16 @@ export default function StudentLiveRoomPage() {
             </span>
           )}
 
+          {/* TopVeda Live Student Viewer Count */}
+          {isLive && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold tracking-wide shadow-xs">
+              <Users className="h-3 w-3 text-blue-400" />
+              <span>
+                {displayStudentCount} {displayStudentCount === 1 ? "Student Live" : "Students Live"}
+              </span>
+            </div>
+          )}
+
           {sessionData?.educatorName && (
             <div className="flex items-center gap-2 text-xs text-white/70">
               {sessionData.educatorAvatarUrl ? (
@@ -525,7 +617,8 @@ export default function StudentLiveRoomPage() {
             <div className="w-full h-full max-h-[80vh] aspect-video rounded-2xl bg-black border border-white/10 overflow-hidden relative shadow-2xl flex items-center justify-center">
               {sessionData?.playbackVideoId ? (
                 <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${sessionData.playbackVideoId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`}
+                  key={sessionData.playbackVideoId}
+                  src={`https://www.youtube-nocookie.com/embed/${sessionData.playbackVideoId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1`}
                   title={sessionData.topic || "TopVeda Live Stream"}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -784,7 +877,17 @@ export default function StudentLiveRoomPage() {
                     <span className="text-[10px] font-mono text-brand-orange font-bold uppercase tracking-wider">
                       {activePoll.status === "ACTIVE" ? "Active Poll" : "Poll Closed"}
                     </span>
-                    <span className="text-[10px] text-white/50">{activePoll.totalVotes || 0} votes</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-white/50">{activePoll.totalVotes || 0} votes</span>
+                      {isTeacherOrAdmin && activePoll.status === "ACTIVE" && (
+                        <button
+                          onClick={handleClosePoll}
+                          className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 transition-colors"
+                        >
+                          End Poll
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <h3 className="text-xs font-bold text-white leading-snug">{activePoll.question}</h3>
@@ -895,7 +998,17 @@ export default function StudentLiveRoomPage() {
                     <span className="text-[10px] font-mono text-brand-orange font-bold uppercase tracking-wider">
                       Live Quiz In Progress
                     </span>
-                    <span className="text-[10px] text-white/60">Timer: {activeQuiz.durationSeconds}s</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-white/60">Timer: {activeQuiz.durationSeconds}s</span>
+                      {isTeacherOrAdmin && activeQuiz.status === "ACTIVE" && (
+                        <button
+                          onClick={handleCloseQuiz}
+                          className="text-[10px] text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 transition-colors"
+                        >
+                          End Quiz
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <h3 className="text-xs font-bold text-white leading-snug">{activeQuiz.title}</h3>

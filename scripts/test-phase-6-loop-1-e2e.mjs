@@ -154,9 +154,11 @@ async function runE2E() {
   // ------------------------------------------------------------------------------
   console.log("\n[3/6] Database Platform Integration Record Lifecycle & RLS Enforcement");
   const testProvider = "youtube_test_e2e_" + Date.now();
+  const anonKey = getEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY") || getEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  const anonSupabase = createClient(supabaseUrl, anonKey);
   
   // 1. Verify RLS Blocks Unauthenticated Insertion
-  const { data: unauthInsert, error: unauthErr } = await supabase
+  const { data: unauthInsert, error: unauthErr } = await anonSupabase
     .from("cms_platform_integrations")
     .insert({
       provider: testProvider,
@@ -173,7 +175,7 @@ async function runE2E() {
   );
 
   // 2. Verify RLS Blocks Unauthenticated Querying
-  const { data: unauthSelect, error: unauthSelectErr } = await supabase
+  const { data: unauthSelect, error: unauthSelectErr } = await anonSupabase
     .from("cms_platform_integrations")
     .select("*");
 

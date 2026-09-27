@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StreamingService } from "@/lib/services/streaming.service";
+import { LiveInstanceManager } from "@/lib/services/live-instance.service";
 import { YouTubeLiveService } from "@/lib/services/youtube-live.service";
+import { ContentAccessService } from "@/lib/services/content-access.service";
 import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 
 export async function GET(request: NextRequest) {
@@ -22,16 +25,28 @@ export async function GET(request: NextRequest) {
     });
 
     const { searchParams } = new URL(request.url);
-    const liveClassId = searchParams.get("id");
+    const liveClassId = searchParams.get("id") || searchParams.get("classId");
 
     if (!liveClassId) {
       return NextResponse.json({ error: "Missing id parameter." }, { status: 400 });
     }
 
-    // 1. Authenticate user
+    // 1. Authenticate user (caller context) - STRICT REJECTION IF UNAUTHENTICATED
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          error: "Authentication required to access live class session.",
+          canJoin: false,
+          playbackVideoId: null,
+          embedPlaybackUrl: null,
+        },
+        { status: 401 }
+      );
+    }
 
     // 2. Fetch Live Class Details
     const { data: liveClass, error: fetchErr } = await supabase
@@ -48,24 +63,51 @@ export async function GET(request: NextRequest) {
     let isOwnerTeacher = false;
     let isSuperAdmin = false;
 
-    if (user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, full_name")
+      .eq("id", user.id)
+      .single();
 
-      if (profile?.role === "SUPER_ADMIN") {
-        userRole = "SUPER_ADMIN";
-        isSuperAdmin = true;
-      } else if (profile?.role === "ADMIN") {
-        userRole = "ADMIN";
+    if (profile?.role === "SUPER_ADMIN") {
+      userRole = "SUPER_ADMIN";
+      isSuperAdmin = true;
+    } else if (profile?.role === "ADMIN") {
+      userRole = "ADMIN";
+    }
+
+    isOwnerTeacher =
+      liveClass.educator_id === user.id ||
+      liveClass.created_by === user.id ||
+      liveClass.submitted_by === user.id;
+
+    // 3. Strict Enrollment / Access Control Gate for Student Callers
+    if (!isSuperAdmin && !isOwnerTeacher) {
+      const accessResult = await ContentAccessService.checkAccess(supabase, {
+        userId: user.id,
+        contentType: "LIVE_CLASS",
+        contentId: liveClass.id,
+        isTeacherOrAdmin: false,
+      });
+
+      if (!accessResult.granted) {
+        return NextResponse.json(
+          {
+            id: liveClass.id,
+            topic: liveClass.topic,
+            subject: liveClass.subject,
+            educatorName: liveClass.educator_name,
+            liveStatus: liveClass.live_status,
+            canJoin: false,
+            isLive: false,
+            playbackVideoId: null,
+            embedPlaybackUrl: null,
+            access: accessResult,
+            error: accessResult.reason || "Active enrollment required to access this live classroom.",
+          },
+          { status: 403 }
+        );
       }
-
-      isOwnerTeacher =
-        liveClass.educator_id === user.id ||
-        liveClass.created_by === user.id ||
-        liveClass.submitted_by === user.id;
     }
 
     const nowMs = Date.now();
@@ -106,7 +148,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 5. Active YouTube Webcam Broadcast Discovery & Auto-Sync
+    // 5. Active YouTube Webcam Broadcast Discovery & Auto-Sync (Server-Authoritative)
     const isRealYt =
       liveClass.stream_provider === "youtube" &&
       liveClass.live_status !== "TERMINATED" &&
@@ -114,35 +156,41 @@ export async function GET(request: NextRequest) {
 
     let activeLiveBroadcastId: string | null = null;
     let isBroadcastConfirmedLive = false;
+    let currentInstanceId: string | null = liveClass.current_live_instance_id || null;
 
     if (isRealYt && nowMs >= scheduledStartMs - earlyAccessWindowMs) {
       try {
+        const privilegedServerClient = createAdminClient();
         const matchedBroadcast = await YouTubeLiveService.matchActiveBroadcast({
           topic: liveClass.topic,
           scheduledStart: liveClass.scheduled_start,
           currentBroadcastId: liveClass.provider_session_id,
-          client: supabase,
+          client: privilegedServerClient,
         });
 
         if (matchedBroadcast) {
           activeLiveBroadcastId = matchedBroadcast.id;
           isBroadcastConfirmedLive = true;
 
-          // If the matched active broadcast ID is different from current provider_session_id, safely update DB
-          if (matchedBroadcast.id !== liveClass.provider_session_id) {
-            await supabase
-              .from("cms_live_classes")
-              .update({
-                provider_session_id: matchedBroadcast.id,
-                live_status: "LIVE",
-                is_live: true,
-                status_text: "LIVE",
-                cta_text: "Join Class",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", liveClass.id);
+          // If the matched active broadcast is new or different, perform atomic instance transition
+          if (
+            !liveClass.current_live_instance_id ||
+            matchedBroadcast.id !== liveClass.provider_session_id
+          ) {
+            const isInitial = !liveClass.current_live_instance_id;
+            const transition = await LiveInstanceManager.transitionToNewInstance({
+              liveClassId: liveClass.id,
+              newBroadcastId: matchedBroadcast.id,
+              newVideoId: matchedBroadcast.id,
+              lifecycleStatus: matchedBroadcast.status?.lifeCycleStatus || "live",
+              teacherId: liveClass.educator_id || user?.id || null,
+              transitionReason: isInitial ? "INITIAL_CREATE" : "TEACHER_RECONNECT",
+              client: privilegedServerClient,
+            });
 
-            liveClass.provider_session_id = matchedBroadcast.id;
+            currentInstanceId = transition.instanceId;
+            liveClass.current_live_instance_id = transition.instanceId;
+            liveClass.provider_session_id = transition.videoId;
             liveClass.live_status = "LIVE";
             liveClass.is_live = true;
           }
@@ -166,9 +214,12 @@ export async function GET(request: NextRequest) {
     const isStudentWindowOpen = nowMs >= scheduledStartMs;
     const isLiveActive = liveClass.live_status === "LIVE" || liveClass.is_live || isBroadcastConfirmedLive;
 
-    // For YouTube streams, student receives live state only when window is open AND broadcast is actively live
+    // For YouTube streams:
+    // Student receives live playback ONLY when a YouTube broadcast is CONFIRMED ACTIVELY LIVE (isBroadcastConfirmedLive === true)
+    // If no broadcast is currently live on YouTube, student is kept in waiting state and NEVER served old completed video recordings.
+    // For non-YouTube streams: student is allowed when scheduled window is open and class is live.
     const isEffectiveStudentLive = isRealYt
-      ? (isStudentWindowOpen && (isBroadcastConfirmedLive || liveClass.live_status === "LIVE"))
+      ? (isStudentWindowOpen && isBroadcastConfirmedLive)
       : (isStudentWindowOpen && isLiveActive);
 
     const isStudentAllowed = !isOwnerTeacher && !isSuperAdmin && isEffectiveStudentLive;
@@ -190,15 +241,15 @@ export async function GET(request: NextRequest) {
         });
       }
     } else {
-      // Student path: strictly blocked before scheduled_start
+      // Student path: allowed strictly when live broadcast is confirmed active
       if (isStudentAllowed) {
         canJoin = true;
         accessMode = "STUDENT_JOIN";
         joinUrl = await StreamingService.getJoinUrl({
-          sessionId: liveClass.provider_session_id || `live_${liveClass.id}`,
+          sessionId: activeLiveBroadcastId || liveClass.provider_session_id || `live_${liveClass.id}`,
           liveClassId: liveClass.id,
-          userId: user?.id || "guest_student",
-          userName: "Student",
+          userId: user.id,
+          userName: profile?.full_name || "Student",
           userRole: "STUDENT",
         });
       }
@@ -207,20 +258,24 @@ export async function GET(request: NextRequest) {
     const isStudentInPreparation =
       !isOwnerTeacher &&
       !isSuperAdmin &&
+      !isBroadcastConfirmedLive &&
       nowMs >= scheduledStartMs - earlyAccessWindowMs &&
       nowMs < scheduledStartMs;
 
     const isEffectiveLive =
       isOwnerTeacher || isSuperAdmin
         ? isLiveActive
-        : isStudentAllowed;
+        : isEffectiveStudentLive;
 
+    // Resolved playback ID:
+    // For students: ONLY the actively confirmed live broadcast ID (e.g. Broadcast B). NEVER fallback to old provider_session_id when not live.
+    // For teachers/admins: actively confirmed live broadcast ID, or current provider_session_id for setup preview.
     const resolvedPlaybackId = isBroadcastConfirmedLive
       ? activeLiveBroadcastId
-      : (isOwnerTeacher || isSuperAdmin ? liveClass.provider_session_id : (isEffectiveStudentLive ? liveClass.provider_session_id : null));
+      : (isOwnerTeacher || isSuperAdmin ? liveClass.provider_session_id : null);
 
     const embedPlaybackUrl = resolvedPlaybackId
-      ? `https://www.youtube-nocookie.com/embed/${resolvedPlaybackId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`
+      ? `https://www.youtube-nocookie.com/embed/${resolvedPlaybackId}?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1`
       : null;
 
     const studioPublishUrl = isOwnerTeacher || isSuperAdmin
@@ -247,6 +302,20 @@ export async function GET(request: NextRequest) {
     const rawAvatar = profileData?.avatar_url || liveClass.educator_avatar_url || liveClass.thumbnail_url || null;
     const resolvedEducatorAvatar = formatAvatarUrl(rawAvatar);
 
+    // 7. Calculate Active TopVeda Live Student Viewer Count from student_live_attendance
+    let activeViewerCount = 0;
+    try {
+      const ninetySecondsAgo = new Date(Date.now() - 90 * 1000).toISOString();
+      const { count } = await supabase
+        .from("student_live_attendance")
+        .select("id", { count: "exact", head: true })
+        .eq("live_class_id", liveClass.id)
+        .gte("last_heartbeat_at", ninetySecondsAgo);
+      activeViewerCount = count || 0;
+    } catch {
+      // non-blocking
+    }
+
     return NextResponse.json({
       id: liveClass.id,
       topic: liveClass.topic,
@@ -259,6 +328,7 @@ export async function GET(request: NextRequest) {
       timeDisplay: liveClass.scheduled_start ? formatLiveTimeDisplay(liveClass.scheduled_start, liveClass.scheduled_end) : liveClass.time_display,
       liveStatus: isBroadcastConfirmedLive ? "LIVE" : liveClass.live_status,
       streamProvider: liveClass.stream_provider,
+      currentInstanceId,
       isLive: isEffectiveLive,
       canJoin,
       accessMode,
@@ -266,6 +336,7 @@ export async function GET(request: NextRequest) {
       playbackVideoId: resolvedPlaybackId,
       embedPlaybackUrl,
       studioPublishUrl,
+      activeViewerCount,
       isTeacher: isOwnerTeacher || isSuperAdmin,
       isPreparationWindow: isOwnerTeacher || isSuperAdmin ? isTeacherInPreparationWindow : isStudentInPreparation,
       secondsToStart: Math.max(0, Math.floor((scheduledStartMs - nowMs) / 1000)),

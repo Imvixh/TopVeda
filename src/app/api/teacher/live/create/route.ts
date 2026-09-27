@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StreamingService } from "@/lib/services/streaming.service";
+import { LiveInstanceManager } from "@/lib/services/live-instance.service";
 import { NotificationService } from "@/lib/services/notification.service";
 import { CreateLiveClassDTO } from "@/types/teacher.types";
 import {
@@ -180,6 +182,23 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       return NextResponse.json({ error: insertError.message || "Failed to schedule live class." }, { status: 500 });
+    }
+
+    // 7b. Provision initial Live Instance record (Server-Authoritative)
+    if (sessionConfig.sessionId) {
+      try {
+        const adminClient = createAdminClient();
+        await LiveInstanceManager.createInitialInstance({
+          liveClassId: newLiveClass.id,
+          youtubeBroadcastId: sessionConfig.sessionId,
+          youtubeVideoId: sessionConfig.sessionId,
+          youtubeStreamId: sessionConfig.internalStreamKey || null,
+          teacherId: user.id,
+          client: adminClient,
+        });
+      } catch (instErr) {
+        console.warn("[LiveCreate] Initial instance creation non-blocking note:", instErr);
+      }
     }
 
     // 8. Dispatch notification event to Super Admin

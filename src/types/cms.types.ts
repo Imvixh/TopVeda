@@ -201,6 +201,7 @@ export interface CmsLiveClass extends CmsAuditMetadata {
   stream_room_url?: string | null;
   stream_provider?: string;
   provider_session_id?: string | null;
+  current_live_instance_id?: string | null;
   recording_id?: string | null;
   recording_url?: string | null;
   recording_status?: "NONE" | "PROCESSING" | "READY" | "FAILED";
@@ -209,6 +210,43 @@ export interface CmsLiveClass extends CmsAuditMetadata {
   terminated_at?: string | null;
   terminated_by?: string | null;
   termination_reason?: string | null;
+}
+
+export interface CmsLiveClassInstance {
+  id: string;
+  live_class_id: string;
+  youtube_broadcast_id: string;
+  youtube_video_id: string;
+  youtube_stream_id?: string | null;
+  status: "CREATED" | "READY" | "TESTING" | "LIVE" | "COMPLETED" | "INACTIVE" | "TERMINATED";
+  lifecycle_status?: string | null;
+  stream_status?: string | null;
+  is_current: boolean;
+  started_at?: string | null;
+  ended_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CmsLiveInstanceTransition {
+  id: string;
+  live_class_id: string;
+  previous_instance_id?: string | null;
+  new_instance_id?: string | null;
+  previous_broadcast_id?: string | null;
+  new_broadcast_id?: string | null;
+  previous_video_id?: string | null;
+  new_video_id?: string | null;
+  lifecycle_status?: string | null;
+  stream_status?: string | null;
+  teacher_id?: string | null;
+  transition_reason:
+    | "INITIAL_CREATE"
+    | "TEACHER_RECONNECT"
+    | "YOUTUBE_RESTART"
+    | "BROADCAST_COMPLETED"
+    | "MANUAL_RESTART";
+  created_at: string;
 }
 
 // 9. Hero Banners

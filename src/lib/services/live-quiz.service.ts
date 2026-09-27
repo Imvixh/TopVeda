@@ -180,8 +180,16 @@ export class LiveQuizService {
         return { quiz: null };
       }
 
-      // 2. Fetch questions
-      const { data: rawQuestions, error: qErr } = await supabase
+      // 2. Fetch questions using privileged server client to ensure strict server-side answer redaction
+      let privilegedClient: SupabaseClient = supabase;
+      try {
+        const { createAdminClient } = await import("@/lib/supabase/server");
+        privilegedClient = createAdminClient();
+      } catch {
+        // fallback
+      }
+
+      const { data: rawQuestions, error: qErr } = await privilegedClient
         .from("live_class_quiz_questions")
         .select("*")
         .eq("quiz_id", quiz.id)
@@ -292,8 +300,16 @@ export class LiveQuizService {
         return { success: false, error: "You have already submitted an attempt for this quiz." };
       }
 
-      // 3. Fetch questions WITH authoritative correct answers server-side
-      const { data: questions, error: qErr } = await supabase
+      // 3. Fetch questions WITH authoritative correct answers server-side using privileged client
+      let privilegedClient: SupabaseClient = supabase;
+      try {
+        const { createAdminClient } = await import("@/lib/supabase/server");
+        privilegedClient = createAdminClient();
+      } catch {
+        // fallback
+      }
+
+      const { data: questions, error: qErr } = await privilegedClient
         .from("live_class_quiz_questions")
         .select("*")
         .eq("quiz_id", quizId)

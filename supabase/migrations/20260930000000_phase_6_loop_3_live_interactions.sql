@@ -260,12 +260,14 @@ CREATE POLICY "manage_live_quizzes"
     WITH CHECK (public.is_admin_or_super_admin());
 
 -- live_class_quiz_questions RLS
+-- Direct student SELECT is blocked to protect correct_option_id answer keys.
+-- Student quiz delivery & answer redaction is handled server-side via /api/student/live/[id]/quizzes.
 DROP POLICY IF EXISTS "view_live_quiz_questions" ON public.live_class_quiz_questions;
 CREATE POLICY "view_live_quiz_questions"
     ON public.live_class_quiz_questions
     FOR SELECT
     TO authenticated
-    USING (true);
+    USING (public.is_admin_or_super_admin());
 
 DROP POLICY IF EXISTS "manage_live_quiz_questions" ON public.live_class_quiz_questions;
 CREATE POLICY "manage_live_quiz_questions"
