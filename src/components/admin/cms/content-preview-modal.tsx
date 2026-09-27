@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { ContentStatusBadge } from "./content-status-badge";
 import { ScheduleStatusBadge } from "./schedule-status-badge";
+import { resolveLectureEmbedUrl } from "@/lib/utils/youtube";
 import {
   CmsCourse,
   CmsBatch,
@@ -223,6 +224,55 @@ function LectureCardPreview({
   lecture: CmsLecture;
   signedThumb?: string | null;
 }) {
+  const [isPlaying, setIsPlaying] = React.useState(false);
+
+  // Extract resolved embed URL
+  const embedUrl = React.useMemo(() => {
+    return resolveLectureEmbedUrl({
+      video_stream_id: lecture.video_stream_id,
+      video_playback_url: lecture.video_playback_url,
+    });
+  }, [lecture.video_stream_id, lecture.video_playback_url]);
+
+  if (isPlaying && embedUrl) {
+    return (
+      <div className="max-w-lg w-full rounded-2xl bg-white border border-brand-border shadow-md overflow-hidden text-left space-y-3 p-4">
+        <div className="flex items-center justify-between pb-2 border-b border-brand-border/60">
+          <span className="text-[10px] font-bold text-brand-orange uppercase">
+            {lecture.subject} • Video Sandbox Player
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsPlaying(false)}
+            className="text-xs font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
+          >
+            ← Back to Card
+          </button>
+        </div>
+
+        <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black shadow-inner">
+          <iframe
+            src={embedUrl}
+            title={lecture.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="w-full h-full border-0"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <h4 className="font-extrabold text-sm text-brand-text-primary leading-snug">
+            {lecture.title}
+          </h4>
+          <div className="flex items-center justify-between text-xs text-brand-text-muted">
+            <span>Educator: {lecture.teacher_name}</span>
+            <span>{lecture.duration_human || lecture.duration_formatted}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-sm w-full rounded-2xl bg-white border border-brand-border shadow-md overflow-hidden text-left">
       <div className="relative h-40 bg-gradient-to-tr from-[#0F2042] via-[#162D59] to-[#0A162B] flex items-center justify-center overflow-hidden">
@@ -260,8 +310,12 @@ function LectureCardPreview({
             <User className="h-3.5 w-3.5 text-brand-orange" />
             <span className="font-medium">{lecture.teacher_name}</span>
           </div>
-          <button className="text-xs font-bold text-brand-orange hover:underline cursor-pointer">
-            Watch Now →
+          <button
+            type="button"
+            onClick={() => setIsPlaying(true)}
+            className="text-xs font-bold text-brand-orange hover:underline cursor-pointer flex items-center gap-1"
+          >
+            <span>Watch Now</span> →
           </button>
         </div>
       </div>

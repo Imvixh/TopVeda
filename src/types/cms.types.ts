@@ -105,11 +105,35 @@ export interface CmsCourse extends CmsAuditMetadata {
 }
 
 // 5. Batches
+export interface CmsBatchTeacher {
+  id: string;
+  batch_id: string;
+  teacher_id: string;
+  display_order: number;
+  created_at: string;
+  teacher?: {
+    id: string;
+    full_name: string;
+    avatar_url: string | null;
+    qualification?: string | null;
+    role: string;
+  };
+}
+
+export interface CmsSectionSetting {
+  section_key: "upcoming_batches" | "ongoing_batches" | string;
+  title: string;
+  subtitle?: string | null;
+  is_visible: boolean;
+  updated_at?: string;
+}
+
 export interface CmsBatch extends CmsAuditMetadata {
   id: string;
   course_id?: string | null;
   board_id: string;
   class_id: string;
+  subject_id?: string | null;
   title: string;
   slug: string;
   board_label: string;
@@ -130,6 +154,12 @@ export interface CmsBatch extends CmsAuditMetadata {
   icon_color: string;
   cta_text: string;
   cta_link: string;
+  // Joined relation fields
+  board?: CmsBoard;
+  class_level?: CmsClassLevel;
+  subject?: CmsSubject;
+  batch_teachers?: CmsBatchTeacher[];
+  lecture_count?: number;
 }
 
 // 6. Chapters
@@ -173,6 +203,8 @@ export interface CmsLecture extends CmsAuditMetadata {
   material_ids?: string[];
   is_home_featured: boolean;
   is_free_preview: boolean;
+  // Joined relation fields
+  batch?: CmsBatch;
 }
 
 // 8. Live Classes
@@ -376,6 +408,17 @@ export interface CmsPendingReviewItem {
   author_name: string;
   media_preview_url?: string | null;
   video_stream_url?: string | null;
+  video_stream_id?: string | null;
+  video_playback_url?: string | null;
+  duration_human?: string | null;
+  duration_formatted?: string | null;
+  duration_seconds?: number | null;
+  description?: string | null;
+  batch_id?: string | null;
+  batch_title?: string | null;
+  board_name?: string | null;
+  class_name?: string | null;
+  subject_name?: string | null;
   status: ContentStatus;
   submitted_by?: string | null;
   submitted_at: string;

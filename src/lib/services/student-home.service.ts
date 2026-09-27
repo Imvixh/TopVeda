@@ -13,6 +13,7 @@ import {
   HubItem,
   DailyQuote,
   ChatbotConfig,
+  SectionSettings,
 } from "@/types/student-home.types";
 import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
 
@@ -26,6 +27,7 @@ export interface StudentHomeAggregatedData {
   whatsHappening: HubItem[];
   dailyQuote: DailyQuote;
   chatbotConfig: ChatbotConfig;
+  sectionSettings?: SectionSettings;
 }
 
 function getDefaultClient(): SupabaseClient | null {
@@ -39,6 +41,58 @@ function getDefaultClient(): SupabaseClient | null {
   }
 
   return createSupabaseClient(supabaseUrl, supabaseAnonKey);
+}
+
+/**
+ * 0. Fetch Configurable Section Settings (New Features & Batches, Ongoing Batches)
+ */
+export async function fetchSectionSettings(
+  client?: SupabaseClient
+): Promise<SectionSettings> {
+  const defaultSettings: SectionSettings = {
+    upcomingBatches: {
+      title: "New Features & Batches",
+      subtitle: "Upcoming academic batches with expert faculty",
+      isVisible: true,
+    },
+    ongoingBatches: {
+      title: "Ongoing Batches",
+      subtitle: "Active batches and daily live syllabus",
+      isVisible: true,
+    },
+  };
+
+  const supabase = client || getDefaultClient();
+  if (!supabase) return defaultSettings;
+
+  try {
+    const { data, error } = await supabase
+      .from("cms_section_settings")
+      .select("section_key, title, subtitle, is_visible")
+      .in("section_key", ["upcoming_batches", "ongoing_batches"]);
+
+    if (error || !data) return defaultSettings;
+
+    const result = { ...defaultSettings };
+    for (const item of data) {
+      if (item.section_key === "upcoming_batches") {
+        result.upcomingBatches = {
+          title: item.title || defaultSettings.upcomingBatches.title,
+          subtitle: item.subtitle || defaultSettings.upcomingBatches.subtitle,
+          isVisible: item.is_visible ?? true,
+        };
+      } else if (item.section_key === "ongoing_batches") {
+        result.ongoingBatches = {
+          title: item.title || defaultSettings.ongoingBatches.title,
+          subtitle: item.subtitle || defaultSettings.ongoingBatches.subtitle,
+          isVisible: item.is_visible ?? true,
+        };
+      }
+    }
+    return result;
+  } catch {
+    return defaultSettings;
+  }
 }
 
 /**
@@ -79,7 +133,7 @@ export async function fetchPublishedHeroBanners(
 }
 
 /**
- * 2. Fetch Published Featured Batches (Section 1)
+ * 2. Fetch Published Upcoming Batches ("New Features & Batches", starts_at > NOW())
  */
 export async function fetchPublishedFeaturedBatches(
   client?: SupabaseClient
@@ -88,12 +142,35 @@ export async function fetchPublishedFeaturedBatches(
   if (!supabase) return [];
 
   try {
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("cms_batches")
-      .select("id, title, subtitle, board_label, badge_text, badge_variant, educator_name, educator_avatar_url, bg_gradient, border_color, icon_type, display_order")
+      .select(`
+        id,
+        title,
+        subtitle,
+        description,
+        board_label,
+        badge_text,
+        badge_variant,
+        educator_name,
+        educator_avatar_url,
+        bg_gradient,
+        border_color,
+        icon_type,
+        starts_at,
+        subject_id,
+        is_featured,
+        is_ongoing,
+        display_order,
+        batch_teachers:cms_batch_teachers(
+          display_order,
+          teacher:profiles(id, full_name, avatar_url, qualification)
+        )
+      `)
       .eq("status", "PUBLISHED")
       .eq("is_visible", true)
-      .eq("is_featured", true)
+      .or(`is_featured.eq.true,starts_at.gt.${nowIso}`)
       .order("display_order", { ascending: true });
 
     if (error) {
@@ -101,28 +178,65 @@ export async function fetchPublishedFeaturedBatches(
       return [];
     }
 
-    return (data || []).map((b) => ({
-      id: b.id,
-      badge: {
-        text: b.badge_text || "Featured",
-        variant: (b.badge_variant as "orange" | "pink" | "green" | "purple") || "orange",
-      },
-      board: b.board_label,
-      title: b.title,
-      subtitle: b.subtitle,
-      educatorName: b.educator_name,
-      educatorAvatar: b.educator_avatar_url,
-      bgGradient: b.bg_gradient,
-      borderColor: b.border_color,
-      iconType: (b.icon_type as "math" | "science" | "foundation" | "medical") || "math",
-    }));
+    return (data || []).map((b) => {
+      const rawTeachers = (b.batch_teachers || []) as unknown as Array<{
+        display_order?: number;
+        teacher?: { id: string; full_name: string; avatar_url: string | null; qualification?: string | null } | Array<{ id: string; full_name: string; avatar_url: string | null; qualification?: string | null }>;
+      }>;
+
+      const mappedTeachers = rawTeachers
+        .map((bt) => {
+          const t = Array.isArray(bt.teacher) ? bt.teacher[0] : bt.teacher;
+          return {
+            display_order: bt.display_order || 0,
+            teacher: t,
+          };
+        })
+        .filter((bt) => bt.teacher?.id)
+        .sort((x, y) => (x.display_order || 0) - (y.display_order || 0))
+        .map((bt) => ({
+          id: bt.teacher!.id,
+          name: bt.teacher!.full_name,
+          avatarUrl: formatAvatarUrl(bt.teacher!.avatar_url),
+          qualification: bt.teacher!.qualification || null,
+        }));
+
+      const primaryTeacherName = b.educator_name || mappedTeachers[0]?.name || "Educator";
+      const primaryTeacherAvatar =
+        formatAvatarUrl(b.educator_avatar_url) ||
+        mappedTeachers[0]?.avatarUrl ||
+        "/assets/student/teacher-male-1.jpg";
+
+      return {
+        id: b.id,
+        badge: {
+          text: b.badge_text || "New",
+          variant: (b.badge_variant as "orange" | "pink" | "green" | "purple") || "orange",
+        },
+        board: b.board_label,
+        title: b.title,
+        subtitle: b.subtitle || "",
+        description: b.description || null,
+        startsAt: b.starts_at || null,
+        subjectId: b.subject_id || null,
+        educatorName: primaryTeacherName,
+        educatorAvatar: primaryTeacherAvatar,
+        teachers:
+          mappedTeachers.length > 0
+            ? mappedTeachers
+            : [{ id: "primary", name: primaryTeacherName, avatarUrl: primaryTeacherAvatar }],
+        bgGradient: b.bg_gradient || "from-sky-50/70 via-blue-50/40 to-indigo-50/30",
+        borderColor: b.border_color || "border-sky-100",
+        iconType: (b.icon_type as "math" | "science" | "foundation" | "medical") || "math",
+      };
+    });
   } catch {
     return [];
   }
 }
 
 /**
- * 3. Fetch Published Ongoing Batches (Section 2)
+ * 3. Fetch Published Ongoing Batches (is_ongoing=true OR starts_at <= NOW())
  */
 export async function fetchPublishedOngoingBatches(
   client?: SupabaseClient
@@ -131,12 +245,35 @@ export async function fetchPublishedOngoingBatches(
   if (!supabase) return [];
 
   try {
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("cms_batches")
-      .select("id, title, board_label, badge_text, status_type, cta_text, icon_bg, icon_color, icon_type, display_order")
+      .select(`
+        id,
+        title,
+        board_label,
+        badge_text,
+        status_type,
+        cta_text,
+        icon_bg,
+        icon_color,
+        icon_type,
+        display_order,
+        starts_at,
+        description,
+        subject_id,
+        is_featured,
+        is_ongoing,
+        educator_name,
+        educator_avatar_url,
+        batch_teachers:cms_batch_teachers(
+          display_order,
+          teacher:profiles(id, full_name, avatar_url, qualification)
+        )
+      `)
       .eq("status", "PUBLISHED")
       .eq("is_visible", true)
-      .eq("is_ongoing", true)
+      .or(`is_ongoing.eq.true,and(starts_at.not.is.null,starts_at.lte.${nowIso})`)
       .order("display_order", { ascending: true });
 
     if (error) {
@@ -144,18 +281,67 @@ export async function fetchPublishedOngoingBatches(
       return [];
     }
 
-    return (data || []).map((b) => ({
-      id: b.id,
-      badge: b.badge_text || b.board_label,
-      batchName: b.title,
-      subject: b.board_label,
-      status: b.status_type === "live" ? "Live Now" : "Ongoing",
-      statusType: (b.status_type as "live" | "ongoing") || "ongoing",
-      ctaText: b.cta_text || "Explore →",
-      iconBg: b.icon_bg || "bg-emerald-50 border-emerald-100 text-emerald-600",
-      iconColor: b.icon_color || "text-emerald-600",
-      iconType: (b.icon_type as "target" | "atom" | "book" | "academy" | "medical") || "book",
-    }));
+    const batches = data || [];
+    const batchIds = batches.map((b) => b.id);
+
+    // Fetch real lecture count per batch
+    const lectureCountMap = new Map<string, number>();
+    if (batchIds.length > 0) {
+      const { data: lecturesData } = await supabase
+        .from("cms_lectures")
+        .select("id, batch_id")
+        .in("batch_id", batchIds)
+        .eq("status", "PUBLISHED")
+        .eq("is_visible", true);
+
+      (lecturesData || []).forEach((lec) => {
+        if (lec.batch_id) {
+          lectureCountMap.set(lec.batch_id, (lectureCountMap.get(lec.batch_id) || 0) + 1);
+        }
+      });
+    }
+
+    return batches.map((b) => {
+      const rawTeachers = (b.batch_teachers || []) as unknown as Array<{
+        display_order?: number;
+        teacher?: { id: string; full_name: string; avatar_url: string | null; qualification?: string | null } | Array<{ id: string; full_name: string; avatar_url: string | null; qualification?: string | null }>;
+      }>;
+
+      const mappedTeachers = rawTeachers
+        .map((bt) => {
+          const t = Array.isArray(bt.teacher) ? bt.teacher[0] : bt.teacher;
+          return {
+            display_order: bt.display_order || 0,
+            teacher: t,
+          };
+        })
+        .filter((bt) => bt.teacher?.id)
+        .sort((x, y) => (x.display_order || 0) - (y.display_order || 0))
+        .map((bt) => ({
+          id: bt.teacher!.id,
+          name: bt.teacher!.full_name,
+          avatarUrl: formatAvatarUrl(bt.teacher!.avatar_url),
+          qualification: bt.teacher!.qualification || null,
+        }));
+
+      return {
+        id: b.id,
+        badge: b.badge_text || b.board_label,
+        batchName: b.title,
+        subject: b.board_label,
+        status: b.status_type === "live" ? "Live Now" : "Ongoing",
+        statusType: (b.status_type as "live" | "ongoing") || "ongoing",
+        ctaText: b.cta_text || (b.status_type === "live" ? "Join Now" : "View Details"),
+        iconBg: b.icon_bg || "bg-emerald-50 border-emerald-100 text-emerald-600",
+        iconColor: b.icon_color || "text-emerald-600",
+        iconType: (b.icon_type as "target" | "atom" | "book" | "academy" | "medical") || "target",
+        startsAt: b.starts_at || null,
+        description: b.description || null,
+        subjectId: b.subject_id || null,
+        lectureCount: lectureCountMap.get(b.id) || 0,
+        teachers: mappedTeachers,
+      };
+    });
   } catch {
     return [];
   }
@@ -240,22 +426,38 @@ export async function fetchPublishedLatestLectures(
   if (!supabase) return [];
 
   try {
-    const { data, error } = await supabase
+    const { data: featuredData, error } = await supabase
       .from("cms_lectures")
-      .select("id, title, subject, teacher_name, duration_human, duration_formatted, thumbnail_bg, category_tag, display_order, is_home_featured, created_at")
+      .select("id, title, subject, teacher_name, duration_human, duration_formatted, thumbnail_bg, category_tag, display_order, is_home_featured, created_at, batch_id")
       .eq("status", "PUBLISHED")
       .eq("is_visible", true)
-      .order("is_home_featured", { ascending: false })
+      .eq("is_home_featured", true)
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(12);
 
     if (error) {
-      console.warn("[StudentHomeService] Failed to fetch lectures:", error.message);
+      console.warn("[StudentHomeService] Failed to fetch latest lectures:", error.message);
       return [];
     }
 
-    return (data || []).map((l) => ({
+    let lecturesList = featuredData || [];
+
+    // Fallback if no lectures are explicitly flagged as latest yet
+    if (lecturesList.length === 0) {
+      const { data: fallbackData } = await supabase
+        .from("cms_lectures")
+        .select("id, title, subject, teacher_name, duration_human, duration_formatted, thumbnail_bg, category_tag, display_order, is_home_featured, created_at, batch_id")
+        .eq("status", "PUBLISHED")
+        .eq("is_visible", true)
+        .order("display_order", { ascending: true })
+        .order("created_at", { ascending: false })
+        .limit(12);
+
+      lecturesList = fallbackData || [];
+    }
+
+    return lecturesList.map((l) => ({
       id: l.id,
       title: l.title,
       subject: l.subject,
@@ -449,6 +651,7 @@ export async function getStudentHomeData(
       hubResult,
       quoteResult,
       chatbotResult,
+      sectionSettingsResult,
     ] = await Promise.allSettled([
       fetchPublishedHeroBanners(client),
       fetchPublishedFeaturedBatches(client),
@@ -459,6 +662,7 @@ export async function getStudentHomeData(
       fetchPublishedHubItems(client),
       fetchActiveDailyQuote(client),
       fetchPublicChatbotConfig(client),
+      fetchSectionSettings(client),
     ]);
 
     return {
@@ -471,6 +675,7 @@ export async function getStudentHomeData(
       whatsHappening: hubResult.status === "fulfilled" ? hubResult.value : [],
       dailyQuote: quoteResult.status === "fulfilled" ? quoteResult.value : DAILY_MOTIVATION_QUOTE,
       chatbotConfig: chatbotResult.status === "fulfilled" ? chatbotResult.value : CHATBOT_CONFIG,
+      sectionSettings: sectionSettingsResult.status === "fulfilled" ? sectionSettingsResult.value : undefined,
     };
   } catch (error) {
     console.error("[StudentHomeService] Aggregated retrieval failed:", error);

@@ -9,6 +9,13 @@ export interface HeroSlide {
   characterImage: string;
 }
 
+export interface BatchTeacherItem {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+  qualification?: string | null;
+}
+
 export interface FeaturedBatch {
   id: string;
   badge: {
@@ -23,6 +30,10 @@ export interface FeaturedBatch {
   bgGradient: string;
   borderColor: string;
   iconType: "math" | "science" | "foundation" | "medical";
+  startsAt?: string | null;
+  description?: string | null;
+  subjectId?: string | null;
+  teachers?: BatchTeacherItem[];
 }
 
 export interface OngoingBatch {
@@ -36,6 +47,16 @@ export interface OngoingBatch {
   iconBg: string;
   iconColor: string;
   iconType: "target" | "atom" | "book" | "academy" | "medical";
+  startsAt?: string | null;
+  description?: string | null;
+  subjectId?: string | null;
+  lectureCount?: number;
+  teachers?: BatchTeacherItem[];
+}
+
+export interface SectionSettings {
+  upcomingBatches: { title: string; subtitle?: string; isVisible?: boolean };
+  ongoingBatches: { title: string; subtitle?: string; isVisible?: boolean };
 }
 
 export interface LiveClass {

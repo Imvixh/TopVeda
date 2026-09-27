@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronRight, Play, Clock, UserCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Clock, UserCheck } from "lucide-react";
 import { LATEST_LECTURES } from "@/config/student-home.config";
 import { Lecture } from "@/types/student-home.types";
 import { cn } from "@/lib/utils";
@@ -15,12 +15,42 @@ export interface LatestLecturesSectionProps {
 export function LatestLecturesSection({ lectures }: LatestLecturesSectionProps) {
   const activeLectures = lectures !== undefined ? lectures : LATEST_LECTURES;
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(false);
+
+  const checkScrollability = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5);
+  }, []);
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    checkScrollability();
+    el.addEventListener("scroll", checkScrollability, { passive: true });
+    window.addEventListener("resize", checkScrollability);
+
+    return () => {
+      el.removeEventListener("scroll", checkScrollability);
+      window.removeEventListener("resize", checkScrollability);
+    };
+  }, [checkScrollability, activeLectures]);
 
   if (activeLectures.length === 0) {
     return null;
   }
 
-  const scrollRight = () => {
+  const handleScrollLeft = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: -320, behavior: "smooth" });
+    }
+  };
+
+  const handleScrollRight = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollBy({ left: 320, behavior: "smooth" });
     }
@@ -42,11 +72,22 @@ export function LatestLecturesSection({ lectures }: LatestLecturesSectionProps) 
         </Link>
       </div>
 
-      {/* Horizontal Cards Container — Larger, Balanced Rectangular Cards */}
+      {/* Horizontal Cards Container */}
       <div className="relative group">
+        {/* Scroll Left Navigation Arrow */}
+        {canScrollLeft && (
+          <button
+            onClick={handleScrollLeft}
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-brand-border/80 shadow-md text-brand-charcoal flex items-center justify-center transition-all duration-200 z-10 hover:bg-brand-bg-warm cursor-pointer -ml-2 sm:-ml-3"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
+
         <div
           ref={scrollRef}
-          className="flex items-stretch gap-4 sm:gap-5 overflow-x-auto pb-3 pt-1 scrollbar-none scroll-smooth"
+          className="flex items-stretch gap-4 sm:gap-5 overflow-x-auto pb-3 pt-1 scrollbar-none scroll-smooth px-0.5"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {activeLectures.map((lecture: Lecture) => (
@@ -120,13 +161,15 @@ export function LatestLecturesSection({ lectures }: LatestLecturesSectionProps) 
         </div>
 
         {/* Scroll Right Navigation Arrow */}
-        <button
-          onClick={scrollRight}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-brand-border/80 shadow-md text-brand-charcoal flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 hover:bg-brand-bg-warm"
-          aria-label="Scroll right"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        {canScrollRight && (
+          <button
+            onClick={handleScrollRight}
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-brand-border/80 shadow-md text-brand-charcoal flex items-center justify-center transition-all duration-200 z-10 hover:bg-brand-bg-warm cursor-pointer -mr-2 sm:-mr-3"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </section>
   );

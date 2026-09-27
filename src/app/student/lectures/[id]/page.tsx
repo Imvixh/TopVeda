@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { StudentSidebar } from "@/components/student/student-sidebar";
 import { StudentHeader } from "@/components/student/student-header";
 import { FloatingChatbot } from "@/components/student/floating-chatbot";
+import { resolveLectureEmbedUrl } from "@/lib/utils/youtube";
 import {
   ArrowLeft,
   PlayCircle,
@@ -36,6 +37,12 @@ interface LectureDetail {
   batch_id?: string;
   chapter_id?: string;
   is_completed?: boolean;
+  batch?: {
+    id: string;
+    title: string;
+    board_label: string;
+    subtitle?: string;
+  } | null;
 }
 
 export default function LectureVideoPlayerPage() {
@@ -73,7 +80,8 @@ export default function LectureVideoPlayerPage() {
           category_tag,
           course_id,
           batch_id,
-          chapter_id
+          chapter_id,
+          batch:cms_batches(id, title, board_label, subtitle)
         `)
         .eq("id", lectureId)
         .eq("status", "PUBLISHED")
@@ -122,7 +130,15 @@ export default function LectureVideoPlayerPage() {
         }
       }
 
-      setLecture({ ...data, is_completed: completed });
+      const resolvedBatch = Array.isArray(data.batch)
+        ? data.batch[0]
+        : (data.batch as { id: string; title: string; board_label: string; subtitle?: string } | null);
+
+      setLecture({
+        ...data,
+        batch: resolvedBatch || null,
+        is_completed: completed,
+      });
       setIsCompleted(completed);
       setWatchProgressPercent(existingProgress);
     } catch (err) {
@@ -140,23 +156,7 @@ export default function LectureVideoPlayerPage() {
 
   // Helper to extract YouTube embed URL
   const getEmbedUrl = React.useCallback((): string | null => {
-    if (!lecture) return null;
-    const url = lecture.video_playback_url;
-    const streamId = lecture.video_stream_id;
-
-    if (url && (url.includes("youtube.com") || url.includes("youtube-nocookie.com") || url.includes("youtu.be"))) {
-      if (url.includes("/embed/")) return url;
-      const vMatch = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-      if (vMatch && vMatch[1]) {
-        return `https://www.youtube-nocookie.com/embed/${vMatch[1]}?enablejsapi=1&rel=0&modestbranding=1`;
-      }
-    }
-
-    if (streamId && streamId.length === 11 && !streamId.startsWith("cf_")) {
-      return `https://www.youtube-nocookie.com/embed/${streamId}?enablejsapi=1&rel=0&modestbranding=1`;
-    }
-
-    return null;
+    return resolveLectureEmbedUrl(lecture);
   }, [lecture]);
 
   const handleManualComplete = async () => {
@@ -196,14 +196,26 @@ export default function LectureVideoPlayerPage() {
         <StudentHeader onOpenMobileMenu={() => setIsMobileMenuOpen(true)} />
 
         <main className="flex-1 px-4 sm:px-8 py-6 sm:py-8 max-w-5xl w-full mx-auto space-y-6">
-          {/* Back Navigation */}
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-text-muted hover:text-brand-orange transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to Course Lectures</span>
-          </button>
+          {/* Back Navigation & Batch Context */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-text-muted hover:text-brand-orange transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>{lecture?.batch?.title ? `Back to ${lecture.batch.title}` : "Back to Lectures"}</span>
+            </button>
+
+            {lecture?.batch && (
+              <Link
+                href={`/student/batches/${lecture.batch.id}`}
+                className="text-xs font-bold text-brand-orange hover:underline hidden sm:inline-flex items-center gap-1"
+              >
+                <span>Batch: {lecture.batch.title}</span>
+                {lecture.batch.board_label ? `(${lecture.batch.board_label})` : ""}
+              </Link>
+            )}
+          </div>
 
           {isLoading ? (
             <div className="p-16 text-center flex flex-col items-center justify-center gap-3">
@@ -260,7 +272,13 @@ export default function LectureVideoPlayerPage() {
               {/* Lecture Metadata Card */}
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {lecture.batch && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold">
+                        <BookOpen className="h-3.5 w-3.5 text-purple-600" />
+                        {lecture.batch.title}
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-brand-orange text-xs font-bold">
                       <Sparkles className="h-3.5 w-3.5" />
                       {lecture.subject}
@@ -275,7 +293,11 @@ export default function LectureVideoPlayerPage() {
                   <div className="flex items-center gap-3 text-xs font-semibold text-brand-text-muted">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
-                      {lecture.duration_human || lecture.duration_formatted || "45 min"}
+                      {lecture.duration_human ||
+                        lecture.duration_formatted ||
+                        (lecture.duration_seconds && lecture.duration_seconds > 0
+                          ? `${Math.floor(lecture.duration_seconds / 60)} min`
+                          : "Lecture Video")}
                     </span>
                     {isCompleted ? (
                       <span className="inline-flex items-center gap-1 text-emerald-600 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">

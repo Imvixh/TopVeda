@@ -64,6 +64,18 @@ export function RecordedLecturesTab({
   const [filter, setFilter] = React.useState<"ALL" | "DRAFT" | "PENDING_REVIEW" | "REJECTED" | "APPROVED" | "PUBLISHED">("ALL");
   const [searchQuery, setSearchQuery] = React.useState("");
 
+  // Filter only valid Ongoing Batches for prominent selection
+  const ongoingBatches = React.useMemo(() => {
+    const nowIso = new Date().toISOString();
+    return batches.filter(
+      (b) =>
+        b.status === "PUBLISHED" &&
+        b.is_visible !== false &&
+        (!b.starts_at || b.starts_at <= nowIso) &&
+        (!b.ends_at || b.ends_at >= nowIso)
+    );
+  }, [batches]);
+
   // Upload Wizard Modal State
   const [isUploadOpen, setIsUploadOpen] = React.useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
@@ -81,6 +93,51 @@ export function RecordedLecturesTab({
   const [uploadVideoPlaybackUrl, setUploadVideoPlaybackUrl] = React.useState("https://stream.topveda.com/lectures/sample.m3u8");
   const [uploadDurationFormatted, setUploadDurationFormatted] = React.useState("45:00");
   const [uploadStatusTarget, setUploadStatusTarget] = React.useState<"DRAFT" | "PENDING_REVIEW">("PENDING_REVIEW");
+
+  const handleBatchSelect = (batchId: string) => {
+    setUploadBatchId(batchId);
+    if (!batchId) return;
+
+    const selectedBatch = batches.find((b) => b.id === batchId);
+    if (!selectedBatch) return;
+
+    // Auto-fill Board
+    if (selectedBatch.board_id) {
+      setUploadBoardId(selectedBatch.board_id);
+    }
+    // Auto-fill Class
+    if (selectedBatch.class_id) {
+      setUploadClassId(selectedBatch.class_id);
+    }
+    // Auto-fill Subject
+    if (selectedBatch.subject_id) {
+      const matchingSub = subjects.find((s) => s.id === selectedBatch.subject_id);
+      if (matchingSub) setUploadSubject(matchingSub.name);
+    } else if (selectedBatch.subject?.name) {
+      setUploadSubject(selectedBatch.subject.name);
+    }
+
+    // Auto-fill Course
+    let targetCourse = courses.find((c) => c.id === selectedBatch.course_id);
+    if (!targetCourse) {
+      targetCourse = courses.find(
+        (c) =>
+          c.board_id === selectedBatch.board_id &&
+          c.class_id === selectedBatch.class_id &&
+          (selectedBatch.subject_id ? c.subject_id === selectedBatch.subject_id : true)
+      );
+    }
+    if (!targetCourse) {
+      targetCourse = courses.find(
+        (c) =>
+          c.board_id === selectedBatch.board_id &&
+          c.class_id === selectedBatch.class_id
+      );
+    }
+    if (targetCourse) {
+      setUploadCourseId(targetCourse.id);
+    }
+  };
 
   // Material File Upload State
   const [videoFile, setVideoFile] = React.useState<File | null>(null);
@@ -560,6 +617,34 @@ export function RecordedLecturesTab({
         maxWidth="lg"
       >
         <form onSubmit={handleUploadSubmit} className="space-y-4 pt-2">
+          {/* 1. Primary Ongoing Batch Selector */}
+          <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200/90 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-brand-charcoal flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-brand-orange" />
+                Select Ongoing Batch (Recommended)
+              </label>
+              <span className="text-[10px] font-bold text-brand-orange bg-white px-2 py-0.5 rounded-full border border-orange-200">
+                Auto-Fills Board, Class & Course
+              </span>
+            </div>
+            <p className="text-[11px] text-brand-text-muted">
+              Select an active cohort to auto-populate the board, class level, subject, and course mapping.
+            </p>
+            <select
+              value={uploadBatchId}
+              onChange={(e) => handleBatchSelect(e.target.value)}
+              className="w-full h-10 px-3 rounded-xl border border-brand-border bg-white text-xs text-brand-charcoal font-semibold focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+            >
+              <option value="">-- No Specific Batch / Standalone Course Lecture --</option>
+              {ongoingBatches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.title} ({b.board_label}) {b.subject?.name ? `• ${b.subject.name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Title */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-brand-charcoal">
@@ -633,8 +718,8 @@ export function RecordedLecturesTab({
             </div>
           </div>
 
-          {/* Course, Batch, Lecture Number */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Course Mapping & Lecture Number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-brand-charcoal">Course Mapping</label>
               <select
@@ -646,22 +731,6 @@ export function RecordedLecturesTab({
                 {courses.map((cr) => (
                   <option key={cr.id} value={cr.id}>
                     {cr.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Batch Association</label>
-              <select
-                value={uploadBatchId}
-                onChange={(e) => setUploadBatchId(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                <option value="">Select Batch</option>
-                {batches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.title}
                   </option>
                 ))}
               </select>

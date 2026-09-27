@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, Target, Atom, BookOpen, GraduationCap, Stethoscope } from "lucide-react";
+import { ChevronLeft, ChevronRight, Target, Atom, BookOpen, GraduationCap, Stethoscope } from "lucide-react";
 import { ONGOING_BATCHES } from "@/config/student-home.config";
 import { OngoingBatch } from "@/types/student-home.types";
 import { cn } from "@/lib/utils";
@@ -17,19 +17,55 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 export interface OngoingBatchesSectionProps {
   batches?: OngoingBatch[];
+  title?: string;
+  subtitle?: string;
 }
 
-export function OngoingBatchesSection({ batches }: OngoingBatchesSectionProps) {
+export function OngoingBatchesSection({
+  batches,
+  title = "Ongoing Batches",
+  subtitle,
+}: OngoingBatchesSectionProps) {
   const activeBatches = batches !== undefined ? batches : ONGOING_BATCHES;
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(false);
+
+  const checkScrollability = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5);
+  }, []);
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    checkScrollability();
+    el.addEventListener("scroll", checkScrollability, { passive: true });
+    window.addEventListener("resize", checkScrollability);
+
+    return () => {
+      el.removeEventListener("scroll", checkScrollability);
+      window.removeEventListener("resize", checkScrollability);
+    };
+  }, [checkScrollability, activeBatches]);
 
   if (activeBatches.length === 0) {
     return null;
   }
 
-  const scrollRight = () => {
+  const handleScrollLeft = () => {
     if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: 300, behavior: "smooth" });
+      scrollRef.current.scrollBy({ left: -260, behavior: "smooth" });
+    }
+  };
+
+  const handleScrollRight = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: 260, behavior: "smooth" });
     }
   };
 
@@ -37,12 +73,17 @@ export function OngoingBatchesSection({ batches }: OngoingBatchesSectionProps) {
     <section className="space-y-3.5">
       {/* Section Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-base sm:text-lg font-black text-brand-charcoal tracking-tight">
-          Ongoing Batches
-        </h2>
+        <div className="space-y-0.5">
+          <h2 className="text-base sm:text-lg font-black text-brand-charcoal tracking-tight">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-xs text-brand-text-muted font-medium">{subtitle}</p>
+          )}
+        </div>
         <Link
           href="/student/batches"
-          className="inline-flex items-center gap-1 text-xs font-bold text-brand-orange hover:text-brand-orange-hover transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-bold text-brand-orange hover:text-brand-orange-hover transition-colors shrink-0"
         >
           See All
           <ChevronRight className="h-3.5 w-3.5" />
@@ -51,9 +92,20 @@ export function OngoingBatchesSection({ batches }: OngoingBatchesSectionProps) {
 
       {/* Horizontal Cards Container */}
       <div className="relative group">
+        {/* Scroll Left Button */}
+        {canScrollLeft && (
+          <button
+            onClick={handleScrollLeft}
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-brand-border/80 shadow-md text-brand-charcoal flex items-center justify-center transition-all duration-200 z-10 hover:bg-brand-bg-warm cursor-pointer -ml-2 sm:-ml-3"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        )}
+
         <div
           ref={scrollRef}
-          className="flex items-stretch gap-3.5 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth"
+          className="flex items-stretch gap-3.5 overflow-x-auto pb-2 pt-1 scrollbar-none scroll-smooth px-0.5"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {activeBatches.map((item: OngoingBatch) => {
@@ -114,14 +166,16 @@ export function OngoingBatchesSection({ batches }: OngoingBatchesSectionProps) {
           })}
         </div>
 
-        {/* Scroll right button */}
-        <button
-          onClick={scrollRight}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-brand-border/80 shadow-md text-brand-charcoal flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 hover:bg-brand-bg-warm"
-          aria-label="Scroll right"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        {/* Scroll Right Button */}
+        {canScrollRight && (
+          <button
+            onClick={handleScrollRight}
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/95 border border-brand-border/80 shadow-md text-brand-charcoal flex items-center justify-center transition-all duration-200 z-10 hover:bg-brand-bg-warm cursor-pointer -mr-2 sm:-mr-3"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </section>
   );

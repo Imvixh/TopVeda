@@ -1,10 +1,13 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { resolveLectureEmbedUrl, resolveLectureVideoId } from "@/lib/utils/youtube";
 import {
   CmsBoard,
   CmsClassLevel,
   CmsSubject,
   CmsCourse,
   CmsBatch,
+  CmsBatchTeacher,
+  CmsSectionSetting,
   CmsChapter,
   CmsLecture,
   CmsLiveClass,
@@ -80,7 +83,29 @@ export class CmsService {
       const [lecturesRes, materialsRes, batchesRes] = await Promise.all([
         supabase
           .from("cms_lectures")
-          .select("id, title, subject, teacher_name, thumbnail_url, video_playback_url, status, submitted_by, reviewed_by, reviewed_at, review_note, created_at, updated_at")
+          .select(`
+            id,
+            title,
+            subject,
+            teacher_name,
+            thumbnail_url,
+            video_stream_id,
+            video_playback_url,
+            duration_seconds,
+            duration_formatted,
+            duration_human,
+            description,
+            batch_id,
+            status,
+            submitted_by,
+            reviewed_by,
+            reviewed_at,
+            review_note,
+            created_at,
+            updated_at,
+            batch:cms_batches(id, title, board_label, subtitle),
+            course:cms_courses(id, title)
+          `)
           .in("status", statusList)
           .order("created_at", { ascending: false }),
         supabase
@@ -99,6 +124,12 @@ export class CmsService {
 
       if (lecturesRes.data) {
         for (const l of lecturesRes.data) {
+          const resolvedBatch = Array.isArray(l.batch) ? l.batch[0] : l.batch;
+          const resolvedEmbedUrl = resolveLectureEmbedUrl({
+            video_stream_id: l.video_stream_id,
+            video_playback_url: l.video_playback_url,
+          });
+
           items.push({
             entity_type: "LECTURE",
             entity_id: l.id,
@@ -106,7 +137,16 @@ export class CmsService {
             subject: l.subject,
             author_name: l.teacher_name || "Educator",
             media_preview_url: l.thumbnail_url,
-            video_stream_url: l.video_playback_url,
+            video_stream_url: resolvedEmbedUrl || l.video_playback_url,
+            video_stream_id: l.video_stream_id,
+            video_playback_url: l.video_playback_url,
+            duration_human: l.duration_human,
+            duration_formatted: l.duration_formatted,
+            duration_seconds: l.duration_seconds,
+            description: l.description,
+            batch_id: l.batch_id,
+            batch_title: resolvedBatch?.title,
+            board_name: resolvedBatch?.board_label,
             status: l.status,
             submitted_by: l.submitted_by,
             submitted_at: l.created_at,
@@ -591,7 +631,20 @@ export class CmsService {
     supabase: SupabaseClient,
     filters?: { isFeatured?: boolean; isOngoing?: boolean; status?: string }
   ): Promise<CmsBatch[]> {
-    let query = supabase.from("cms_batches").select("*");
+    let query = supabase.from("cms_batches").select(`
+      *,
+      board:cms_boards(id, name, code),
+      class_level:cms_class_levels(id, name, code),
+      subject:cms_subjects(id, name, code),
+      batch_teachers:cms_batch_teachers(
+        id,
+        batch_id,
+        teacher_id,
+        display_order,
+        created_at,
+        teacher:profiles(id, full_name, avatar_url, qualification, role)
+      )
+    `);
 
     if (filters?.isFeatured !== undefined) query = query.eq("is_featured", filters.isFeatured);
     if (filters?.isOngoing !== undefined) query = query.eq("is_ongoing", filters.isOngoing);
@@ -601,26 +654,224 @@ export class CmsService {
     return (data as CmsBatch[]) || [];
   }
 
+  /**
+   * Fetch New & Featured Batches (is_featured=true OR starts_at > NOW()) with relations
+   */
+  static async getUpcomingBatches(
+    supabase: SupabaseClient,
+    filters?: { status?: string }
+  ): Promise<CmsBatch[]> {
+    const nowIso = new Date().toISOString();
+    let query = supabase
+      .from("cms_batches")
+      .select(`
+        *,
+        board:cms_boards(id, name, code),
+        class_level:cms_class_levels(id, name, code),
+        subject:cms_subjects(id, name, code),
+        batch_teachers:cms_batch_teachers(
+          id,
+          batch_id,
+          teacher_id,
+          display_order,
+          created_at,
+          teacher:profiles(id, full_name, avatar_url, qualification, role)
+        )
+      `)
+      .or(`is_featured.eq.true,starts_at.gt.${nowIso}`);
+
+    if (filters?.status && filters.status !== "ALL") {
+      query = query.eq("status", filters.status);
+    } else {
+      query = query.neq("status", "ARCHIVED");
+    }
+
+    const { data, error } = await query.order("display_order", { ascending: true });
+    if (error) {
+      console.warn("[CmsService] getUpcomingBatches error:", error.message);
+      return [];
+    }
+    return (data as CmsBatch[]) || [];
+  }
+
+  /**
+   * Fetch Ongoing Batches (is_ongoing=true OR starts_at <= NOW()) with relations & real lecture counts
+   */
+  static async getOngoingBatches(
+    supabase: SupabaseClient,
+    filters?: { status?: string }
+  ): Promise<CmsBatch[]> {
+    const nowIso = new Date().toISOString();
+    let query = supabase
+      .from("cms_batches")
+      .select(`
+        *,
+        board:cms_boards(id, name, code),
+        class_level:cms_class_levels(id, name, code),
+        subject:cms_subjects(id, name, code),
+        batch_teachers:cms_batch_teachers(
+          id,
+          batch_id,
+          teacher_id,
+          display_order,
+          created_at,
+          teacher:profiles(id, full_name, avatar_url, qualification, role)
+        )
+      `)
+      .or(`is_ongoing.eq.true,and(starts_at.not.is.null,starts_at.lte.${nowIso})`);
+
+    if (filters?.status && filters.status !== "ALL") {
+      query = query.eq("status", filters.status);
+    } else {
+      query = query.neq("status", "ARCHIVED");
+    }
+
+    const { data, error } = await query.order("display_order", { ascending: true });
+    if (error) {
+      console.warn("[CmsService] getOngoingBatches error:", error.message);
+      return [];
+    }
+
+    const batches = (data as CmsBatch[]) || [];
+    if (batches.length > 0) {
+      const batchIds = batches.map((b) => b.id);
+      const { data: lecturesData } = await supabase
+        .from("cms_lectures")
+        .select("id, batch_id")
+        .in("batch_id", batchIds)
+        .eq("status", "PUBLISHED")
+        .eq("is_visible", true);
+
+      const countMap = new Map<string, number>();
+      (lecturesData || []).forEach((l) => {
+        if (l.batch_id) {
+          countMap.set(l.batch_id, (countMap.get(l.batch_id) || 0) + 1);
+        }
+      });
+
+      batches.forEach((b) => {
+        b.lecture_count = countMap.get(b.id) || 0;
+      });
+    }
+
+    return batches;
+  }
+
+  /**
+   * Upsert a Batch record and synchronize relational cms_batch_teachers mappings.
+   */
   static async upsertBatch(
     supabase: SupabaseClient,
-    batch: Partial<CmsBatch>
+    batch: Partial<CmsBatch>,
+    teacherIds?: string[]
   ): Promise<{ data: CmsBatch | null; error: Error | null }> {
     try {
+      const { board, class_level, subject, batch_teachers, lecture_count, ...cleanPayload } = batch;
+
       const payload = {
-        ...batch,
+        ...cleanPayload,
+        subject_id: cleanPayload.subject_id ? cleanPayload.subject_id : null,
+        starts_at: cleanPayload.starts_at ? cleanPayload.starts_at : null,
+        ends_at: cleanPayload.ends_at ? cleanPayload.ends_at : null,
+        description: cleanPayload.description ? cleanPayload.description : null,
         updated_at: new Date().toISOString(),
       };
-      let res;
+
+      let savedBatch: CmsBatch;
       if (batch.id) {
-        res = await supabase.from("cms_batches").update(payload).eq("id", batch.id).select().single();
+        const res = await supabase.from("cms_batches").update(payload).eq("id", batch.id).select().single();
+        if (res.error) throw new Error(res.error.message);
+        savedBatch = res.data as CmsBatch;
       } else {
-        res = await supabase.from("cms_batches").insert(payload).select().single();
+        const res = await supabase.from("cms_batches").insert(payload).select().single();
+        if (res.error) throw new Error(res.error.message);
+        savedBatch = res.data as CmsBatch;
       }
-      if (res.error) throw new Error(res.error.message);
-      return { data: res.data as CmsBatch, error: null };
+
+      // If teacherIds is provided, synchronize cms_batch_teachers
+      if (teacherIds && savedBatch.id) {
+        await supabase.from("cms_batch_teachers").delete().eq("batch_id", savedBatch.id);
+
+        const validTeacherIds = teacherIds.filter((tid) => Boolean(tid && typeof tid === "string" && tid.trim().length > 0));
+        if (validTeacherIds.length > 0) {
+          const teacherRows = validTeacherIds.map((tid, idx) => ({
+            batch_id: savedBatch.id,
+            teacher_id: tid,
+            display_order: idx + 1,
+          }));
+          const { error: tErr } = await supabase.from("cms_batch_teachers").insert(teacherRows);
+          if (tErr) {
+            console.warn("[CmsService] Failed to bind batch teachers:", tErr.message);
+          }
+        }
+      }
+
+      return { data: savedBatch, error: null };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       return { data: null, error };
+    }
+  }
+
+  /**
+   * Safe Batch Deletion with join table cascade
+   */
+  static async deleteBatch(
+    supabase: SupabaseClient,
+    batchId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await supabase.from("cms_batch_teachers").delete().eq("batch_id", batchId);
+      const { error } = await supabase.from("cms_batches").delete().eq("id", batchId);
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Section Settings (New Features & Batches, Ongoing Batches)
+   */
+  static async getSectionSettings(
+    supabase: SupabaseClient
+  ): Promise<CmsSectionSetting[]> {
+    try {
+      const { data, error } = await supabase
+        .from("cms_section_settings")
+        .select("*")
+        .in("section_key", ["upcoming_batches", "ongoing_batches"]);
+
+      if (error) {
+        console.warn("[CmsService] getSectionSettings error:", error.message);
+        return [];
+      }
+      return (data as CmsSectionSetting[]) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  static async updateSectionSetting(
+    supabase: SupabaseClient,
+    sectionKey: string,
+    updates: Partial<CmsSectionSetting>
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase
+        .from("cms_section_settings")
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("section_key", sectionKey);
+
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error: error.message };
     }
   }
 
@@ -628,7 +879,10 @@ export class CmsService {
     supabase: SupabaseClient,
     filters?: { batchId?: string; chapterId?: string; status?: string }
   ): Promise<CmsLecture[]> {
-    let query = supabase.from("cms_lectures").select("*");
+    let query = supabase.from("cms_lectures").select(`
+      *,
+      batch:cms_batches(id, title, board_label, subtitle, badge_text, subject:cms_subjects(name))
+    `);
 
     if (filters?.batchId) query = query.eq("batch_id", filters.batchId);
     if (filters?.chapterId) query = query.eq("chapter_id", filters.chapterId);
@@ -643,8 +897,11 @@ export class CmsService {
     lecture: Partial<CmsLecture>
   ): Promise<{ data: CmsLecture | null; error: Error | null }> {
     try {
+      // Remove joined relation objects from payload before writing to table
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { batch, ...cleanPayload } = lecture;
       const payload = {
-        ...lecture,
+        ...cleanPayload,
         updated_at: new Date().toISOString(),
       };
       let res;
@@ -658,6 +915,21 @@ export class CmsService {
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       return { data: null, error };
+    }
+  }
+
+  static async deleteLecture(
+    supabase: SupabaseClient,
+    lectureId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await supabase.from("student_lecture_progress").delete().eq("lecture_id", lectureId);
+      const { error } = await supabase.from("cms_lectures").delete().eq("id", lectureId);
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { success: false, error: error.message };
     }
   }
 
@@ -1582,7 +1854,7 @@ export class CmsService {
         supabase
           .from("profiles")
           .select("id, full_name, email, phone, avatar_url, qualification, location, address, bio, role, created_at")
-          .eq("role", "ADMIN")
+          .in("role", ["ADMIN", "SUPER_ADMIN", "TEACHER", "EDUCATOR"])
           .order("full_name", { ascending: true }),
         supabase
           .from("cms_live_classes")

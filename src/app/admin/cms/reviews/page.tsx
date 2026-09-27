@@ -33,6 +33,7 @@ import {
   Calendar,
   Inbox,
   ShieldCheck,
+  Video,
 } from "lucide-react";
 
 export default function ReviewCenterPage() {
@@ -635,10 +636,18 @@ export default function ReviewCenterPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => setInspectTarget(item)}
-                              title="Inspect Submission Details"
-                              className="h-8 px-2 text-xs font-semibold"
+                              title={item.entity_type === "LECTURE" ? "Watch Video & Review Details" : "Inspect Submission Details"}
+                              className="h-8 px-2.5 text-xs font-bold"
                             >
-                              <FileCheck2 className="h-3.5 w-3.5 mr-1 text-brand-orange" /> Inspect
+                              {item.entity_type === "LECTURE" ? (
+                                <>
+                                  <Video className="h-3.5 w-3.5 mr-1 text-brand-orange" /> Review & Watch
+                                </>
+                              ) : (
+                                <>
+                                  <FileCheck2 className="h-3.5 w-3.5 mr-1 text-brand-orange" /> Inspect
+                                </>
+                              )}
                             </Button>
 
                             <Button

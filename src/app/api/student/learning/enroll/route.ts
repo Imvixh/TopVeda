@@ -30,21 +30,83 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { courseId, batchId } = body;
 
-    if (!courseId) {
-      return NextResponse.json({ error: "Missing required parameter: courseId" }, { status: 400 });
+    if (!courseId && !batchId) {
+      return NextResponse.json({ error: "Missing required parameter: courseId or batchId" }, { status: 400 });
     }
 
-    const result = await StudentLearningService.enrollInCourse(supabase, {
-      userId: user.id,
-      courseId,
-      batchId: batchId || null,
-    });
+    let targetCourseId = courseId;
+    if (batchId) {
+      const { data: batchData, error: batchErr } = await supabase
+        .from("cms_batches")
+        .select("id, course_id, starts_at, status, is_visible")
+        .eq("id", batchId)
+        .maybeSingle();
 
-    if (!result.success) {
-      return NextResponse.json({ error: result.error || "Enrollment failed" }, { status: 400 });
+      if (batchErr || !batchData) {
+        return NextResponse.json({ error: "Batch not found." }, { status: 404 });
+      }
+
+      if (batchData.status !== "PUBLISHED" || batchData.is_visible === false) {
+        return NextResponse.json({ error: "Batch is not active or available for enrollment." }, { status: 400 });
+      }
+
+      // STRICT VALIDATION: Reject enrollment into upcoming batches (starts_at > NOW())
+      const nowIso = new Date().toISOString();
+      if (batchData.starts_at && batchData.starts_at > nowIso) {
+        return NextResponse.json(
+          { error: "Enrollment is not open for upcoming batches. Please check back when the batch starts." },
+          { status: 400 }
+        );
+      }
+
+      if (batchData.course_id && !targetCourseId) {
+        targetCourseId = batchData.course_id;
+      }
     }
 
-    return NextResponse.json({ success: true, enrollment: result.enrollment });
+    if (targetCourseId) {
+      const result = await StudentLearningService.enrollInCourse(supabase, {
+        userId: user.id,
+        courseId: targetCourseId,
+        batchId: batchId || null,
+      });
+
+      if (!result.success) {
+        return NextResponse.json({ error: result.error || "Enrollment failed" }, { status: 400 });
+      }
+
+      return NextResponse.json({ success: true, enrollment: result.enrollment });
+    }
+
+    // Direct standalone batch enrollment
+    const { data: existing } = await supabase
+      .from("student_enrollments")
+      .select("*")
+      .eq("student_id", user.id)
+      .eq("batch_id", batchId)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({ success: true, enrollment: existing });
+    }
+
+    const { data: newEnrollment, error: insertError } = await supabase
+      .from("student_enrollments")
+      .insert({
+        student_id: user.id,
+        batch_id: batchId,
+        status: "ACTIVE",
+        enrolled_at: new Date().toISOString(),
+        last_accessed_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message || "Failed to enroll in batch" }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, enrollment: newEnrollment });
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));
     return NextResponse.json({ error: error.message }, { status: 500 });

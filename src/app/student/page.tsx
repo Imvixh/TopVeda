@@ -102,11 +102,19 @@ export default function StudentHomePage() {
           {/* Hero Banner Carousel */}
           <StudentHeroBanner slides={homeData ? homeData.heroSlides : undefined} />
 
-          {/* Section 1: New & Featured Batches */}
-          <FeaturedBatchesSection batches={homeData ? homeData.featuredBatches : undefined} />
+          {/* Section 1: New Features & Batches (Upcoming) */}
+          <FeaturedBatchesSection
+            batches={homeData ? homeData.featuredBatches : undefined}
+            title={homeData?.sectionSettings?.upcomingBatches?.title}
+            subtitle={homeData?.sectionSettings?.upcomingBatches?.subtitle}
+          />
 
           {/* Section 2: Ongoing Batches */}
-          <OngoingBatchesSection batches={homeData ? homeData.ongoingBatches : undefined} />
+          <OngoingBatchesSection
+            batches={homeData ? homeData.ongoingBatches : undefined}
+            title={homeData?.sectionSettings?.ongoingBatches?.title}
+            subtitle={homeData?.sectionSettings?.ongoingBatches?.subtitle}
+          />
 
           {/* Section 3: Live Classes (Today) */}
           <LiveClassesSection liveClasses={homeData ? homeData.liveClassesToday : undefined} />

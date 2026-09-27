@@ -41,9 +41,13 @@ export class YouTubeUploadService {
   }
 
   /**
-   * Formats seconds into human-readable duration (e.g. 2700s -> "45:00", "45 min").
+   * Formats seconds into human-readable duration (e.g. 15s -> "00:15", "15 sec"; 2700s -> "45:00", "45 min"; 3600s -> "1:00:00", "1 hr").
    */
   public static formatDuration(seconds: number): { formatted: string; human: string } {
+    if (!seconds || seconds <= 0) {
+      return { formatted: "00:00", human: "0 sec" };
+    }
+
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     const hours = Math.floor(mins / 60);
@@ -51,7 +55,13 @@ export class YouTubeUploadService {
 
     if (hours > 0) {
       const formatted = `${hours}:${remainingMins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-      const human = `${hours} hr ${remainingMins} min`;
+      const human = remainingMins > 0 ? `${hours} hr ${remainingMins} min` : `${hours} hr`;
+      return { formatted, human };
+    }
+
+    if (mins === 0) {
+      const formatted = `00:${secs.toString().padStart(2, "0")}`;
+      const human = `${secs} sec`;
       return { formatted, human };
     }
 
