@@ -153,13 +153,14 @@ async function runTestSuite() {
     assert(!studentAttempt, `Student query for PENDING_REVIEW lecture "${testPendingLec.title}" correctly returns NULL`);
   }
 
-  // 4. Test Student Access to PUBLISHED Lectures
+  // 4. Test Student Access to PUBLISHED Free/Preview Lectures
   console.log("\n--- 4. Testing Student Playback for PUBLISHED Content ---");
   const { data: publishedLectures } = await adminClient
     .from("cms_lectures")
-    .select("id, title, status, is_visible, batch_id")
+    .select("id, title, status, is_visible, batch_id, is_free_preview, access_tier")
     .eq("status", "PUBLISHED")
     .eq("is_visible", true)
+    .or("is_free_preview.eq.true,access_tier.eq.FREE")
     .limit(1);
 
   if (publishedLectures && publishedLectures.length > 0) {
