@@ -52,8 +52,9 @@ export default function LectureVideoPlayerPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const supabase = React.useMemo(() => createClient(), []);
 
-  const [lecture, setLecture] = React.useState<LectureDetail | null>(null);
+  const [lecture, setLecture] = React.useState<(LectureDetail & { embedUrl?: string | null }) | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [accessError, setAccessError] = React.useState<string | null>(null);
   const [isCompleted, setIsCompleted] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [watchProgressPercent, setWatchProgressPercent] = React.useState(0);
@@ -63,35 +64,33 @@ export default function LectureVideoPlayerPage() {
 
     try {
       setIsLoading(true);
+      setAccessError(null);
 
-      const { data, error } = await supabase
-        .from("cms_lectures")
-        .select(`
-          id,
-          title,
-          subject,
-          teacher_name,
-          description,
-          duration_seconds,
-          duration_human,
-          duration_formatted,
-          video_playback_url,
-          video_stream_id,
-          category_tag,
-          course_id,
-          batch_id,
-          chapter_id,
-          batch:cms_batches(id, title, board_label, subtitle)
-        `)
-        .eq("id", lectureId)
-        .eq("status", "PUBLISHED")
-        .eq("is_visible", true)
-        .single();
+      const res = await fetch(`/api/student/lectures/${lectureId}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
 
-      if (error || !data) {
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
         setLecture(null);
+        setAccessError(
+          errorData.error ||
+            (res.status === 403
+              ? "Active batch or course enrollment required to access this lecture."
+              : "This lecture is currently unavailable.")
+        );
         return;
       }
+
+      const data = await res.json();
+      if (!data.authorized || !data.lecture) {
+        setLecture(null);
+        setAccessError(data.error || "Access denied.");
+        return;
+      }
+
+      const lec = data.lecture;
 
       // Check existing progress if student is logged in
       let completed = false;
@@ -107,42 +106,40 @@ export default function LectureVideoPlayerPage() {
         completed = !!progress?.is_completed;
         if (completed) {
           existingProgress = 100;
-        } else if (progress?.last_position_seconds && data.duration_seconds) {
+        } else if (progress?.last_position_seconds && lec.duration_seconds) {
           existingProgress = Math.min(
             100,
-            Math.round((progress.last_position_seconds / data.duration_seconds) * 100)
+            Math.round((progress.last_position_seconds / lec.duration_seconds) * 100)
           );
         }
 
         // Send an initial watch heartbeat
-        if (data.course_id) {
+        if (lec.course_id) {
           await fetch("/api/student/learning/progress", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               lectureId,
-              courseId: data.course_id,
+              courseId: lec.course_id,
               lastPositionSeconds: progress?.last_position_seconds || 30,
               watchDurationSeconds: 30,
-              totalDurationSeconds: data.duration_seconds || 2700,
+              totalDurationSeconds: lec.duration_seconds || 2700,
             }),
           }).catch((e) => console.warn("Progress update warning:", e));
         }
       }
 
-      const resolvedBatch = Array.isArray(data.batch)
-        ? data.batch[0]
-        : (data.batch as { id: string; title: string; board_label: string; subtitle?: string } | null);
-
       setLecture({
-        ...data,
-        batch: resolvedBatch || null,
+        ...lec,
+        embedUrl: data.embedUrl || null,
         is_completed: completed,
       });
       setIsCompleted(completed);
       setWatchProgressPercent(existingProgress);
     } catch (err) {
       console.error("Failed to fetch lecture details:", err);
+      setLecture(null);
+      setAccessError("Failed to load lecture. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -156,6 +153,7 @@ export default function LectureVideoPlayerPage() {
 
   // Helper to extract YouTube embed URL
   const getEmbedUrl = React.useCallback((): string | null => {
+    if (lecture?.embedUrl) return lecture.embedUrl;
     return resolveLectureEmbedUrl(lecture);
   }, [lecture]);
 
@@ -224,9 +222,11 @@ export default function LectureVideoPlayerPage() {
             </div>
           ) : !lecture ? (
             <div className="p-12 text-center bg-white rounded-3xl border border-brand-border space-y-3">
-              <h2 className="text-lg font-bold text-brand-charcoal">Lecture Not Found</h2>
+              <h2 className="text-lg font-bold text-brand-charcoal">
+                {accessError ? "Access Restricted" : "Lecture Not Found"}
+              </h2>
               <p className="text-xs text-brand-text-muted">
-                This lecture is currently unavailable or has not been published yet.
+                {accessError || "This lecture is currently unavailable or has not been published yet."}
               </p>
               <Link
                 href="/student/learning"
