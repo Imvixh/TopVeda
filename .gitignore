@@ -1,5 +1,3 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
@@ -10,43 +8,51 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# testing & coverage
 /coverage
 
-# next.js
+# next.js build output
 /.next/
 /out/
 
-# production
+# production & build output
 /build
+/dist/
+/.vinext/
+/.wrangler/
 
 # misc
 .DS_Store
 *.pem
 .system-state.json
 
-# debug
+# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*.local
+# environment files (strictly ignore all real/local env files)
 .env
+.env*.local
+.env.local
+.env.development
 .env.production
 .env.staging
+.env.*
 !.env.example
-!.env.production
 
 # vercel
 .vercel
 
-# typescript
+# typescript build cache
 *.tsbuildinfo
 next-env.d.ts
 
-# cloudflare & vinext
-/dist/
-/.vinext/
-/.wrangler/
+# generated local audit reports, PDFs, and verification artifacts
+*.pdf
+TOPVEDA_FINAL_PRINCIPAL_SECURITY_AUDIT.*
+SECURITY-AUDIT-REPORT.*
+SECURITY_PRODUCTION_READINESS_REPORT.*
+FINAL-PROJECT-DEPLOYMENT-RESULT.*
+
