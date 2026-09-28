@@ -12,17 +12,16 @@ interface RateLimitRecord {
 
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
-// Cleanup stale rate limit records periodically (every 10 minutes)
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now();
+// On-demand cleanup of stale rate limit records (Cloudflare Worker global scope compliant)
+function cleanupStaleRateLimits(now: number) {
+  if (rateLimitStore.size > 200) {
     for (const [key, record] of rateLimitStore.entries()) {
       record.timestamps = record.timestamps.filter((ts) => now - ts < 600000);
       if (record.timestamps.length === 0) {
         rateLimitStore.delete(key);
       }
     }
-  }, 600000);
+  }
 }
 
 /**
@@ -94,6 +93,7 @@ export function checkRateLimit(
   windowMs: number = 60000
 ): { allowed: boolean; remaining: number; resetTime: number } {
   const now = Date.now();
+  cleanupStaleRateLimits(now);
   const windowStart = now - windowMs;
 
   let record = rateLimitStore.get(key);
@@ -175,16 +175,15 @@ export interface TurnstileVerificationResult {
 // In-memory cache of verified Turnstile tokens for single-use replay protection
 const usedTurnstileTokens = new Map<string, number>();
 
-// Periodically clean up expired token cache entries (every 5 minutes)
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now();
+// On-demand cleanup of expired token cache entries (Cloudflare Worker global scope compliant)
+function cleanupStaleTurnstileTokens(now: number) {
+  if (usedTurnstileTokens.size > 200) {
     for (const [token, timestamp] of usedTurnstileTokens.entries()) {
       if (now - timestamp > 15 * 60 * 1000) {
         usedTurnstileTokens.delete(token);
       }
     }
-  }, 300000);
+  }
 }
 
 /**
@@ -201,6 +200,8 @@ export async function validateTurnstileToken(
   token: string | null | undefined,
   clientIp?: string | null
 ): Promise<TurnstileVerificationResult> {
+  const now = Date.now();
+  cleanupStaleTurnstileTokens(now);
   // 1. Validate token existence and basic shape
   if (!token || typeof token !== "string" || !token.trim()) {
     return {
