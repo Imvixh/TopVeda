@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { Container } from "@/components/ui/container";
-import { Wordmark } from "@/components/brand/wordmark";
-import { BrandGlyph } from "@/components/brand/glyph";
+import { TopVedaLogo } from "@/components/brand/logo";
 import { landingConfig } from "@/config/landing.config";
 import { 
   Mail, 
@@ -63,9 +62,8 @@ export function Footer({ onOpenTerms, onOpenPrivacy }: FooterProps) {
           
           {/* Brand Info & Mission */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-2.5">
-              <BrandGlyph size={28} />
-              <Wordmark size="md" inverseVeda />
+            <div className="flex items-center">
+              <TopVedaLogo size={42} variant="dark" />
             </div>
             <p className="text-sm text-gray-400 max-w-sm leading-relaxed">
               {footer.description}
@@ -78,36 +76,40 @@ export function Footer({ onOpenTerms, onOpenPrivacy }: FooterProps) {
               </p>
               <div className="flex items-center gap-3 text-gray-400">
                 <a
-                  href={footer.social.x}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={footer.social.x || "#"}
+                  {...(footer.social.x
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : { "aria-disabled": "true", onClick: (e: React.MouseEvent) => e.preventDefault() })}
                   className="h-9 w-9 rounded-lg bg-gray-800/80 hover:bg-brand-orange hover:text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
                   aria-label="TopVeda on X"
                 >
                   <XIcon className="h-4 w-4" />
                 </a>
                 <a
-                  href={footer.social.youtube}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={footer.social.youtube || "#"}
+                  {...(footer.social.youtube
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : { "aria-disabled": "true", onClick: (e: React.MouseEvent) => e.preventDefault() })}
                   className="h-9 w-9 rounded-lg bg-gray-800/80 hover:bg-brand-orange hover:text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
                   aria-label="TopVeda on YouTube"
                 >
                   <YoutubeIcon className="h-4 w-4" />
                 </a>
                 <a
-                  href={footer.social.instagram}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={footer.social.instagram || "#"}
+                  {...(footer.social.instagram
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : { "aria-disabled": "true", onClick: (e: React.MouseEvent) => e.preventDefault() })}
                   className="h-9 w-9 rounded-lg bg-gray-800/80 hover:bg-brand-orange hover:text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
                   aria-label="TopVeda on Instagram"
                 >
                   <InstagramIcon className="h-4 w-4" />
                 </a>
                 <a
-                  href={footer.social.facebook}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={footer.social.facebook || "#"}
+                  {...(footer.social.facebook
+                    ? { target: "_blank", rel: "noopener noreferrer" }
+                    : { "aria-disabled": "true", onClick: (e: React.MouseEvent) => e.preventDefault() })}
                   className="h-9 w-9 rounded-lg bg-gray-800/80 hover:bg-brand-orange hover:text-white flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
                   aria-label="TopVeda on Facebook"
                 >
@@ -155,7 +157,7 @@ export function Footer({ onOpenTerms, onOpenPrivacy }: FooterProps) {
             <div className="flex flex-wrap gap-4 pt-1">
               <span className="flex items-center gap-1.5 text-gray-300">
                 <Mail className="h-3.5 w-3.5 text-brand-orange" />
-                support@topveda.com
+                support@topveda.in
               </span>
               <span className="flex items-center gap-1.5 text-gray-300">
                 <Phone className="h-3.5 w-3.5 text-brand-orange" />

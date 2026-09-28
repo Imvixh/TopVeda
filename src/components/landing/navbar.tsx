@@ -4,8 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
-import { Wordmark } from "@/components/brand/wordmark";
-import { BrandGlyph } from "@/components/brand/glyph";
+import { TopVedaLogo } from "@/components/brand/logo";
 import { landingConfig } from "@/config/landing.config";
 import { useAuth } from "@/hooks/use-auth";
 import { Menu, X, LogIn, UserPlus, LayoutDashboard, LogOut, Shield } from "lucide-react";
@@ -44,14 +43,13 @@ export function Navbar({ onOpenLogin, onOpenRegister }: NavbarProps) {
     >
       <Container size="xl">
         <div className="flex h-18 items-center justify-between gap-4">
-          {/* Brand Logo & Wordmark */}
+          {/* Canonical Brand Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange rounded-lg p-1 transition-transform active:scale-95"
+            className="flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange rounded-lg p-1 transition-transform active:scale-95"
             aria-label="TopVeda Homepage"
           >
-            <BrandGlyph size={28} />
-            <Wordmark size="md" />
+            <TopVedaLogo size={40} priority />
           </Link>
 
           {/* Desktop Navigation */}

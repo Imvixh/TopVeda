@@ -5,11 +5,12 @@
 export const siteConfig = {
   name: "TopVeda",
   description:
-    "A modern, extensible e-learning platform delivering live interactive classes, tests, and comprehensive learning resources.",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    "TopVeda is an online learning platform helping students learn smarter, prepare better, and achieve more through interactive classes, courses, tests, study materials, doubt support, and structured learning resources.",
+  url: process.env.NEXT_PUBLIC_APP_URL || "https://topveda.in",
   ogImage: "/og-image.png",
   brand: {
     name: "TOPVEDA",
+    tagline: "Learn Smart. Prepare Better. Achieve More.",
     wordmarkPrefix: "TOP",
     wordmarkSuffix: "VEDA",
     colors: {
@@ -24,10 +25,10 @@ export const siteConfig = {
     },
   },
   links: {
-    x: "https://x.com/topveda",
-    youtube: "https://youtube.com/@topveda",
-    instagram: "https://instagram.com/topveda",
-    facebook: "https://facebook.com/topveda",
+    x: "",
+    youtube: "",
+    instagram: "",
+    facebook: "",
   },
 } as const;
 

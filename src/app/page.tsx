@@ -182,7 +182,7 @@ export default function LandingPage() {
             </p>
           </div>
           <p>
-            For educator inquiries or early curriculum partnership discussions, feel free to write to <strong className="text-brand-text-primary">support@topveda.com</strong>.
+            For educator inquiries or early curriculum partnership discussions, feel free to write to <strong className="text-brand-text-primary">support@topveda.in</strong>.
           </p>
           <div className="flex justify-end pt-3 border-t border-brand-border-subtle">
             <Button variant="primary" size="sm" onClick={() => setTeachModalOpen(false)}>

@@ -5,8 +5,7 @@ import Link from "next/link";
 import { Container } from "@/components/ui/container";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wordmark } from "@/components/brand/wordmark";
-import { BrandGlyph } from "@/components/brand/glyph";
+import { TopVedaLogo } from "@/components/brand/logo";
 import { Mail, CheckCircle2, ArrowRight } from "lucide-react";
 
 export default function VerifyEmailPage() {
@@ -14,10 +13,9 @@ export default function VerifyEmailPage() {
     <div className="min-h-screen bg-brand-bg-warm flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <Container size="sm">
         {/* Header Branding */}
-        <div className="text-center space-y-3 mb-8">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <BrandGlyph size={32} />
-            <Wordmark size="lg" />
+        <div className="text-center space-y-3 mb-8 flex flex-col items-center">
+          <Link href="/" className="inline-flex items-center">
+            <TopVedaLogo size={44} priority />
           </Link>
           <h1 className="text-2xl font-bold text-brand-text-primary tracking-tight">
             Verify Your Email

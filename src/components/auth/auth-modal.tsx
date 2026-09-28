@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Wordmark } from "@/components/brand/wordmark";
+import { TopVedaLogo } from "@/components/brand/logo";
 import { AdminApplicationFlow } from "@/components/auth/admin-application-flow";
 import { useAuth } from "@/hooks/use-auth";
 import { AuthMode, LoginType, RegistrationType } from "@/types/auth.types";
@@ -175,8 +175,8 @@ export function AuthModal({
     >
       <div className="space-y-5">
         {/* Brand Header */}
-        <div className="text-center space-y-1.5">
-          <Wordmark size="md" className="justify-center" />
+        <div className="text-center space-y-2 flex flex-col items-center">
+          <TopVedaLogo size={36} />
           <h2 className="text-xl font-bold text-brand-text-primary">
             {mode === "login" && (loginType === "student" ? "Student Sign In" : "Admin Sign In")}
             {mode === "register" && (regType === "student" ? "Student Registration" : "Admin Registration")}

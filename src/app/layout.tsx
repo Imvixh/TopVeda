@@ -18,43 +18,55 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://topveda.in"),
   title: {
-    default: "TopVeda — Learn Smarter. Prepare Better. Achieve More.",
+    default: "TopVeda | Learn Smart. Prepare Better. Achieve More.",
     template: "%s | TopVeda",
   },
   description:
-    "TopVeda is a modern, student-first education platform delivering daily live interactive classes, structured board exam test series, curated chapter notes, and 24×7 doubt resolution.",
-  keywords: [
-    "TopVeda",
-    "e-learning platform",
-    "live classes",
-    "CBSE",
-    "Bihar Board",
-    "BSEB",
-    "online coaching",
-    "sample papers",
-    "doubt solving",
-    "board exams",
-  ],
+    "TopVeda is an online learning platform helping students learn smarter, prepare better, and achieve more through interactive classes, courses, tests, study materials, doubt support, and structured learning resources.",
+  applicationName: "TopVeda",
   authors: [{ name: "TopVeda" }],
   creator: "TopVeda",
-  icons: {
-    icon: "/favicon.ico",
+  publisher: "TopVeda",
+  alternates: {
+    canonical: "https://topveda.in",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     locale: "en_IN",
-    url: "https://topveda.com",
-    title: "TopVeda — Learn Smarter. Prepare Better. Achieve More.",
-    description:
-      "A modern education platform delivering live interactive classes, comprehensive test series, curated notes, and 24×7 doubt solving.",
+    url: "https://topveda.in",
     siteName: "TopVeda",
+    title: "TopVeda | Learn Smart. Prepare Better. Achieve More.",
+    description:
+      "TopVeda is an online learning platform helping students learn smarter, prepare better, and achieve more through interactive classes, courses, tests, study materials, doubt support, and structured learning resources.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TopVeda",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "TopVeda — Learn Smarter. Prepare Better. Achieve More.",
+    title: "TopVeda | Learn Smart. Prepare Better. Achieve More.",
     description:
-      "A modern education platform delivering live interactive classes, comprehensive test series, curated notes, and 24×7 doubt solving.",
+      "TopVeda is an online learning platform helping students learn smarter, prepare better, and achieve more through interactive classes, courses, tests, study materials, doubt support, and structured learning resources.",
+    images: ["/og-image.png"],
   },
 };
 
