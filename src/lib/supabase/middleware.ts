@@ -3,6 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SystemStateService } from "@/lib/services/system-state.service";
 import { renderMaintenanceHtml } from "@/lib/utils/maintenance-page";
 
+const PUBLIC_SUPABASE_URL = "https://uxkvwuavidufnqliauuj.supabase.co";
+const PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_";
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -10,11 +13,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || PUBLIC_SUPABASE_URL;
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    "";
+    PUBLIC_SUPABASE_ANON_KEY;
 
   // If Supabase credentials are not configured, pass through
   if (!supabaseUrl || !supabaseAnonKey) {
