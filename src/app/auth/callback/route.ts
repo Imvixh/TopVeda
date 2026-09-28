@@ -4,8 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // if "next" is in search params, use it as the redirect URL
-  const next = searchParams.get("next") ?? "/student";
+  const rawNext = searchParams.get("next") ?? "/student";
+  // Strict open redirect defense: must begin with a single slash, no backslashes, no scheme, no protocol-relative "//"
+  const isSafeRelativePath =
+    typeof rawNext === "string" &&
+    rawNext.startsWith("/") &&
+    !rawNext.startsWith("//") &&
+    !rawNext.includes("\\") &&
+    !rawNext.includes("://");
+  const next = isSafeRelativePath ? rawNext : "/student";
 
   if (code) {
     const supabase = await createClient();

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TopVedaLogo } from "@/components/brand/logo";
 import { AdminApplicationFlow } from "@/components/auth/admin-application-flow";
+import { TurnstileWidget, TurnstileWidgetRef } from "@/components/auth/turnstile-widget";
 import { useAuth } from "@/hooks/use-auth";
 import { AuthMode, LoginType, RegistrationType } from "@/types/auth.types";
 import { 
@@ -53,6 +54,10 @@ export function AuthModal({
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [requireEmailVerification, setRequireEmailVerification] = React.useState(false);
 
+  // Turnstile security verification token
+  const [turnstileToken, setTurnstileToken] = React.useState<string | null>(null);
+  const turnstileRef = React.useRef<TurnstileWidgetRef>(null);
+
   // Password visibility states
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
@@ -80,6 +85,7 @@ export function AuthModal({
     setErrorMessage(null);
     setSuccessMessage(null);
     setRequireEmailVerification(false);
+    setTurnstileToken(null);
   }
 
   const resetFormState = () => {
@@ -87,6 +93,8 @@ export function AuthModal({
     setSuccessMessage(null);
     setRequireEmailVerification(false);
     setIsSubmitting(false);
+    setTurnstileToken(null);
+    turnstileRef.current?.reset();
   };
 
   const switchMode = (newMode: AuthMode) => {
@@ -108,9 +116,11 @@ export function AuthModal({
 
     try {
       if (mode === "login") {
-        const res = await login(loginIdentifier, loginPassword, loginType);
+        const res = await login(loginIdentifier, loginPassword, loginType, turnstileToken || undefined);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to sign in. Please verify your credentials.");
+          turnstileRef.current?.reset();
+          setTurnstileToken(null);
         } else {
           setSuccessMessage(
             loginType === "admin"
@@ -134,10 +144,13 @@ export function AuthModal({
           password: registerPassword,
           confirmPassword: registerConfirmPassword,
           termsAgreed,
+          turnstileToken: turnstileToken || undefined,
         });
 
         if (!res.success) {
           setErrorMessage(res.error || "Registration failed. Please check your information.");
+          turnstileRef.current?.reset();
+          setTurnstileToken(null);
         } else {
           if (res.requireVerification) {
             setRequireEmailVerification(true);
@@ -151,9 +164,11 @@ export function AuthModal({
           }
         }
       } else if (mode === "forgot-password") {
-        const res = await requestPasswordReset(forgotEmail);
+        const res = await requestPasswordReset(forgotEmail, turnstileToken || undefined);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to send reset link. Please try again.");
+          turnstileRef.current?.reset();
+          setTurnstileToken(null);
         } else {
           setSuccessMessage(
             "If an account exists for this email, we've sent a password reset link. Please check your email."
@@ -162,6 +177,8 @@ export function AuthModal({
       }
     } catch {
       setErrorMessage("A network or server error occurred. Please try again.");
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -539,6 +556,14 @@ export function AuthModal({
                       disabled={isSubmitting}
                     />
 
+                    <TurnstileWidget
+                      ref={turnstileRef}
+                      onVerify={(token) => setTurnstileToken(token)}
+                      onExpire={() => setTurnstileToken(null)}
+                      onError={() => setTurnstileToken(null)}
+                      action="forgot-password"
+                    />
+
                     <Button
                       type="submit"
                       variant="primary"
@@ -563,28 +588,38 @@ export function AuthModal({
               </>
             )}
 
-            {/* Submit Action Button for Login & Student Register */}
+            {/* Turnstile & Submit Action Button for Login & Student Register */}
             {mode !== "forgot-password" && (
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                className="w-full mt-2 shadow-subtle"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    {mode === "login" && (loginType === "admin" ? "Sign In as Administrator" : "Sign In as Student")}
-                    {mode === "register" && "Create Student Account"}
-                    <ArrowRight className="h-4 w-4 ml-1.5" />
-                  </>
-                )}
-              </Button>
+              <>
+                <TurnstileWidget
+                  ref={turnstileRef}
+                  onVerify={(token) => setTurnstileToken(token)}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => setTurnstileToken(null)}
+                  action={mode === "login" ? `${loginType}-login` : "student-register"}
+                />
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  className="w-full mt-2 shadow-subtle"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {mode === "login" && (loginType === "admin" ? "Sign In as Administrator" : "Sign In as Student")}
+                      {mode === "register" && "Create Student Account"}
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </>
+                  )}
+                </Button>
+              </>
             )}
           </form>
         )}

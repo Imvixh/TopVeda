@@ -26,6 +26,7 @@ export interface RegisterParams {
   confirmPassword: string;
   termsAgreed: boolean;
   role?: "STUDENT" | "ADMIN";
+  turnstileToken?: string;
 }
 
 export interface AuthResponse {
@@ -42,10 +43,10 @@ interface AuthContextType {
   role: UserRole | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (identifier: string, password: string, expectedPortal?: "student" | "admin") => Promise<AuthResponse>;
+  login: (identifier: string, password: string, expectedPortal?: "student" | "admin", turnstileToken?: string) => Promise<AuthResponse>;
   register: (params: RegisterParams) => Promise<AuthResponse>;
   logout: () => Promise<void>;
-  requestPasswordReset: (email: string) => Promise<AuthResponse>;
+  requestPasswordReset: (email: string, turnstileToken?: string) => Promise<AuthResponse>;
   updatePassword: (password: string) => Promise<AuthResponse>;
   uploadAdminDocument: (file: File) => Promise<AuthResponse>;
   submitAdminApplication: (submission: AdminApplicationSubmission) => Promise<AuthResponse>;
@@ -168,11 +169,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [supabase, fetchProfile]);
 
+async function verifyTurnstileOnServer(token?: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/auth/turnstile/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        error: data.error || "Turnstile security verification failed. Please try again.",
+      };
+    }
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Security verification server is currently unreachable. Please try again.",
+    };
+  }
+}
+
   // Login with Email (Gmail) or 10-digit Phone (+91), with authoritative server-side role verification
   const login = async (
     identifier: string,
     password: string,
-    expectedPortal?: "student" | "admin"
+    expectedPortal?: "student" | "admin",
+    turnstileToken?: string
   ): Promise<AuthResponse> => {
     const trimmedId = identifier.trim();
 
@@ -188,6 +216,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       let authUser: User | null = null;
 
       if (trimmedId.includes("@")) {
+        // Mandatory Server-Side Turnstile Verification for Email Authentication
+        const turnstileCheck = await verifyTurnstileOnServer(turnstileToken);
+        if (!turnstileCheck.success) {
+          return { success: false, error: turnstileCheck.error };
+        }
+
         const emailValidation = validateEmail(trimmedId);
         if (!emailValidation.isValid) {
           return { success: false, error: emailValidation.error };
@@ -196,6 +230,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: emailValidation.normalizedValue!,
           password,
+          options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
         });
 
         if (error) {
@@ -225,6 +260,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             phone: normalizedPhone,
             password,
+            turnstileToken,
           }),
         });
 
@@ -274,6 +310,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
       } else if (expectedPortal === "admin") {
+        if (userRole === "SUPER_ADMIN") {
+          // Reject Super Admin attempting normal Admin Login
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          return {
+            success: false,
+            error: "Invalid credentials. Unauthorized access.",
+          };
+        }
+
         if (userRole === "STUDENT") {
           // Reject Student attempting Admin Login
           await supabase.auth.signOut();
@@ -335,7 +382,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             };
           }
         }
-        // SUPER_ADMIN is allowed immediately
       }
 
       // Successful, authorized login
@@ -349,6 +395,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Register a new Account (supports role STUDENT or ADMIN)
   const register = async (params: RegisterParams): Promise<AuthResponse> => {
+    // 1. Mandatory Server-Side Turnstile Verification
+    const turnstileCheck = await verifyTurnstileOnServer(params.turnstileToken);
+    if (!turnstileCheck.success) {
+      return { success: false, error: turnstileCheck.error };
+    }
+
     const nameVal = validateFullName(params.fullName);
     if (!nameVal.isValid) return { success: false, error: nameVal.error };
 
@@ -399,6 +451,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             typeof window !== "undefined"
               ? `${window.location.origin}/auth/callback`
               : undefined,
+          captchaToken: params.turnstileToken,
         },
       });
 
@@ -437,7 +490,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Password Reset Request (Native Supabase Auth with Enumeration Protection)
-  const requestPasswordReset = async (email: string): Promise<AuthResponse> => {
+  const requestPasswordReset = async (email: string, turnstileToken?: string): Promise<AuthResponse> => {
+    // 1. Mandatory Server-Side Turnstile Verification
+    const turnstileCheck = await verifyTurnstileOnServer(turnstileToken);
+    if (!turnstileCheck.success) {
+      return { success: false, error: turnstileCheck.error };
+    }
+
     const emailVal = validateEmail(email);
     if (!emailVal.isValid) {
       return { success: false, error: emailVal.error };
@@ -457,6 +516,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailVal.normalizedValue!,
         {
           redirectTo: redirectUrl,
+          captchaToken: turnstileToken,
         }
       );
 

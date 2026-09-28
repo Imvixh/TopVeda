@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { validateAndNormalizePhone } from "@/lib/validation/auth";
+import { validateTurnstileToken } from "@/lib/utils/security";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +19,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { phone, password } = body;
+    const { phone, password, turnstileToken } = body;
+
+    // Mandatory Server-Side Cloudflare Turnstile Verification
+    const clientIp =
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "127.0.0.1";
+
+    const turnstileResult = await validateTurnstileToken(turnstileToken, clientIp);
+    if (!turnstileResult.success) {
+      return NextResponse.json(
+        { error: turnstileResult.error || "Turnstile security verification failed. Please try again." },
+        { status: 400 }
+      );
+    }
 
     if (!phone || !password) {
       return NextResponse.json(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { CmsService } from "@/lib/services/cms.service";
 import { ReviewDecisionRequest } from "@/types/cms.types";
+import { requireSuperAdminAAL2 } from "@/lib/supabase/auth-helpers";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,28 +21,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 1. Authenticate user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Authorize Super Admin with mandatory AAL2 MFA verification
+    const authResult = await requireSuperAdminAAL2(supabase);
+    if (!authResult.authorized || !authResult.user) {
+      return authResult.errorResponse!;
     }
-
-    // 2. Authorize Super Admin role
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { error: "Forbidden: Only Super Administrators can review submissions." },
-        { status: 403 }
-      );
-    }
+    const user = authResult.user;
 
     const body: ReviewDecisionRequest = await request.json();
     const { entityType, entityId, decision, reviewNote } = body;

@@ -18,10 +18,13 @@ import {
   ArrowLeft, 
   Loader2, 
   Layers,
-  FileEdit,
-  ArrowRight,
+  ArrowRight, 
   ClipboardCheck,
   Radio,
+  FileCheck2,
+  Power,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -29,12 +32,23 @@ export default function AdminFoundationPage() {
   const router = useRouter();
   const { user, profile, isLoading, logout } = useAuth();
   const [pendingAppsCount, setPendingAppsCount] = React.useState<number>(0);
+  const [pendingReviewsCount, setPendingReviewsCount] = React.useState<number>(0);
+  const [maintenance, setMaintenance] = React.useState<{
+    isEnabled: boolean;
+    updatedAt?: string;
+    updatedBy?: string;
+    message?: string;
+  }>({ isEnabled: false });
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = React.useState(false);
+  const [isTogglingMaintenance, setIsTogglingMaintenance] = React.useState(false);
 
   const isSuperAdmin = profile?.role === "SUPER_ADMIN";
 
   React.useEffect(() => {
     if (isSuperAdmin) {
       const supabase = createClient();
+      
+      // 1. Fetch pending admin applications count
       supabase
         .from("admin_applications")
         .select("id", { count: "exact", head: true })
@@ -42,8 +56,48 @@ export default function AdminFoundationPage() {
         .then(({ count }) => {
           if (count !== null) setPendingAppsCount(count);
         });
+
+      // 2. Fetch pending teacher review submissions count
+      supabase
+        .from("cms_pending_reviews_view")
+        .select("entity_id", { count: "exact", head: true })
+        .then(({ count }) => {
+          if (count !== null) setPendingReviewsCount(count);
+        });
+
+      // 3. Fetch system maintenance mode status
+      fetch("/api/admin/system/maintenance")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.maintenance) {
+            setMaintenance(data.maintenance);
+          }
+        })
+        .catch(() => {
+          // ignore
+        });
     }
   }, [isSuperAdmin]);
+
+  const handleToggleMaintenance = async () => {
+    setIsTogglingMaintenance(true);
+    try {
+      const res = await fetch("/api/admin/system/maintenance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !maintenance.isEnabled }),
+      });
+      const data = await res.json();
+      if (data.success && data.maintenance) {
+        setMaintenance(data.maintenance);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsTogglingMaintenance(false);
+      setIsConfirmModalOpen(false);
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -187,6 +241,50 @@ export default function AdminFoundationPage() {
               </Card>
             )}
 
+            {/* SUPER ADMIN QUICK ACTION 3 (NEW): Teacher Submissions & Review Queue */}
+            {isSuperAdmin && (
+              <Card className="p-5 sm:p-6 bg-gradient-to-br from-brand-surface via-emerald-50/40 to-teal-50/40 border-2 border-emerald-200/80 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
+                      <FileCheck2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-brand-text-primary">
+                          Teacher Submissions & Review Queue
+                        </h3>
+                        {pendingReviewsCount > 0 ? (
+                          <Badge variant="peach" size="sm" className="animate-pulse text-[10px] font-bold">
+                            {pendingReviewsCount} PENDING
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" size="sm" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
+                            All Caught Up
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-brand-text-muted">
+                        Review educator lecture videos, batches, and study notes awaiting Super Admin verification and publishing.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href="/admin/cms/reviews">
+                    <Button variant="primary" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-subtle w-full sm:w-auto">
+                      Review Queue
+                      {pendingReviewsCount > 0 && (
+                        <span className="ml-1.5 px-1.5 py-0.2 bg-white text-emerald-700 rounded-full text-[10px] font-extrabold">
+                          {pendingReviewsCount}
+                        </span>
+                      )}
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            )}
+
             {/* TEACHER WORKSPACE: LIVE CLASSES & RECORDED LECTURES */}
             <Card className="p-5 sm:p-6 bg-gradient-to-br from-brand-surface via-amber-50/40 to-orange-50/40 border-2 border-amber-200/80 shadow-md">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -217,6 +315,72 @@ export default function AdminFoundationPage() {
                 </Link>
               </div>
             </Card>
+
+            {/* SUPER ADMIN QUICK ACTION 4 (NEW): System Maintenance Mode */}
+            {isSuperAdmin && (
+              <Card
+                className={`p-5 sm:p-6 border-2 transition-all shadow-md ${
+                  maintenance.isEnabled
+                    ? "bg-red-950/20 border-red-500/80 shadow-red-900/10"
+                    : "bg-gradient-to-br from-brand-surface via-purple-50/40 to-indigo-50/40 border-purple-200/80 shadow-md"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div
+                      className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                        maintenance.isEnabled ? "bg-red-600 text-white" : "bg-purple-600 text-white"
+                      }`}
+                    >
+                      {maintenance.isEnabled ? (
+                        <AlertTriangle className="h-6 w-6" />
+                      ) : (
+                        <Power className="h-6 w-6" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-brand-text-primary">
+                          System Maintenance Mode
+                        </h3>
+                        <Badge
+                          variant={maintenance.isEnabled ? "peach" : "outline"}
+                          size="sm"
+                          className={`font-mono font-bold text-[10px] uppercase tracking-wider ${
+                            maintenance.isEnabled
+                              ? "bg-red-600 text-white border-red-700"
+                              : "bg-purple-50 text-purple-700 border-purple-300"
+                          }`}
+                        >
+                          [ {maintenance.isEnabled ? "ON" : "OFF"} ]
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        {maintenance.isEnabled
+                          ? "Public and student portals are locked with HTTP 503. Only Super Admin access is permitted."
+                          : "System is operating normally. All student, teacher, and public portals are active."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setIsConfirmModalOpen(true)}
+                      className={`w-full sm:w-auto text-xs font-bold shadow-subtle ${
+                        maintenance.isEnabled
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          : "bg-red-600 hover:bg-red-700 text-white"
+                      }`}
+                    >
+                      <Power className="h-3.5 w-3.5 mr-1.5" />
+                      {maintenance.isEnabled ? "Deactivate Maintenance Mode" : "Activate Maintenance Mode"}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* Admin Profile Overview */}
             <Card className="p-6 sm:p-8 space-y-6 shadow-md">
@@ -310,6 +474,72 @@ export default function AdminFoundationPage() {
           </div>
         </Container>
       </main>
+
+      {/* MAINTENANCE MODE CONFIRMATION DIALOG */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="bg-brand-surface max-w-md w-full rounded-2xl border border-brand-border shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                  maintenance.isEnabled
+                    ? "bg-emerald-100 text-emerald-600"
+                    : "bg-red-100 text-red-600"
+                }`}
+              >
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-brand-text-primary">
+                  {maintenance.isEnabled
+                    ? "Deactivate Maintenance Mode?"
+                    : "Activate Maintenance Mode?"}
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-brand-text-muted leading-relaxed">
+              {maintenance.isEnabled
+                ? "This will restore normal TopVeda access for all students, teachers, administrators, and public visitors."
+                : "This will temporarily block access to TopVeda for students, teachers, administrators and public users. Only Super Admin access will remain available."}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsConfirmModalOpen(false)}
+                disabled={isTogglingMaintenance}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleToggleMaintenance}
+                disabled={isTogglingMaintenance}
+                className={`text-xs font-bold ${
+                  maintenance.isEnabled
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-red-600 hover:bg-red-700 text-white"
+                }`}
+              >
+                {isTogglingMaintenance ? (
+                  <span className="flex items-center gap-1.5">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    Updating...
+                  </span>
+                ) : maintenance.isEnabled ? (
+                  "Deactivate Maintenance"
+                ) : (
+                  "Activate Maintenance"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

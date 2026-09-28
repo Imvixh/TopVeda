@@ -4,6 +4,7 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DocumentUploader } from "@/components/auth/document-uploader";
+import { TurnstileWidget, TurnstileWidgetRef } from "@/components/auth/turnstile-widget";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -90,6 +91,10 @@ export function AdminApplicationFlow({
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
 
+  // Turnstile security verification for Admin Registration
+  const [turnstileToken, setTurnstileToken] = React.useState<string | null>(null);
+  const turnstileRef = React.useRef<TurnstileWidgetRef>(null);
+
   // Step 3: Document Upload State
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
   const [uploadedDocMetadata, setUploadedDocMetadata] = React.useState<DocumentUploadMetadata | null>(null);
@@ -136,16 +141,21 @@ export function AdminApplicationFlow({
         confirmPassword,
         termsAgreed,
         role: "ADMIN",
+        turnstileToken: turnstileToken || undefined,
       });
 
       if (!res.success) {
         setErrorMessage(res.error || "Registration failed. Please try again.");
+        turnstileRef.current?.reset();
+        setTurnstileToken(null);
       } else {
         // Step 2: Email Verification
         setStep(2);
       }
     } catch {
       setErrorMessage("Network error occurred during registration. Please retry.");
+      turnstileRef.current?.reset();
+      setTurnstileToken(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -469,6 +479,14 @@ export function AdminApplicationFlow({
               and understand administrator applications require identity verification.
             </span>
           </label>
+
+          <TurnstileWidget
+            ref={turnstileRef}
+            onVerify={(token) => setTurnstileToken(token)}
+            onExpire={() => setTurnstileToken(null)}
+            onError={() => setTurnstileToken(null)}
+            action="admin-register"
+          />
 
           <Button
             type="submit"

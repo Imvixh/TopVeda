@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { StreamingService } from "@/lib/services/streaming.service";
 import { NotificationService } from "@/lib/services/notification.service";
+import { requireSuperAdminAAL2 } from "@/lib/supabase/auth-helpers";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,28 +21,18 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 1. Authenticate user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Authorize Super Admin with mandatory AAL2 MFA verification
+    const authResult = await requireSuperAdminAAL2(supabase);
+    if (!authResult.authorized || !authResult.user) {
+      return authResult.errorResponse!;
     }
+    const user = authResult.user;
 
-    // 2. Authorize Super Admin role ONLY
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, role, full_name, email")
+      .select("full_name")
       .eq("id", user.id)
-      .single();
-
-    if (!profile || profile.role !== "SUPER_ADMIN") {
-      return NextResponse.json(
-        { error: "Forbidden: Live Class emergency termination is restricted exclusively to Super Administrators." },
-        { status: 403 }
-      );
-    }
+      .maybeSingle();
 
     const { liveClassId, terminationReason } = await request.json();
 
@@ -106,7 +97,7 @@ export async function POST(request: NextRequest) {
         liveClassId: liveClass.id,
         title: liveClass.topic,
         terminationReason: terminationReason.trim(),
-        adminName: profile.full_name || "Super Administrator",
+        adminName: profile?.full_name || "Super Administrator",
       });
     }
 
@@ -117,7 +108,7 @@ export async function POST(request: NextRequest) {
       message: "Live class session has been terminated and access severed.",
       liveClass: sanitizedClass,
       auditLog: {
-        terminatedBy: profile.full_name || "Super Admin",
+        terminatedBy: profile?.full_name || "Super Admin",
         terminatedAt: nowIso,
         reason: terminationReason.trim(),
       },
