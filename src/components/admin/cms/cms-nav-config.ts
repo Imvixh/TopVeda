@@ -89,6 +89,12 @@ export const CMS_NAV_SECTIONS: CmsNavSection[] = [
         icon: FileText,
         description: "Formula sheets, revision notes, NCERT solutions, and PYQ papers.",
       },
+      {
+        title: "Test & Practice",
+        href: "/admin/cms/tests",
+        icon: FileCheck2,
+        description: "Quizzes, chapter tests, practice drills, and full-length mock exams.",
+      },
     ],
   },
   {

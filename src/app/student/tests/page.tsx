@@ -14,14 +14,9 @@ import {
   Atom,
   Clock,
   Award,
-  ChevronRight,
-  Sparkles,
   ArrowRight,
-  CheckCircle2,
   FileCheck,
   Target,
-  Loader2,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,40 +30,45 @@ function getSubjectIcon(subjectName: string) {
 }
 
 export default function StudentTestsPage() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { isLoading: isAuthLoading } = useAuth();
   const [tests, setTests] = React.useState<StudentTestItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [activeTab, setActiveTab] = React.useState<"all" | "quiz" | "mock" | "completed">("all");
+  const [activeTab, setActiveTab] = React.useState<"all" | "quiz" | "test" | "mock" | "completed">("all");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
 
-  const fetchTests = React.useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch("/api/student/tests");
-      if (res.ok) {
-        const data: StudentTestItem[] = await res.json();
-        setTests(data);
-      }
-    } catch (err) {
-      console.error("Failed to load tests:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
   React.useEffect(() => {
-    if (!isAuthLoading) {
-      fetchTests();
+    let isMounted = true;
+    async function fetchTests() {
+      if (isAuthLoading) return;
+      try {
+        setIsLoading(true);
+        const res = await fetch("/api/student/tests");
+        if (res.ok && isMounted) {
+          const data: StudentTestItem[] = await res.json();
+          setTests(data);
+        }
+      } catch (err) {
+        console.error("Failed to load tests:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
     }
-  }, [isAuthLoading, fetchTests]);
+    void fetchTests();
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthLoading]);
 
   const filteredTests = React.useMemo(() => {
     if (activeTab === "quiz") {
-      return tests.filter((t) => t.testType === "chapter_quiz" || t.testType === "practice_drill");
+      return tests.filter((t) => t.testType === "chapter_quiz" || t.testType === "quiz" || t.testType === "practice_drill");
+    }
+    if (activeTab === "test") {
+      return tests.filter((t) => t.testType === "test");
     }
     if (activeTab === "mock") {
-      return tests.filter((t) => t.testType === "mock_exam" || t.testType === "sample_paper_test");
+      return tests.filter((t) => t.testType === "mock_exam" || t.testType === "mock_test" || t.testType === "sample_paper_test");
     }
     if (activeTab === "completed") {
       return tests.filter((t) => t.isAttempted);
@@ -134,7 +134,18 @@ export default function StudentTestsPage() {
                   : "bg-white text-brand-text-muted hover:text-brand-charcoal hover:bg-gray-50 border border-brand-border/70"
               )}
             >
-              Chapter Drills ({tests.filter((t) => t.testType === "chapter_quiz" || t.testType === "practice_drill").length})
+              Chapter Drills ({tests.filter((t) => t.testType === "chapter_quiz" || t.testType === "quiz" || t.testType === "practice_drill").length})
+            </button>
+            <button
+              onClick={() => setActiveTab("test")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                activeTab === "test"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "bg-white text-brand-text-muted hover:text-brand-charcoal hover:bg-gray-50 border border-brand-border/70"
+              )}
+            >
+              Test Series ({tests.filter((t) => t.testType === "test").length})
             </button>
             <button
               onClick={() => setActiveTab("mock")}
@@ -145,7 +156,7 @@ export default function StudentTestsPage() {
                   : "bg-white text-brand-text-muted hover:text-brand-charcoal hover:bg-gray-50 border border-brand-border/70"
               )}
             >
-              Mock Exams ({tests.filter((t) => t.testType === "mock_exam" || t.testType === "sample_paper_test").length})
+              Mock Exams ({tests.filter((t) => t.testType === "mock_exam" || t.testType === "mock_test" || t.testType === "sample_paper_test").length})
             </button>
             <button
               onClick={() => setActiveTab("completed")}
@@ -200,7 +211,11 @@ export default function StudentTestsPage() {
                             </span>
                           ) : (
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-brand-orange border border-orange-200 uppercase tracking-wide">
-                              {test.testType === "mock_exam" ? "Mock Exam" : "Practice Drill"}
+                              {test.testType === "mock_exam" || test.testType === "mock_test"
+                                ? "Mock Exam"
+                                : test.testType === "test"
+                                ? "Test Series"
+                                : "Practice Drill"}
                             </span>
                           )}
                         </div>
@@ -221,7 +236,9 @@ export default function StudentTestsPage() {
                         <div className="flex items-center gap-3 text-[11px] font-semibold text-brand-text-muted pt-2 border-t border-brand-border/40">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5 text-brand-orange" />
-                            {test.durationMinutes} mins
+                            {test.durationMinutes > 0 && test.testType !== "practice_drill"
+                              ? `${test.durationMinutes} mins`
+                              : "Untimed"}
                           </span>
                           <span>•</span>
                           <span className="flex items-center gap-1">

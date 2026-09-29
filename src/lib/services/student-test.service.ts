@@ -58,7 +58,7 @@ export class StudentTestService {
     userId?: string
   ): Promise<StudentTestItem[]> {
     try {
-      // 1. Fetch published tests
+      // 1. Fetch published tests with course & chapter details
       const { data: tests, error } = await supabase
         .from("student_tests")
         .select(`
@@ -76,7 +76,13 @@ export class StudentTestService {
           passing_marks,
           total_questions,
           access_tier,
-          display_order
+          display_order,
+          cms_courses (
+            id,
+            board_id,
+            class_id,
+            subject_id
+          )
         `)
         .eq("status", "PUBLISHED")
         .eq("is_visible", true)
@@ -87,7 +93,77 @@ export class StudentTestService {
         return [];
       }
 
-      // 2. Fetch student's previous attempts if authenticated
+      // 2. Academic Enrollment Gating & Targeting (Server-Enforced)
+      let eligibleTests = tests || [];
+
+      if (userId) {
+        // Check if user is Super Admin or Admin or Teacher
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .maybeSingle();
+
+        const isPrivileged = profile?.role === "SUPER_ADMIN" || profile?.role === "ADMIN" || profile?.role === "TEACHER";
+
+        if (!isPrivileged) {
+          // Fetch student enrollments
+          const { data: enrollments } = await supabase
+            .from("student_enrollments")
+            .select("course_id, batch_id")
+            .eq("student_id", userId)
+            .eq("status", "ACTIVE");
+
+          // Fetch student entitlements
+          const { data: entitlements } = await supabase
+            .from("student_content_entitlements")
+            .select("content_type, content_id")
+            .eq("student_id", userId)
+            .eq("status", "ACTIVE");
+
+          const hasAllAccess = (entitlements || []).some((e) => e.content_type === "ALL_ACCESS");
+
+          if (!hasAllAccess) {
+            const enrolledCourseIds = new Set<string>((enrollments || []).map((e) => e.course_id).filter(Boolean));
+            (entitlements || []).forEach((e) => {
+              if (e.content_type === "COURSE" && e.content_id) {
+                enrolledCourseIds.add(e.content_id);
+              }
+            });
+
+            // Fetch student learning preferences for board/class fallback
+            const { data: prefs } = await supabase
+              .from("student_learning_preferences")
+              .select("board_id, class_id")
+              .eq("student_id", userId)
+              .maybeSingle();
+
+            if (enrolledCourseIds.size > 0) {
+              // Eligible: tests linked to enrolled courses OR general free demo tests without course restrictions
+              eligibleTests = (tests || []).filter((t) => {
+                if (!t.course_id) return true; // General open test
+                if (enrolledCourseIds.has(t.course_id)) return true;
+                return false;
+              });
+            } else if (prefs?.board_id || prefs?.class_id) {
+              // Fallback to student target board & class preferences
+              eligibleTests = (tests || []).filter((t) => {
+                if (!t.course_id) return true;
+                const course = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
+                if (!course) return true;
+                const matchBoard = !prefs.board_id || course.board_id === prefs.board_id;
+                const matchClass = !prefs.class_id || course.class_id === prefs.class_id;
+                return matchBoard && matchClass;
+              });
+            } else {
+              // Default new student: show all free / open tests
+              eligibleTests = (tests || []).filter((t) => t.access_tier === "FREE");
+            }
+          }
+        }
+      }
+
+      // 3. Fetch student's previous attempts if authenticated
       const attemptsMap = new Map<string, { attemptId: string; score: number; percentage: number; passed: boolean }>();
       if (userId) {
         const { data: attempts } = await supabase
@@ -109,7 +185,7 @@ export class StudentTestService {
         });
       }
 
-      return (tests || []).map((t) => {
+      return eligibleTests.map((t) => {
         const theme = getSubjectTestTheme(t.subject_name);
         const prevAttempt = attemptsMap.get(t.id);
 
@@ -408,7 +484,15 @@ export class StudentTestService {
       let attemptedCount = 0;
 
       const evaluations: QuestionEvaluationResult[] = [];
-      const answersToUpsert: any[] = [];
+      const answersToUpsert: {
+        attempt_id: string;
+        question_id: string;
+        selected_option_ids: string[];
+        numerical_answer: string | null;
+        is_correct: boolean | null;
+        marks_awarded: number;
+        time_spent_seconds: number;
+      }[] = [];
 
       fullQuestions.forEach((q) => {
         totalMaxScore += q.marks;
@@ -635,7 +719,16 @@ export class StudentTestService {
         .select("question_id, selected_option_ids, numerical_answer, is_correct, marks_awarded")
         .eq("attempt_id", attemptId);
 
-      const answersMap = new Map<string, any>();
+      const answersMap = new Map<
+        string,
+        {
+          question_id: string;
+          selected_option_ids: string[];
+          numerical_answer: string | null;
+          is_correct: boolean | null;
+          marks_awarded: number;
+        }
+      >();
       (savedAnswers || []).forEach((a) => answersMap.set(a.question_id, a));
 
       const evaluations: QuestionEvaluationResult[] = (fullQuestions || []).map((q) => {

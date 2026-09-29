@@ -1,42 +1,49 @@
 "use client";
 
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/hooks/use-auth";
 import {
   SafeTestQuestion,
   TestScorecardResult,
 } from "@/types/assessment.types";
 import {
   Clock,
-  Target,
   Award,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   XCircle,
-  AlertCircle,
-  HelpCircle,
-  RotateCcw,
   Loader2,
-  TrendingUp,
-  FileCheck,
-  ShieldCheck,
-  ChevronRight,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+interface StudentTestMeta {
+  id: string;
+  title: string;
+  description?: string | null;
+  test_type: string;
+  duration_minutes: number;
+  total_marks: number;
+  passing_marks?: number;
+  total_questions: number;
+  subject_name?: string;
+  cms_courses?: {
+    title?: string;
+    cms_boards?: { name?: string };
+    cms_class_levels?: { name?: string };
+  };
+  cms_chapters?: { title?: string };
+}
+
 export default function TestRunnerPage() {
   const params = useParams();
-  const router = useRouter();
-  const { user } = useAuth();
   const testId = params.id as string;
 
   // View mode: 'instruction' | 'active' | 'scorecard'
   const [viewMode, setViewMode] = React.useState<"instruction" | "active" | "scorecard">("instruction");
-  const [testMeta, setTestMeta] = React.useState<any>(null);
+  const [testMeta, setTestMeta] = React.useState<StudentTestMeta | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
   // Active Runner State
@@ -45,6 +52,8 @@ export default function TestRunnerPage() {
   const [currentQIndex, setCurrentQIndex] = React.useState(0);
   const [selectedAnswers, setSelectedAnswers] = React.useState<Record<string, string[]>>({});
   const [secondsRemaining, setSecondsRemaining] = React.useState<number>(0);
+  const [elapsedSeconds, setElapsedSeconds] = React.useState<number>(0);
+  const [isTimed, setIsTimed] = React.useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [showSubmitModal, setShowSubmitModal] = React.useState(false);
 
@@ -52,89 +61,31 @@ export default function TestRunnerPage() {
   const [scorecard, setScorecard] = React.useState<TestScorecardResult | null>(null);
 
   // 1. Fetch Test Metadata on Mount
-  const loadTestMeta = React.useCallback(async () => {
-    if (!testId) return;
-    try {
-      setIsLoading(true);
-      const res = await fetch(`/api/student/tests/${testId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTestMeta(data);
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadTestMeta() {
+      if (!testId) return;
+      try {
+        setIsLoading(true);
+        const res = await fetch(`/api/student/tests/${testId}`);
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          setTestMeta(data);
+        }
+      } catch (err) {
+        console.error("Failed to load test metadata:", err);
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to load test metadata:", err);
-    } finally {
-      setIsLoading(false);
     }
+    void loadTestMeta();
+    return () => {
+      isMounted = false;
+    };
   }, [testId]);
 
-  React.useEffect(() => {
-    void loadTestMeta();
-  }, [loadTestMeta]);
-
-  // 2. Start Test Attempt
-  const handleStartTest = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch(`/api/student/tests/${testId}/attempt`, {
-        method: "POST",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setAttemptId(data.attemptId);
-        setQuestions(data.questions || []);
-        setCurrentQIndex(0);
-        setSelectedAnswers({});
-        setSecondsRemaining((data.durationMinutes || 20) * 60);
-        setViewMode("active");
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to start test attempt.");
-      }
-    } catch (err) {
-      console.error("Error starting test:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 3. Countdown Timer in Active Runner
-  React.useEffect(() => {
-    if (viewMode !== "active" || secondsRemaining <= 0) return;
-
-    const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          void handleSubmitTest(); // Auto-submit on time expiry
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [viewMode, secondsRemaining]);
-
-  // 4. Option Selection Handlers
-  const handleSelectOption = (questionId: string, optionId: string) => {
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [questionId]: [optionId], // Single choice selection
-    }));
-  };
-
-  const handleClearSelection = (questionId: string) => {
-    setSelectedAnswers((prev) => {
-      const next = { ...prev };
-      delete next[questionId];
-      return next;
-    });
-  };
-
-  // 5. Submit Test Attempt for Server-Side Grading
-  const handleSubmitTest = async () => {
+  // Submit Test Attempt for Server-Side Grading
+  const handleSubmitTest = React.useCallback(async () => {
     if (!attemptId || isSubmitting) return;
 
     try {
@@ -146,8 +97,7 @@ export default function TestRunnerPage() {
         selectedOptionIds: selectedAnswers[q.id] || [],
       }));
 
-      const totalDurationSecs = (testMeta?.duration_minutes || 20) * 60;
-      const timeSpentSecs = Math.max(1, totalDurationSecs - secondsRemaining);
+      const timeSpentSecs = Math.max(1, elapsedSeconds);
 
       const res = await fetch(`/api/student/tests/${testId}/submit`, {
         method: "POST",
@@ -172,6 +122,80 @@ export default function TestRunnerPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }, [attemptId, isSubmitting, questions, selectedAnswers, elapsedSeconds, testId]);
+
+  // 2. Start Test Attempt
+  const handleStartTest = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/student/tests/${testId}/attempt`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAttemptId(data.attemptId);
+        setQuestions(data.questions || []);
+        setCurrentQIndex(0);
+        setSelectedAnswers({});
+        const duration = Number(data.durationMinutes) || 0;
+        const timed = duration > 0 && testMeta?.test_type !== "practice_drill";
+        setIsTimed(timed);
+        setSecondsRemaining(timed ? duration * 60 : 0);
+        setElapsedSeconds(0);
+        setViewMode("active");
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to start test attempt.");
+      }
+    } catch (err) {
+      console.error("Error starting test:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 3. Timer in Active Runner (Countdown for timed tests, Elapsed timer for untimed drills)
+  React.useEffect(() => {
+    if (viewMode !== "active") return;
+
+    if (isTimed) {
+      if (secondsRemaining <= 0) return;
+      const timer = setInterval(() => {
+        setSecondsRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            void handleSubmitTest(); // Auto-submit on time expiry
+            return 0;
+          }
+          return prev - 1;
+        });
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    } else {
+      // Untimed Practice Drill: track elapsed time
+      const timer = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [viewMode, isTimed, secondsRemaining, handleSubmitTest]);
+
+  // 4. Option Selection Handlers
+  const handleSelectOption = (questionId: string, optionId: string) => {
+    setSelectedAnswers((prev) => ({
+      ...prev,
+      [questionId]: [optionId], // Single choice selection
+    }));
+  };
+
+  const handleClearSelection = (questionId: string) => {
+    setSelectedAnswers((prev) => {
+      const next = { ...prev };
+      delete next[questionId];
+      return next;
+    });
   };
 
   // Format mm:ss
@@ -226,7 +250,11 @@ export default function TestRunnerPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60">
               <div className="space-y-0.5 text-center sm:text-left">
                 <span className="text-[10px] font-bold text-brand-text-muted uppercase">Duration</span>
-                <p className="text-sm font-black text-brand-charcoal">{testMeta?.duration_minutes} Mins</p>
+                <p className="text-sm font-black text-brand-charcoal">
+                  {testMeta?.duration_minutes && testMeta.test_type !== "practice_drill"
+                    ? `${testMeta.duration_minutes} Mins`
+                    : "Untimed"}
+                </p>
               </div>
               <div className="space-y-0.5 text-center sm:text-left">
                 <span className="text-[10px] font-bold text-brand-text-muted uppercase">Questions</span>
@@ -250,16 +278,23 @@ export default function TestRunnerPage() {
               <ul className="space-y-2 text-xs font-medium text-brand-text-muted leading-relaxed">
                 <li className="flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Each correct question awards <strong>+4 Marks</strong>.</span>
+                  <span>Correct selections award marks according to the question scheme.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <XCircle className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
-                  <span>Incorrect answers incur <strong>-1 Negative Mark</strong>.</span>
+                  <span>Incorrect answers incur negative marks where configured.</span>
                 </li>
-                <li className="flex items-start gap-2">
-                  <Clock className="h-4 w-4 text-brand-orange shrink-0 mt-0.5" />
-                  <span>The test will auto-submit when the countdown timer reaches zero.</span>
-                </li>
+                {testMeta?.test_type !== "practice_drill" && (testMeta?.duration_minutes ?? 0) > 0 ? (
+                  <li className="flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-brand-orange shrink-0 mt-0.5" />
+                    <span>The test will auto-submit when the countdown timer reaches zero.</span>
+                  </li>
+                ) : (
+                  <li className="flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Self-paced practice drill: no time pressure, submit when ready.</span>
+                  </li>
+                )}
                 <li className="flex items-start gap-2">
                   <Award className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
                   <span>Your scorecard and progress tracker will be updated immediately upon submission.</span>
@@ -302,16 +337,23 @@ export default function TestRunnerPage() {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Dynamic Countdown Timer */}
-            <div className={cn(
-              "px-3.5 py-1.5 rounded-xl text-xs font-black tabular-nums flex items-center gap-1.5 border",
-              secondsRemaining < 180
-                ? "bg-rose-50 text-rose-600 border-rose-200 animate-pulse"
-                : "bg-orange-50 text-brand-orange border-orange-200"
-            )}>
-              <Clock className="h-3.5 w-3.5" />
-              <span>{formatTime(secondsRemaining)}</span>
-            </div>
+            {/* Dynamic Timer: Countdown if timed, Elapsed counter if untimed practice */}
+            {isTimed ? (
+              <div className={cn(
+                "px-3.5 py-1.5 rounded-xl text-xs font-black tabular-nums flex items-center gap-1.5 border",
+                secondsRemaining < 180
+                  ? "bg-rose-50 text-rose-600 border-rose-200 animate-pulse"
+                  : "bg-orange-50 text-brand-orange border-orange-200"
+              )}>
+                <Clock className="h-3.5 w-3.5" />
+                <span>{formatTime(secondsRemaining)}</span>
+              </div>
+            ) : (
+              <div className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                <span>Practice: {formatTime(elapsedSeconds)}</span>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

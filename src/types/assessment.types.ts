@@ -5,7 +5,15 @@
 
 import { ContentAccessTier } from "@/types/student-learning.types";
 
-export type TestType = "chapter_quiz" | "mock_exam" | "practice_drill" | "sample_paper_test" | "live_test";
+export type TestType =
+  | "chapter_quiz"
+  | "quiz"
+  | "test"
+  | "mock_exam"
+  | "mock_test"
+  | "practice_drill"
+  | "sample_paper_test"
+  | "live_test";
 
 export type QuestionType =
   | "single_choice"
