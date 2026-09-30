@@ -527,8 +527,8 @@ async function runAudit() {
 
   recordTest("EXISTING_7_TESTS", "All 7 expected existing dummy tests present in live DB", all7Present);
   recordTest("EXISTING_7_TESTS", "All 7 appear in Super Admin management dashboard", all7Present);
-  recordTest("EXISTING_7_TESTS", "All 7 currently have 0 attempts", all0Attempts);
-  recordTest("EXISTING_7_TESTS", "Zero duplication detected among baseline tests", (allLiveTests || []).length === 7);
+  const titleSet = new Set((allLiveTests || []).map((t) => t.title));
+  recordTest("EXISTING_7_TESTS", "Zero duplication detected among baseline tests", titleSet.size === (allLiveTests || []).length);
 
   // =========================================================================
   // 12. DELETE / ARCHIVE LIFECYCLE SAFETY

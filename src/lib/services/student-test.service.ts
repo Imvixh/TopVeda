@@ -156,11 +156,14 @@ export class StudentTestService {
                 return matchBoard && matchClass;
               });
             } else {
-              // Default new student: show all free / open tests
-              eligibleTests = (tests || []).filter((t) => t.access_tier === "FREE");
+              // Default new student: show only general open free tests without course binding
+              eligibleTests = (tests || []).filter((t) => !t.course_id && t.access_tier === "FREE");
             }
           }
         }
+      } else {
+        // Unauthenticated visitor: show only general open free tests without course binding
+        eligibleTests = (tests || []).filter((t) => !t.course_id && t.access_tier === "FREE");
       }
 
       // 3. Fetch student's previous attempts if authenticated
@@ -618,6 +621,11 @@ export class StudentTestService {
         return { success: false, error: "Unauthorized attempt manipulation." };
       }
 
+      // Double Submission Protection: If attempt is already evaluated/completed, return existing scorecard
+      if (attempt.status === "EVALUATED" || attempt.status === "SUBMITTED") {
+        return this.getAttemptScorecard(supabase, userId, attemptId);
+      }
+
       // 2. Fetch test metadata
       const { data: test, error: testErr } = await supabase
         .from("student_tests")
@@ -685,7 +693,9 @@ export class StudentTestService {
       }[] = [];
 
       fullQuestions.forEach((q) => {
-        totalMaxScore += q.marks;
+        const questionMarks = Number(q.marks) || 1;
+        const questionNegative = Number(q.negative_marks) || 0;
+        totalMaxScore += questionMarks;
 
         const studentAns = studentAnswersMap.get(q.id);
         const selectedOptionIds = studentAns?.selectedOptionIds || [];
@@ -706,11 +716,11 @@ export class StudentTestService {
             selectedOptionIds.every((id) => correctOptionIds.includes(id))
           ) {
             isCorrect = true;
-            marksAwarded = q.marks;
+            marksAwarded = questionMarks;
             correctCount++;
           } else {
             isCorrect = false;
-            marksAwarded = -Math.abs(q.negative_marks || 0);
+            marksAwarded = -Math.abs(questionNegative);
             incorrectCount++;
           }
         } else {
@@ -727,7 +737,7 @@ export class StudentTestService {
           selected_option_ids: selectedOptionIds,
           numerical_answer: studentAns?.numericalAnswer || null,
           is_correct: isAttempted ? isCorrect : null,
-          marks_awarded: marksAwarded,
+          marks_awarded: parseFloat(marksAwarded.toFixed(2)),
           time_spent_seconds: studentAns?.timeSpent || 0,
         });
 
@@ -736,9 +746,9 @@ export class StudentTestService {
           questionId: q.id,
           questionText: q.question_text,
           questionType: q.question_type,
-          marks: q.marks,
-          negativeMarks: q.negative_marks,
-          marksAwarded,
+          marks: questionMarks,
+          negativeMarks: questionNegative,
+          marksAwarded: parseFloat(marksAwarded.toFixed(2)),
           isCorrect,
           isAttempted,
           explanation: q.explanation || undefined,
@@ -753,10 +763,11 @@ export class StudentTestService {
         });
       });
 
-      // Ensure final score is non-negative
-      totalCalculatedScore = Math.max(0, totalCalculatedScore);
-      const percentage = totalMaxScore > 0 ? Math.round((totalCalculatedScore / totalMaxScore) * 100) : 0;
-      const passed = totalCalculatedScore >= test.passing_marks;
+      // Ensure final score is non-negative and properly rounded to 2 decimals
+      const roundedScore = Math.max(0, parseFloat(totalCalculatedScore.toFixed(2)));
+      const roundedMaxScore = parseFloat(totalMaxScore.toFixed(2));
+      const percentage = roundedMaxScore > 0 ? parseFloat(((roundedScore / roundedMaxScore) * 100).toFixed(2)) : 0;
+      const passed = percentage >= 40;
       const nowIso = new Date().toISOString();
 
       // 5. Upsert answers into student_test_answers
@@ -777,8 +788,8 @@ export class StudentTestService {
           correct_count: correctCount,
           incorrect_count: incorrectCount,
           unanswered_count: unansweredCount,
-          score_obtained: totalCalculatedScore,
-          max_score: totalMaxScore,
+          score_obtained: roundedScore,
+          max_score: roundedMaxScore,
           percentage,
           passed,
           time_spent_seconds: timeSpentSeconds || 0,
@@ -786,23 +797,35 @@ export class StudentTestService {
         })
         .eq("id", attemptId);
 
-      // 7. Insert into student_learning_activity log
-      await supabase.from("student_learning_activity").insert({
-        student_id: userId,
-        activity_type: "TEST_ATTEMPT",
-        entity_type: "TEST",
-        entity_id: testId,
-        duration_seconds: timeSpentSeconds || 0,
-        activity_date: nowIso.split("T")[0],
-        metadata: {
-          attemptId,
-          testTitle: test.title,
-          scoreObtained: totalCalculatedScore,
-          maxScore: totalMaxScore,
-          percentage,
-          passed,
-        },
-      });
+      // 7. Insert into student_learning_activity log (check duplicate first)
+      const { data: existingAct } = await supabase
+        .from("student_learning_activity")
+        .select("id")
+        .eq("student_id", userId)
+        .eq("entity_id", testId)
+        .contains("metadata", { attemptId })
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingAct) {
+        await supabase.from("student_learning_activity").insert({
+          student_id: userId,
+          activity_type: "TEST_ATTEMPT",
+          entity_type: "TEST",
+          entity_id: testId,
+          duration_seconds: timeSpentSeconds || 0,
+          activity_date: nowIso.split("T")[0],
+          metadata: {
+            attemptId,
+            testTitle: test.title,
+            subjectName: test.subject_name,
+            scoreObtained: roundedScore,
+            maxScore: roundedMaxScore,
+            percentage,
+            passed,
+          },
+        });
+      }
 
       const scorecard: TestScorecardResult = {
         attemptId,
@@ -818,8 +841,8 @@ export class StudentTestService {
         correctCount,
         incorrectCount,
         unansweredCount,
-        scoreObtained: totalCalculatedScore,
-        maxScore: totalMaxScore,
+        scoreObtained: roundedScore,
+        maxScore: roundedMaxScore,
         passingMarks: test.passing_marks,
         percentage,
         passed,
@@ -878,6 +901,10 @@ export class StudentTestService {
 
       if (attempt.student_id !== userId) {
         return { success: false, error: "Unauthorized access to scorecard." };
+      }
+
+      if (attempt.status !== "EVALUATED" && attempt.status !== "SUBMITTED") {
+        return { success: false, error: "Test attempt is still in progress." };
       }
 
       const testData = (Array.isArray(attempt.test) ? attempt.test[0] : attempt.test) as { id: string; title: string; subject_name: string; duration_minutes: number; passing_marks: number } | null;

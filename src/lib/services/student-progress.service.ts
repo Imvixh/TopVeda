@@ -105,9 +105,6 @@ export class StudentProgressService {
       }
 
       const enrolledList = enrollments || [];
-      const enrolledCourseIds = enrolledList
-        .map((e) => (e.course as { id?: string })?.id || e.course_id)
-        .filter(Boolean) as string[];
       const enrolledBatchIds = enrolledList
         .map((e) => (e.batch as { id?: string })?.id || e.batch_id)
         .filter(Boolean) as string[];
@@ -131,8 +128,8 @@ export class StudentProgressService {
         .eq("status", "PUBLISHED")
         .eq("is_visible", true);
 
-      const courseLecturesMap = new Map<string, any[]>();
-      const batchLecturesMap = new Map<string, any[]>();
+      const courseLecturesMap = new Map<string, Array<{ id: string }>>();
+      const batchLecturesMap = new Map<string, Array<{ id: string }>>();
       const chapterList: { id: string; title: string; courseId: string; subjectName: string }[] = [];
 
       (allLectures || []).forEach((lec) => {
@@ -248,8 +245,7 @@ export class StudentProgressService {
               title,
               subject_name,
               test_type,
-              course_id,
-              batch_id
+              course_id
             )
           `)
           .eq("student_id", userId)
@@ -313,7 +309,6 @@ export class StudentProgressService {
       const courseProgress: CourseBatchProgressItem[] = [];
       const distinctAccessibleLectureIds = new Set<string>();
       let totalAccessibleLectures = 0;
-      let totalCompletedLectures = 0;
 
       // Subject aggregation map
       const subjectAggregationMap = new Map<
@@ -322,8 +317,21 @@ export class StudentProgressService {
       >();
 
       enrolledList.forEach((e) => {
-        const course = e.course as any;
-        const batch = e.batch as any;
+        const course = e.course as {
+          id?: string;
+          title?: string;
+          category?: string;
+          class_level?: { name?: string };
+          subject?: { name?: string };
+          board?: { name?: string };
+        } | null;
+        const batch = e.batch as {
+          id?: string;
+          title?: string;
+          board_label?: string;
+          educator_name?: string | null;
+          batch_teachers?: Array<{ teacher?: { full_name?: string } }>;
+        } | null;
         const courseId = course?.id || e.course_id;
         const batchId = batch?.id || e.batch_id || null;
 
@@ -343,7 +351,6 @@ export class StudentProgressService {
           distinctAccessibleLectureIds.add(lid);
           if (completedLectureIds.has(lid)) {
             enrollmentCompletedLecs++;
-            totalCompletedLectures++;
           }
         });
 

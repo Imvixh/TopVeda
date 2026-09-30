@@ -79,7 +79,16 @@ async function runComprehensiveRegressionSuite() {
   await adminClient.from("student_tests").delete().ilike("title", "Automated Suite:%");
   await adminClient.from("student_tests").delete().ilike("slug", "atomicity-%");
 
-  // Fetch academic taxonomy
+  // Fetch academic taxonomy and test student profile
+  const { data: studentProfiles } = await adminClient
+    .from("profiles")
+    .select("id, role")
+    .eq("role", "STUDENT")
+    .limit(1);
+  const { data: anyProfiles } = await adminClient.from("profiles").select("id, role").limit(1);
+  const studentUser = studentProfiles?.[0] || anyProfiles?.[0] || { id: "00000000-0000-0000-0000-000000000001" };
+  const mockStudentId = studentUser.id;
+
   const taxonomy = await CmsTestService.getAcademicTaxonomy(adminClient);
   const mathSubject = taxonomy.subjects.find((s) => s.code === "MATH") || taxonomy.subjects[0];
   const mathCourse = taxonomy.courses.find((c) => c.subject_id === mathSubject?.id) || taxonomy.courses[0];
@@ -288,9 +297,7 @@ async function runComprehensiveRegressionSuite() {
   assert(test2CreateRes.success === true, "10.1 Created test with questions for attempt simulation");
   const test2Id = test2CreateRes.testId;
 
-  // Fetch a valid student/profile ID for foreign key integrity
-  const { data: existingProfile } = await adminClient.from("profiles").select("id").limit(1).single();
-  const mockStudentId = existingProfile?.id;
+  // Seed student attempt record using valid student/profile ID
   const { data: attemptRow } = await adminClient
     .from("student_test_attempts")
     .insert({
@@ -405,34 +412,178 @@ async function runComprehensiveRegressionSuite() {
   await adminClient.from("student_tests").delete().eq("id", test3Id);
 
   // ---------------------------------------------------------------------------
-  // REQUIREMENT 13: Creation Atomicity Rollback
+  // REQUIREMENT 14: Decimal Negative Marking Regression Suite
   // ---------------------------------------------------------------------------
-  console.log("\n[SECTION 13] Creation Atomicity Rollback Verification...");
+  console.log("\n[SECTION 14] Decimal Negative Marking Validation & Precision Tests...");
 
-  const atomicitySlug = "atomicity-rollback-test-" + Date.now().toString(36);
-  const { data: preTest } = await adminClient
-    .from("student_tests")
-    .insert({
-      title: "Atomicity Verification Mock Test",
-      slug: atomicitySlug,
-      subject_name: "General",
-      test_type: "chapter_quiz",
-      duration_minutes: 10,
-      total_marks: 4,
-      passing_marks: 2,
-      total_questions: 1,
-      status: "DRAFT",
-    })
-    .select("id")
-    .single();
+  const decimalValuesToTest = [0, 0.2, 0.25, 0.5, 0.75, 1, 1.25];
+  for (const decVal of decimalValuesToTest) {
+    const decPayload = {
+      title: `Automated Suite: Decimal Neg ${decVal} Test`,
+      testType: "practice_drill",
+      status: "PUBLISHED",
+      durationMinutes: 0,
+      totalMarks: 4,
+      questions: [
+        {
+          questionText: `Question testing decimal negative mark ${decVal}`,
+          questionType: "single_choice",
+          marks: 4,
+          negativeMarks: decVal,
+          options: [
+            { optionLabel: "A", optionText: "Option 1", isCorrect: true, displayOrder: 1 },
+            { optionLabel: "B", optionText: "Option 2", isCorrect: false, displayOrder: 2 },
+          ],
+        },
+      ],
+    };
 
-  const tempId = preTest?.id;
-  if (tempId) {
-    // Simulate cleanup on failure
-    await adminClient.from("student_tests").delete().eq("id", tempId);
-    const { data: afterDel } = await adminClient.from("student_tests").select("id").eq("id", tempId);
-    assert(afterDel?.length === 0, "13.1 Atomic rollback leaves 0 orphaned records in student_tests");
+    const decRes = await CmsTestService.upsertTestWithQuestions(adminClient, decPayload);
+    assert(decRes.success === true, `14. Decimal negative mark ${decVal} upserted successfully`);
+
+    if (decRes.testId) {
+      const { data: qData } = await adminClient
+        .from("student_test_questions")
+        .select("negative_marks")
+        .eq("test_id", decRes.testId)
+        .single();
+
+      assert(
+        Math.abs(Number(qData?.negative_marks) - decVal) < 0.001,
+        `14. Decimal negative mark ${decVal} stored and retrieved accurately in DB (${qData?.negative_marks})`
+      );
+
+      // Clean up test
+      await adminClient.from("student_tests").delete().eq("id", decRes.testId);
+    }
   }
+
+  // ---------------------------------------------------------------------------
+  // REQUIREMENT 15: Decimal Precision Server-Side Grading Evaluation
+  // ---------------------------------------------------------------------------
+  console.log("\n[SECTION 15] Server-Side Grading with Fractional Negative Deductions...");
+
+  // Create test with 2 questions: Q1 (+4 marks, -0.25 neg), Q2 (+4 marks, -0.75 neg)
+  const gradingTestPayload = {
+    title: "Automated Suite: Grading Calculation Test",
+    testType: "test",
+    status: "PUBLISHED",
+    durationMinutes: 15,
+    totalMarks: 8,
+    questions: [
+      {
+        questionText: "Grading Test Q1",
+        questionType: "single_choice",
+        marks: 4,
+        negativeMarks: 0.25,
+        options: [
+          { optionLabel: "A", optionText: "Correct A", isCorrect: true, displayOrder: 1 },
+          { optionLabel: "B", optionText: "Incorrect B", isCorrect: false, displayOrder: 2 },
+        ],
+      },
+      {
+        questionText: "Grading Test Q2",
+        questionType: "single_choice",
+        marks: 4,
+        negativeMarks: 0.75,
+        options: [
+          { optionLabel: "A", optionText: "Correct A", isCorrect: true, displayOrder: 1 },
+          { optionLabel: "B", optionText: "Incorrect B", isCorrect: false, displayOrder: 2 },
+        ],
+      },
+    ],
+  };
+
+  const gTestRes = await CmsTestService.upsertTestWithQuestions(adminClient, gradingTestPayload);
+  const gTestId = gTestRes.testId;
+
+  // Student starts attempt
+  const startRes = await StudentTestService.startTestAttempt(adminClient, studentUser.id, gTestId);
+  assert(startRes.success === true, "15.1 Student started attempt on grading test");
+
+  if (startRes.attemptId && startRes.questions) {
+    const q1 = startRes.questions[0];
+    const q2 = startRes.questions[1];
+
+    const q1CorrectOpt = (await adminClient.from("student_test_question_options").select("id").eq("question_id", q1.id).eq("is_correct", true).single()).data?.id;
+    const q2IncorrectOpt = (await adminClient.from("student_test_question_options").select("id").eq("question_id", q2.id).eq("is_correct", false).single()).data?.id;
+
+    // Submit: Q1 correct (+4.00), Q2 incorrect (-0.75) -> Total = 3.25 / 8.00 (40.63%)
+    const submitRes = await StudentTestService.submitTestAttempt(adminClient, studentUser.id, gTestId, {
+      attemptId: startRes.attemptId,
+      timeSpentSeconds: 120,
+      answers: [
+        { questionId: q1.id, selectedOptionIds: [q1CorrectOpt] },
+        { questionId: q2.id, selectedOptionIds: [q2IncorrectOpt] },
+      ],
+    });
+
+    assert(submitRes.success === true, "15.2 Test evaluated successfully by grading engine");
+    assert(Math.abs(submitRes.scorecard?.scoreObtained - 3.25) < 0.001, `15.3 Fractional score 3.25 calculated accurately (received ${submitRes.scorecard?.scoreObtained})`);
+    assert(Math.abs(submitRes.scorecard?.percentage - 40.63) < 0.1, `15.4 Percentage 40.63% computed accurately (received ${submitRes.scorecard?.percentage}%)`);
+
+    // Clean up
+    await adminClient.from("student_test_attempts").delete().eq("id", startRes.attemptId);
+  }
+  await adminClient.from("student_tests").delete().eq("id", gTestId);
+
+  // ---------------------------------------------------------------------------
+  // REQUIREMENT 16: Academic Scope & Multi-Tier Entitlement Consistency
+  // ---------------------------------------------------------------------------
+  console.log("\n[SECTION 16] Academic Scope & Subject/Class Isolation Consistency...");
+
+  // Create Class 10 Math Test
+  const class10MathCourse = taxonomy.courses.find(c => c.board?.code === "CBSE" && c.class?.code === "CLASS_10" && c.subject?.code === "MATH") || taxonomy.courses[0];
+  const class10SciCourse = taxonomy.courses.find(c => c.board?.code === "CBSE" && c.class?.code === "CLASS_10" && c.subject?.code === "SCI") || taxonomy.courses[1];
+
+  const isolationTestPayload = {
+    title: "Automated Suite: Isolation Consistency Test",
+    testType: "test",
+    status: "PUBLISHED",
+    durationMinutes: 20,
+    totalMarks: 4,
+    courseId: class10MathCourse.id,
+    subjectId: class10MathCourse.subject_id,
+    questions: [
+      {
+        questionText: "Class 10 Math specific question",
+        questionType: "single_choice",
+        marks: 4,
+        negativeMarks: 0,
+        options: [
+          { optionLabel: "A", optionText: "True", isCorrect: true, displayOrder: 1 },
+          { optionLabel: "B", optionText: "False", isCorrect: false, displayOrder: 2 },
+        ],
+      },
+    ],
+  };
+
+  const isoTestRes = await CmsTestService.upsertTestWithQuestions(adminClient, isolationTestPayload);
+  const isoTestId = isoTestRes.testId;
+
+  // Enrolled student in Math -> Granted
+  await adminClient.from("student_enrollments").upsert({
+    student_id: studentUser.id,
+    course_id: class10MathCourse.id,
+    status: "ACTIVE",
+  }, { onConflict: "student_id, course_id" });
+
+  const enrolledAccess = await StudentTestService.verifyStudentTestAccess(adminClient, studentUser.id, isoTestId);
+  assert(enrolledAccess.granted === true, "16.1 Enrolled student granted access to matching Class 10 Math test");
+
+  // Remove enrollment -> Check access denied for unenrolled student without preferences
+  await adminClient.from("student_enrollments").delete().eq("student_id", studentUser.id).eq("course_id", class10MathCourse.id);
+  await adminClient.from("student_learning_preferences").delete().eq("student_id", studentUser.id);
+
+  const unenrolledAccess = await StudentTestService.verifyStudentTestAccess(adminClient, studentUser.id, isoTestId);
+  assert(unenrolledAccess.granted === false, "16.2 Unenrolled student denied access to protected test");
+
+  // Unauthenticated access -> Denied
+  const unauthAccess = await StudentTestService.verifyStudentTestAccess(adminClient, "", isoTestId);
+  assert(unauthAccess.granted === false, "16.3 Unauthenticated user denied access to test");
+
+  // Clean up isolation test
+  await adminClient.from("student_tests").delete().eq("id", isoTestId);
 
   console.log("\n================================================================================");
   console.log(`  COMPREHENSIVE REGRESSION SUMMARY: ${passCount}/${testCount} TESTS PASSED`);

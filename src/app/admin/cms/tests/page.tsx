@@ -397,7 +397,13 @@ export default function AdminTestsPage() {
           setFormEnableTimer(parsed.durationMinutes > 0);
         }
         if (parsed.questions && parsed.questions.length > 0) {
-          setQuestions(parsed.questions);
+          const mappedQuestions = parsed.questions.map((q, idx) => ({
+            ...q,
+            marks: formDefaultMarks,
+            negativeMarks: formNegativeMarking,
+            displayOrder: idx + 1,
+          }));
+          setQuestions(mappedQuestions);
         }
       }
     } catch (err: unknown) {
@@ -447,13 +453,24 @@ export default function AdminTestsPage() {
     try {
       setIsSaving(true);
       const effectiveStatus = overrideStatus || formStatus;
-      const matchedCourse = taxonomy.courses.find(
-        (c) => c.board_id === formBoardId && c.class_id === formClassId && c.subject_id === formSubjectId
-      );
-      const matchedSubject = taxonomy.subjects.find((s) => s.id === formSubjectId);
+      // Global marking scheme from Step 1 applied to all questions
+      const standardizedQuestions = questions.map((q, idx) => ({
+        ...q,
+        marks: formDefaultMarks,
+        negativeMarks: formNegativeMarking,
+        displayOrder: idx + 1,
+      }));
 
-      const totalCalculatedMarks = questions.reduce((acc, q) => acc + (q.marks || 1), 0);
+      const totalCalculatedMarks = standardizedQuestions.length * formDefaultMarks;
       const durationMinutes = formType === "practice_drill" || !formEnableTimer ? 0 : formDurationMinutes;
+
+      const matchedSubject = taxonomy.subjects.find((s) => s.id === formSubjectId);
+      const matchedCourse = taxonomy.courses.find(
+        (c) =>
+          (!formBoardId || c.board_id === formBoardId) &&
+          (!formClassId || c.class_id === formClassId) &&
+          (!formSubjectId || c.subject_id === formSubjectId)
+      );
 
       const payload: AdminTestUpsertPayload = {
         id: testId,
@@ -470,7 +487,7 @@ export default function AdminTestsPage() {
         subjectName: matchedSubject?.name || "General",
         courseId: matchedCourse?.id || undefined,
         chapterId: formChapterId || undefined,
-        questions,
+        questions: standardizedQuestions,
       };
 
       const res = await fetch("/api/admin/cms/tests", {
@@ -1181,17 +1198,16 @@ export default function AdminTestsPage() {
                         <label className="text-xs font-bold text-brand-charcoal">
                           Negative Marking per Q
                         </label>
-                        <select
+                        <Input
+                          type="number"
+                          step="any"
+                          min={0}
+                          max={50}
+                          placeholder="e.g. 0, 0.2, 0.25, 0.5, 0.75, 1, 1.25"
                           value={formNegativeMarking}
-                          onChange={(e) => setFormNegativeMarking(Number(e.target.value))}
-                          className="w-full px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-brand-border text-brand-charcoal"
-                        >
-                          <option value={0}>0 (No Negative Marking)</option>
-                          <option value={0.25}>0.25 Mark</option>
-                          <option value={0.5}>0.5 Mark</option>
-                          <option value={1}>1 Mark (Standard)</option>
-                          <option value={2}>2 Marks</option>
-                        </select>
+                          onChange={(e) => setFormNegativeMarking(parseFloat(e.target.value) || 0)}
+                          className="rounded-xl text-xs"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1235,6 +1251,21 @@ export default function AdminTestsPage() {
                   {/* METHOD 1: MANUAL GOOGLE FORMS-STYLE BUILDER */}
                   {creationMethod === "manual" && (
                     <div className="space-y-6">
+                      {/* Global Marking Scheme Banner from Step 1 */}
+                      <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-lg bg-brand-orange text-white font-black text-[10px] uppercase">
+                            Global Scheme
+                          </span>
+                          <span className="font-bold text-brand-charcoal">
+                            +{formDefaultMarks} Marks per Q · -{formNegativeMarking} Negative Marking
+                          </span>
+                        </div>
+                        <span className="font-extrabold text-brand-charcoal text-[11px]">
+                          Total Marks: {questions.length * formDefaultMarks} Marks ({questions.length} Questions)
+                        </span>
+                      </div>
+
                       <div className="flex items-center justify-between pb-2 border-b border-brand-border/60">
                         <span className="text-xs font-black uppercase tracking-wider text-brand-charcoal">
                           Questions ({questions.length} Total)
@@ -1268,43 +1299,21 @@ export default function AdminTestsPage() {
                               </div>
 
                               <div className="flex items-center gap-1.5">
-                                {/* Marks Inputs */}
-                                <div className="flex items-center gap-1 text-xs">
-                                  <span className="text-brand-text-muted text-[11px]">Marks:</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    value={q.marks}
-                                    onChange={(e) => handleUpdateQuestion(qIdx, { marks: Number(e.target.value) })}
-                                    className="w-12 px-2 py-0.5 rounded-lg border text-xs font-bold text-center"
-                                  />
-                                </div>
-
-                                <div className="flex items-center gap-1 text-xs">
-                                  <span className="text-brand-text-muted text-[11px]">Neg:</span>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step={0.25}
-                                    value={q.negativeMarks}
-                                    onChange={(e) => handleUpdateQuestion(qIdx, { negativeMarks: Number(e.target.value) })}
-                                    className="w-12 px-2 py-0.5 rounded-lg border text-xs font-bold text-center"
-                                  />
-                                </div>
-
                                 {/* Reorder Controls */}
                                 <button
+                                  type="button"
                                   onClick={() => handleMoveQuestion(qIdx, "up")}
                                   disabled={qIdx === 0}
-                                  className="p-1 rounded-lg border text-brand-text-muted hover:text-brand-charcoal disabled:opacity-30"
+                                  className="p-1.5 rounded-lg border border-brand-border text-brand-text-muted hover:text-brand-charcoal disabled:opacity-30 transition-colors"
                                   title="Move Up"
                                 >
                                   <ChevronUp className="h-3.5 w-3.5" />
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => handleMoveQuestion(qIdx, "down")}
                                   disabled={qIdx === questions.length - 1}
-                                  className="p-1 rounded-lg border text-brand-text-muted hover:text-brand-charcoal disabled:opacity-30"
+                                  className="p-1.5 rounded-lg border border-brand-border text-brand-text-muted hover:text-brand-charcoal disabled:opacity-30 transition-colors"
                                   title="Move Down"
                                 >
                                   <ChevronDown className="h-3.5 w-3.5" />
@@ -1312,8 +1321,9 @@ export default function AdminTestsPage() {
 
                                 {/* Duplicate */}
                                 <button
+                                  type="button"
                                   onClick={() => handleDuplicateQuestion(qIdx)}
-                                  className="p-1.5 rounded-lg border text-brand-text-muted hover:text-brand-charcoal"
+                                  className="p-1.5 rounded-lg border border-brand-border text-brand-text-muted hover:text-brand-charcoal transition-colors"
                                   title="Duplicate Question"
                                 >
                                   <Copy className="h-3.5 w-3.5" />
@@ -1321,9 +1331,10 @@ export default function AdminTestsPage() {
 
                                 {/* Delete */}
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteQuestion(qIdx)}
                                   disabled={questions.length <= 1}
-                                  className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-30"
+                                  className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-30 transition-colors"
                                   title="Delete Question"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />

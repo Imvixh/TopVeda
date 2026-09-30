@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StudentTestService } from "@/lib/services/student-test.service";
 
 export async function GET(
@@ -35,7 +36,8 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized. Please sign in." }, { status: 401 });
     }
 
-    const result = await StudentTestService.getAttemptScorecard(supabase, user.id, attemptId);
+    const adminClient = createAdminClient();
+    const result = await StudentTestService.getAttemptScorecard(adminClient, user.id, attemptId);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 404 });

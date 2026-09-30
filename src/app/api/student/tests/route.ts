@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StudentTestService } from "@/lib/services/student-test.service";
 
 export async function GET(request: NextRequest) {
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const data = await StudentTestService.getPublishedTests(supabase, user?.id);
+    const adminClient = createAdminClient();
+    const data = await StudentTestService.getPublishedTests(adminClient, user?.id);
 
     return NextResponse.json(data);
   } catch (err: unknown) {

@@ -35,6 +35,13 @@ interface StudentTestMeta {
     cms_class_levels?: { name?: string };
   };
   cms_chapters?: { title?: string };
+  previousAttempt?: {
+    attemptId: string;
+    scoreObtained: number;
+    percentage: number;
+    passed: boolean;
+    submittedAt: string;
+  } | null;
 }
 
 export default function TestRunnerPage() {
@@ -83,6 +90,25 @@ export default function TestRunnerPage() {
       isMounted = false;
     };
   }, [testId]);
+
+  // Load Previous Completed Scorecard
+  const handleLoadPreviousScorecard = async (prevAttemptId: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/student/tests/attempts/${prevAttemptId}`);
+      if (res.ok) {
+        const data: TestScorecardResult = await res.json();
+        setScorecard(data);
+        setViewMode("scorecard");
+      } else {
+        alert("Failed to load previous scorecard.");
+      }
+    } catch (err) {
+      console.error("Failed to load previous scorecard:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Submit Test Attempt for Server-Side Grading
   const handleSubmitTest = React.useCallback(async () => {
@@ -247,7 +273,7 @@ export default function TestRunnerPage() {
             </div>
 
             {/* Parameter Badges Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60">
+            <div className="grid grid-cols-3 gap-3 p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60">
               <div className="space-y-0.5 text-center sm:text-left">
                 <span className="text-[10px] font-bold text-brand-text-muted uppercase">Duration</span>
                 <p className="text-sm font-black text-brand-charcoal">
@@ -263,10 +289,6 @@ export default function TestRunnerPage() {
               <div className="space-y-0.5 text-center sm:text-left">
                 <span className="text-[10px] font-bold text-brand-text-muted uppercase">Total Marks</span>
                 <p className="text-sm font-black text-brand-charcoal">{testMeta?.total_marks} Marks</p>
-              </div>
-              <div className="space-y-0.5 text-center sm:text-left">
-                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Passing Mark</span>
-                <p className="text-sm font-black text-emerald-600">{testMeta?.passing_marks} Marks</p>
               </div>
             </div>
 
@@ -302,13 +324,41 @@ export default function TestRunnerPage() {
               </ul>
             </div>
 
+            {/* Previous Attempt Summary (if any) */}
+            {testMeta?.previousAttempt && (
+              <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="text-xs font-black text-emerald-950">
+                      Previous Attempt Completed
+                    </span>
+                  </div>
+                  <span className="text-xs font-black text-emerald-700">
+                    Score: {testMeta.previousAttempt.scoreObtained} / {testMeta.total_marks} ({testMeta.previousAttempt.percentage}%)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-emerald-200/60">
+                  <span className="text-[11px] font-medium text-emerald-800">
+                    Submitted on {new Date(testMeta.previousAttempt.submittedAt).toLocaleDateString()}
+                  </span>
+                  <button
+                    onClick={() => handleLoadPreviousScorecard(testMeta.previousAttempt!.attemptId)}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black transition-colors shadow-3xs"
+                  >
+                    View Scorecard & Review
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Begin Action CTA */}
             <div className="pt-4 border-t border-brand-border/40">
               <button
                 onClick={handleStartTest}
                 className="w-full py-3.5 rounded-2xl bg-brand-orange hover:bg-brand-orange-hover text-white text-sm font-black tracking-wide flex items-center justify-center gap-2 shadow-xs transition-colors"
               >
-                <span>Begin Test Now</span>
+                <span>{testMeta?.previousAttempt ? "Retake Test" : "Begin Test Now"}</span>
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -555,9 +605,17 @@ export default function TestRunnerPage() {
   }
 
   // ==========================================================================
+  // ==========================================================================
   // STATE 3: POST-SUBMISSION SCORECARD & ANALYSIS VIEW
   // ==========================================================================
   if (viewMode === "scorecard" && scorecard) {
+    const totalNegativeDeduction = scorecard.evaluations.reduce((acc, ev) => {
+      if (ev.isAttempted && !ev.isCorrect && ev.marksAwarded < 0) {
+        return acc + Math.abs(ev.marksAwarded);
+      }
+      return acc;
+    }, 0);
+
     return (
       <div className="min-h-screen bg-[#FDFDFC] text-brand-text-primary flex flex-col font-sans antialiased">
         <header className="h-14 border-b border-brand-border/70 bg-white px-4 sm:px-8 flex items-center justify-between">
@@ -582,44 +640,67 @@ export default function TestRunnerPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className={cn(
-                  "px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-3xs",
-                  scorecard.passed
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-300"
-                    : "bg-rose-50 text-rose-700 border-rose-300"
-                )}>
-                  {scorecard.passed ? "PASSED" : "NEEDS PRACTICE"}
+                <span className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border shadow-3xs bg-emerald-50 text-emerald-700 border-emerald-300">
+                  COMPLETED
                 </span>
               </div>
             </div>
 
             {/* Score Metrics Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 text-center space-y-0.5">
-                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Score</span>
-                <p className="text-2xl font-black text-brand-charcoal tabular-nums">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 text-center space-y-0.5">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Final Score</span>
+                <p className="text-xl sm:text-2xl font-black text-brand-charcoal tabular-nums">
                   {scorecard.scoreObtained} / {scorecard.maxScore}
                 </p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 text-center space-y-0.5">
+              <div className="p-3.5 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 text-center space-y-0.5">
                 <span className="text-[10px] font-bold text-brand-text-muted uppercase">Percentage</span>
-                <p className="text-2xl font-black text-brand-orange tabular-nums">
+                <p className="text-xl sm:text-2xl font-black text-brand-orange tabular-nums">
                   {scorecard.percentage}%
                 </p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/70 text-center space-y-0.5">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200/70 text-center space-y-0.5">
                 <span className="text-[10px] font-bold text-emerald-700 uppercase">Correct</span>
-                <p className="text-2xl font-black text-emerald-700 tabular-nums">
+                <p className="text-xl sm:text-2xl font-black text-emerald-700 tabular-nums">
                   {scorecard.correctCount}
                 </p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-rose-50/60 border border-rose-200/70 text-center space-y-0.5">
+              <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200/70 text-center space-y-0.5">
                 <span className="text-[10px] font-bold text-rose-700 uppercase">Incorrect</span>
-                <p className="text-2xl font-black text-rose-700 tabular-nums">
+                <p className="text-xl sm:text-2xl font-black text-rose-700 tabular-nums">
                   {scorecard.incorrectCount}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-gray-50/70 border border-brand-border/60 text-center space-y-0.5">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Unattempted</span>
+                <p className="text-xl sm:text-2xl font-black text-brand-charcoal tabular-nums">
+                  {scorecard.unansweredCount}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-rose-50/40 border border-rose-200/50 text-center space-y-0.5">
+                <span className="text-[10px] font-bold text-rose-600 uppercase">Negative Marks</span>
+                <p className="text-xl sm:text-2xl font-black text-rose-600 tabular-nums">
+                  {totalNegativeDeduction > 0 ? `-${totalNegativeDeduction.toFixed(2)}` : "0.00"}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 text-center space-y-0.5">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Time Taken</span>
+                <p className="text-xl sm:text-2xl font-black text-brand-charcoal tabular-nums">
+                  {formatTime(scorecard.timeSpentSeconds)}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-brand-bg-warm/60 border border-brand-border/60 text-center space-y-0.5">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Submitted At</span>
+                <p className="text-xs sm:text-sm font-black text-brand-charcoal pt-1 truncate">
+                  {new Date(scorecard.submittedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
             </div>
@@ -628,7 +709,7 @@ export default function TestRunnerPage() {
             <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                <span>Results successfully synchronized with your <strong>Progress Tracker</strong>.</span>
+                <span>Results synchronized with your <strong>Progress Tracker</strong>.</span>
               </div>
               <Link href="/student/progress" className="font-black underline text-[11px] shrink-0">
                 View Tracker →
@@ -727,20 +808,29 @@ export default function TestRunnerPage() {
           </div>
 
           {/* Scorecard Bottom Actions */}
-          <div className="flex items-center justify-between pt-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
             <Link
               href="/student/tests"
-              className="px-5 py-2.5 rounded-2xl border border-brand-border bg-white hover:bg-gray-50 text-xs font-bold text-brand-charcoal transition-colors"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-2xl border border-brand-border bg-white hover:bg-gray-50 text-xs font-bold text-brand-charcoal transition-colors text-center"
             >
               ← Back to Tests
             </Link>
 
-            <Link
-              href="/student/progress"
-              className="px-5 py-2.5 rounded-2xl bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-black transition-colors shadow-xs"
-            >
-              View in Progress Tracker →
-            </Link>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <button
+                onClick={handleStartTest}
+                className="flex-1 sm:flex-none px-5 py-2.5 rounded-2xl border border-brand-orange text-brand-orange hover:bg-orange-50 text-xs font-bold transition-colors"
+              >
+                Retake Test
+              </button>
+
+              <Link
+                href="/student/progress"
+                className="flex-1 sm:flex-none px-5 py-2.5 rounded-2xl bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-black transition-colors shadow-xs text-center"
+              >
+                View in Progress Tracker →
+              </Link>
+            </div>
           </div>
         </main>
       </div>

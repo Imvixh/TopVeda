@@ -201,13 +201,8 @@ export default function StudentTestsPage() {
                           </div>
 
                           {test.isAttempted ? (
-                            <span className={cn(
-                              "px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border",
-                              test.lastPassed
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200"
-                            )}>
-                              {test.lastPassed ? "Passed" : "Needs Review"} · {test.lastPercentage}%
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              Completed · {test.lastPercentage}%
                             </span>
                           ) : (
                             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-brand-orange border border-orange-200 uppercase tracking-wide">

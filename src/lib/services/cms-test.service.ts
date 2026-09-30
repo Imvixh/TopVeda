@@ -726,8 +726,8 @@ export class CmsTestService {
             test_id: savedTestId,
             question_text: q.questionText.trim(),
             question_type: q.questionType || "single_choice",
-            marks: q.marks || 1,
-            negative_marks: q.negativeMarks || 0,
+            marks: typeof q.marks === "number" ? q.marks : (parseFloat(String(q.marks)) || 1),
+            negative_marks: typeof q.negativeMarks === "number" ? q.negativeMarks : (parseFloat(String(q.negativeMarks)) || 0),
             explanation: q.explanation || null,
             display_order: i + 1,
           })
@@ -984,7 +984,9 @@ export class CmsTestService {
       return { valid: false, errors, warnings };
     }
 
-    const defaultNegativeMark = typeof parsed.negative_marking === "number" ? parsed.negative_marking : 0;
+    const defaultNegativeMark = typeof parsed.negative_marking === "number"
+      ? parsed.negative_marking
+      : (typeof parsed.negative_marking === "string" ? (parseFloat(parsed.negative_marking) || 0) : 0);
     let computedTotalMarks = 0;
     const questionsPayload: AdminQuestionPayload[] = [];
 
@@ -1002,8 +1004,12 @@ export class CmsTestService {
         errors.push(`Question ${qNum}: Missing question text.`);
       }
 
-      const qMarks = typeof q.marks === "number" && q.marks > 0 ? q.marks : 1;
-      const qNegative = typeof q.negative_marks === "number" ? q.negative_marks : defaultNegativeMark;
+      const qMarks = typeof q.marks === "number" && q.marks > 0
+        ? q.marks
+        : (typeof q.marks === "string" ? (parseFloat(q.marks) || 1) : 1);
+      const qNegative = typeof q.negative_marks === "number"
+        ? q.negative_marks
+        : (typeof q.negative_marks === "string" ? (parseFloat(q.negative_marks) || defaultNegativeMark) : defaultNegativeMark);
       computedTotalMarks += qMarks;
 
       // Validate Options
