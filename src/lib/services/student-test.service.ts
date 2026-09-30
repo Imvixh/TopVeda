@@ -5,6 +5,7 @@
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
+import { ContentAccessService } from "@/lib/services/content-access.service";
 import {
   StudentTestItem,
   SafeTestQuestion,
@@ -12,6 +13,7 @@ import {
   TestScorecardResult,
   QuestionEvaluationResult,
 } from "@/types/assessment.types";
+
 
 // Subject Visual Style Resolver
 function getSubjectTestTheme(subjectName: string) {
@@ -93,7 +95,7 @@ export class StudentTestService {
         return [];
       }
 
-      // 2. Academic Enrollment Gating & Targeting (Server-Enforced)
+      // 2. Academic Enrollment Gating & Targeting (Server-Enforced via Unified Academic Scope)
       let eligibleTests = tests || [];
 
       if (userId) {
@@ -107,56 +109,50 @@ export class StudentTestService {
         const isPrivileged = profile?.role === "SUPER_ADMIN" || profile?.role === "ADMIN" || profile?.role === "TEACHER";
 
         if (!isPrivileged) {
-          // Fetch student enrollments
-          const { data: enrollments } = await supabase
-            .from("student_enrollments")
-            .select("course_id, batch_id")
-            .eq("student_id", userId)
-            .eq("status", "ACTIVE");
+          const scope = await ContentAccessService.resolveStudentAcademicScope(supabase, userId);
 
-          // Fetch student entitlements
-          const { data: entitlements } = await supabase
-            .from("student_content_entitlements")
-            .select("content_type, content_id")
-            .eq("student_id", userId)
-            .eq("status", "ACTIVE");
+          if (scope.hasAllAccess) {
+            eligibleTests = tests || [];
+          } else if (!scope.hasActiveEnrollments) {
+            // Unenrolled students get zero personalized tests
+            eligibleTests = [];
+          } else {
+            // Fetch student previous attempt test IDs so attempted tests are always visible
+            const { data: attempts } = await supabase
+              .from("student_test_attempts")
+              .select("test_id")
+              .eq("student_id", userId);
+            const attemptedTestIds = new Set((attempts || []).map((a: any) => a.test_id));
 
-          const hasAllAccess = (entitlements || []).some((e) => e.content_type === "ALL_ACCESS");
-
-          if (!hasAllAccess) {
-            const enrolledCourseIds = new Set<string>((enrollments || []).map((e) => e.course_id).filter(Boolean));
-            const batchIds: string[] = (enrollments || []).map((e) => e.batch_id).filter(Boolean);
-
-            (entitlements || []).forEach((e) => {
-              if (e.content_type === "COURSE" && e.content_id) {
-                enrolledCourseIds.add(e.content_id);
+            eligibleTests = (tests || []).filter((t: any) => {
+              // Direct entitlement check
+              if (scope.validEntitlements.some((e: any) => e.content_type === "TEST" && e.content_id === t.id)) {
+                return true;
               }
-              if (e.content_type === "BATCH" && e.content_id) {
-                batchIds.push(e.content_id);
+              // Previously attempted test by this student is always included
+              if (attemptedTestIds.has(t.id)) {
+                return true;
               }
+              // Directly linked course match
+              if (t.course_id && scope.enrolledCourseIds.has(t.course_id)) {
+                return true;
+              }
+              // Subject ID matching enrolled subject
+              if (t.subject_id && scope.enrolledSubjectIds.has(t.subject_id)) {
+                const courseRel = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
+                if (courseRel?.board_id && !scope.enrolledBoardIds.has(courseRel.board_id)) return false;
+                if (courseRel?.class_id && !scope.enrolledClassIds.has(courseRel.class_id)) return false;
+                return true;
+              }
+              // Subject name matching enrolled subject name
+              if (t.subject_name && scope.enrolledSubjectNames.has(t.subject_name.trim().toLowerCase())) {
+                const courseRel = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
+                if (courseRel?.board_id && !scope.enrolledBoardIds.has(courseRel.board_id)) return false;
+                if (courseRel?.class_id && !scope.enrolledClassIds.has(courseRel.class_id)) return false;
+                return true;
+              }
+              return false;
             });
-
-            // Resolve course IDs from enrolled batches
-            if (batchIds.length > 0) {
-              const { data: batches } = await supabase
-                .from("cms_batches")
-                .select("id, course_id")
-                .in("id", batchIds);
-              (batches || []).forEach((b) => {
-                if (b.course_id) enrolledCourseIds.add(b.course_id);
-              });
-            }
-
-            if (enrolledCourseIds.size > 0) {
-              // Eligible: tests strictly linked to enrolled courses
-              eligibleTests = (tests || []).filter((t) => {
-                if (t.course_id && enrolledCourseIds.has(t.course_id)) return true;
-                return false;
-              });
-            } else {
-              // No active enrollment / entitlements -> zero personalized tests
-              eligibleTests = [];
-            }
           }
         }
       } else {
@@ -322,79 +318,63 @@ export class StudentTestService {
         return { granted: true, test };
       }
 
-      // 3. Entitlement Vault Check (ALL_ACCESS or direct test entitlement)
-      const { data: entitlements } = await supabase
-        .from("student_content_entitlements")
-        .select("content_type, content_id, expires_at")
-        .eq("student_id", userId)
-        .eq("status", "ACTIVE");
-
-      const now = new Date();
-      const validEntitlements = (entitlements || []).filter(
-        (e) => !e.expires_at || new Date(e.expires_at) >= now
-      );
+      // 3. Unified Academic Scope & Entitlement Verification
+      const scope = await ContentAccessService.resolveStudentAcademicScope(supabase, userId);
 
       if (
-        validEntitlements.some(
-          (e) =>
-            e.content_type === "ALL_ACCESS" ||
-            (e.content_type === "TEST" && e.content_id === testId)
-        )
+        scope.hasAllAccess ||
+        scope.validEntitlements.some((e: any) => e.content_type === "TEST" && e.content_id === testId)
       ) {
         return { granted: true, test };
       }
 
-      // 4. Student Course Enrollments & Course Entitlements Check
-      const { data: enrollments } = await supabase
-        .from("student_enrollments")
-        .select("course_id, batch_id")
+      // Check if student has already attempted this test (always grants access)
+      const { data: attempt } = await supabase
+        .from("student_test_attempts")
+        .select("id")
         .eq("student_id", userId)
-        .eq("status", "ACTIVE");
+        .eq("test_id", testId)
+        .limit(1)
+        .maybeSingle();
 
-      const enrolledCourseIds = new Set<string>(
-        (enrollments || []).map((e) => e.course_id).filter(Boolean)
-      );
-      const batchIds: string[] = (enrollments || []).map((e) => e.batch_id).filter(Boolean);
-
-      validEntitlements.forEach((e) => {
-        if (e.content_type === "COURSE" && e.content_id) {
-          enrolledCourseIds.add(e.content_id);
-        }
-        if (e.content_type === "BATCH" && e.content_id) {
-          batchIds.push(e.content_id);
-        }
-      });
-
-      // Resolve course IDs from enrolled batches
-      if (batchIds.length > 0) {
-        const { data: batches } = await supabase
-          .from("cms_batches")
-          .select("id, course_id")
-          .in("id", batchIds);
-        (batches || []).forEach((b) => {
-          if (b.course_id) enrolledCourseIds.add(b.course_id);
-        });
+      if (attempt) {
+        return { granted: true, test };
       }
 
-      if (enrolledCourseIds.size > 0) {
-        if (test.course_id) {
-          if (enrolledCourseIds.has(test.course_id)) {
+      if (scope.hasActiveEnrollments) {
+        // Direct course match
+        if (test.course_id && scope.enrolledCourseIds.has(test.course_id)) {
+          return { granted: true, test };
+        }
+
+        const courseRel = Array.isArray(test.cms_courses) ? test.cms_courses[0] : test.cms_courses;
+
+        // Subject ID match with academic board & class validation
+        if (test.subject_id && scope.enrolledSubjectIds.has(test.subject_id)) {
+          if (courseRel?.board_id && !scope.enrolledBoardIds.has(courseRel.board_id)) {
+            // Board mismatch
+          } else if (courseRel?.class_id && !scope.enrolledClassIds.has(courseRel.class_id)) {
+            // Class mismatch
+          } else {
             return { granted: true, test };
           }
-          return {
-            granted: false,
-            error: "Access denied. You are not enrolled in the class or subject for this test.",
-          };
         }
-        return {
-          granted: false,
-          error: "Access denied. Active enrollment in the course or batch is required to access this test.",
-        };
+
+        // Subject Name match with academic board & class validation
+        if (test.subject_name && scope.enrolledSubjectNames.has(test.subject_name.trim().toLowerCase())) {
+          if (courseRel?.board_id && !scope.enrolledBoardIds.has(courseRel.board_id)) {
+            // Board mismatch
+          } else if (courseRel?.class_id && !scope.enrolledClassIds.has(courseRel.class_id)) {
+            // Class mismatch
+          } else {
+            return { granted: true, test };
+          }
+        }
       }
 
       return {
         granted: false,
-        error: "Access denied. Active enrollment in the course or batch is required to access this test.",
+        error: "Access denied. You are not enrolled in the class or subject for this test.",
       };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));

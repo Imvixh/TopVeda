@@ -87,6 +87,9 @@ export class StudentLiveService {
           id,
           topic,
           subject,
+          board_id,
+          class_id,
+          subject_id,
           live_status,
           is_live,
           status_text,
@@ -133,73 +136,44 @@ export class StudentLiveService {
       let authorizedClasses = classes || [];
 
       if (!isPrivileged) {
-        // Fetch student enrollments
-        const { data: enrollments } = await supabase
-          .from("student_enrollments")
-          .select("course_id, batch_id")
-          .eq("student_id", userId)
-          .eq("status", "ACTIVE");
+        const scope = await ContentAccessService.resolveStudentAcademicScope(supabase, userId);
 
-        // Fetch student content entitlements
-        const { data: entitlements } = await supabase
-          .from("student_content_entitlements")
-          .select("content_type, content_id, expires_at")
-          .eq("student_id", userId)
-          .eq("status", "ACTIVE");
-
-        const now = new Date();
-        const validEntitlements = (entitlements || []).filter(
-          (e) => !e.expires_at || new Date(e.expires_at) >= now
-        );
-
-        const hasAllAccess = validEntitlements.some((e) => e.content_type === "ALL_ACCESS");
-
-        if (!hasAllAccess) {
-          const enrolledCourseIds = new Set<string>(
-            (enrollments || []).map((e) => e.course_id).filter(Boolean)
-          );
-          const enrolledBatchIds = new Set<string>(
-            (enrollments || []).map((e) => e.batch_id).filter(Boolean)
-          );
-          const directLiveClassIds = new Set<string>();
-
-          validEntitlements.forEach((e) => {
-            if (e.content_type === "COURSE" && e.content_id) {
-              enrolledCourseIds.add(e.content_id);
+        if (scope.hasAllAccess) {
+          authorizedClasses = classes || [];
+        } else if (!scope.hasActiveEnrollments) {
+          // Unenrolled visitors / students get zero personalized live classes
+          return { liveNow: [], upcoming: [], completed: [] };
+        } else {
+          authorizedClasses = (classes || []).filter((c: any) => {
+            // Direct entitlement check
+            if (scope.validEntitlements.some((e: any) => e.content_type === "LIVE_CLASS" && e.content_id === c.id)) {
+              return true;
             }
-            if (e.content_type === "BATCH" && e.content_id) {
-              enrolledBatchIds.add(e.content_id);
+
+            // Must match enrolled subject (e.g. Science or Mathematics, NOT English / Commerce)
+            const liveSubject = (c.subject || "").trim().toLowerCase();
+            const matchesEnrolledSubject = liveSubject ? scope.enrolledSubjectNames.has(liveSubject) : true;
+
+            if (!matchesEnrolledSubject) {
+              return false;
             }
-            if (e.content_type === "LIVE_CLASS" && e.content_id) {
-              directLiveClassIds.add(e.content_id);
+
+            // Academic Board & Class checks if set on live class row
+            if (c.board_id && !scope.enrolledBoardIds.has(c.board_id)) return false;
+            if (c.class_id && !scope.enrolledClassIds.has(c.class_id)) return false;
+            if (c.subject_id && !scope.enrolledSubjectIds.has(c.subject_id)) return false;
+
+            // Batch / Course scope checks
+            if (c.course_id && scope.enrolledCourseIds.has(c.course_id)) return true;
+            if (c.batch_id && scope.enrolledBatchIds.has(c.batch_id)) return true;
+
+            // If no explicit batch/course ID, but board + class + subject matched
+            if (!c.course_id && !c.batch_id && matchesEnrolledSubject) {
+              if (c.board_id || c.class_id) {
+                return true;
+              }
             }
-          });
 
-          // Resolve course IDs from enrolled batches
-          if (enrolledBatchIds.size > 0) {
-            const { data: batches } = await supabase
-              .from("cms_batches")
-              .select("id, course_id")
-              .in("id", Array.from(enrolledBatchIds));
-            (batches || []).forEach((b) => {
-              if (b.course_id) enrolledCourseIds.add(b.course_id);
-            });
-          }
-
-          // If student has NO active enrollments/entitlements, return empty immediately
-          if (
-            enrolledCourseIds.size === 0 &&
-            enrolledBatchIds.size === 0 &&
-            directLiveClassIds.size === 0
-          ) {
-            return { liveNow: [], upcoming: [], completed: [] };
-          }
-
-          // Filter classes matching student's enrolled batches or courses
-          authorizedClasses = (classes || []).filter((c) => {
-            if (directLiveClassIds.has(c.id)) return true;
-            if (c.batch_id && enrolledBatchIds.has(c.batch_id)) return true;
-            if (c.course_id && enrolledCourseIds.has(c.course_id)) return true;
             return false;
           });
         }

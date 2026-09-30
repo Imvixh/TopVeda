@@ -432,4 +432,190 @@ export class ContentAccessService {
       };
     }
   }
+
+  /**
+   * Resolves the student's unified academic enrollment scope (course, batch, board, class, subject)
+   * exactly matching the active enrollment data source used by My Learning.
+   */
+  public static async resolveStudentAcademicScope(
+    supabase: SupabaseClient,
+    userId: string
+  ): Promise<StudentAcademicScope> {
+    const scope: StudentAcademicScope = {
+      hasAllAccess: false,
+      hasActiveEnrollments: false,
+      enrolledCourseIds: new Set<string>(),
+      enrolledBatchIds: new Set<string>(),
+      enrolledBoardIds: new Set<string>(),
+      enrolledClassIds: new Set<string>(),
+      enrolledSubjectIds: new Set<string>(),
+      enrolledSubjectNames: new Set<string>(),
+      validEntitlements: [],
+    };
+
+    if (!userId) {
+      return scope;
+    }
+
+    try {
+      // 1. Fetch Active Enrollments matching My Learning relational structure
+      const { data: enrollments, error: enrollError } = await supabase
+        .from("student_enrollments")
+        .select(`
+          id,
+          student_id,
+          course_id,
+          batch_id,
+          status,
+          course:cms_courses(
+            id,
+            title,
+            board_id,
+            class_id,
+            subject_id,
+            board:cms_boards(id, name, code),
+            subject:cms_subjects(id, name, code),
+            class_level:cms_class_levels(id, name, code)
+          ),
+          batch:cms_batches(
+            id,
+            title,
+            course_id,
+            course:cms_courses(
+              id,
+              title,
+              board_id,
+              class_id,
+              subject_id,
+              board:cms_boards(id, name, code),
+              subject:cms_subjects(id, name, code),
+              class_level:cms_class_levels(id, name, code)
+            )
+          )
+        `)
+        .eq("student_id", userId)
+        .eq("status", "ACTIVE");
+
+      if (enrollError) {
+        console.warn("[ContentAccessService] Failed to fetch enrollments:", enrollError.message);
+      }
+
+      // 2. Fetch Active Entitlements
+      const { data: entitlements, error: entError } = await supabase
+        .from("student_content_entitlements")
+        .select("content_type, content_id, expires_at")
+        .eq("student_id", userId)
+        .eq("status", "ACTIVE");
+
+      if (entError) {
+        console.warn("[ContentAccessService] Failed to fetch entitlements:", entError.message);
+      }
+
+      const now = new Date();
+      const validEntitlements = (entitlements || []).filter(
+        (e: any) => !e.expires_at || new Date(e.expires_at) >= now
+      );
+
+      scope.validEntitlements = validEntitlements;
+      scope.hasAllAccess = validEntitlements.some((e: any) => e.content_type === "ALL_ACCESS");
+
+      // 3. Process enrollments into academic scope
+      (enrollments || []).forEach((e: any) => {
+        const course = e.course || e.batch?.course;
+        if (e.course_id) scope.enrolledCourseIds.add(e.course_id);
+        if (course?.id) scope.enrolledCourseIds.add(course.id);
+        if (e.batch_id) scope.enrolledBatchIds.add(e.batch_id);
+        if (e.batch?.id) scope.enrolledBatchIds.add(e.batch.id);
+
+        if (course?.board_id) scope.enrolledBoardIds.add(course.board_id);
+        if (course?.board?.id) scope.enrolledBoardIds.add(course.board.id);
+        if (course?.class_id) scope.enrolledClassIds.add(course.class_id);
+        if (course?.class_level?.id) scope.enrolledClassIds.add(course.class_level.id);
+        if (course?.subject_id) scope.enrolledSubjectIds.add(course.subject_id);
+        if (course?.subject?.id) scope.enrolledSubjectIds.add(course.subject.id);
+
+        if (course?.subject?.name) {
+          const name = course.subject.name.trim().toLowerCase();
+          scope.enrolledSubjectNames.add(name);
+          if (name.includes("sci")) {
+            scope.enrolledSubjectNames.add("science");
+            scope.enrolledSubjectNames.add("physics");
+            scope.enrolledSubjectNames.add("chemistry");
+            scope.enrolledSubjectNames.add("biology");
+          }
+          if (name.includes("math")) {
+            scope.enrolledSubjectNames.add("mathematics");
+            scope.enrolledSubjectNames.add("maths");
+            scope.enrolledSubjectNames.add("math");
+          }
+        }
+      });
+
+      // 4. Resolve Course / Batch Entitlements
+      const extraBatchIds: string[] = [];
+
+      validEntitlements.forEach((e: any) => {
+        if (e.content_type === "COURSE" && e.content_id) {
+          scope.enrolledCourseIds.add(e.content_id);
+        }
+        if (e.content_type === "BATCH" && e.content_id) {
+          scope.enrolledBatchIds.add(e.content_id);
+          extraBatchIds.push(e.content_id);
+        }
+      });
+
+      if (extraBatchIds.length > 0) {
+        const { data: batches } = await supabase
+          .from("cms_batches")
+          .select("id, course_id, course:cms_courses(id, board_id, class_id, subject_id, subject:cms_subjects(name))")
+          .in("id", extraBatchIds);
+
+        (batches || []).forEach((b: any) => {
+          if (b.course_id) scope.enrolledCourseIds.add(b.course_id);
+          if (b.course?.id) scope.enrolledCourseIds.add(b.course.id);
+          if (b.course?.board_id) scope.enrolledBoardIds.add(b.course.board_id);
+          if (b.course?.class_id) scope.enrolledClassIds.add(b.course.class_id);
+          if (b.course?.subject_id) scope.enrolledSubjectIds.add(b.course.subject_id);
+          if (b.course?.subject?.name) {
+            const name = b.course.subject.name.trim().toLowerCase();
+            scope.enrolledSubjectNames.add(name);
+            if (name.includes("sci")) {
+              scope.enrolledSubjectNames.add("science");
+              scope.enrolledSubjectNames.add("physics");
+              scope.enrolledSubjectNames.add("chemistry");
+              scope.enrolledSubjectNames.add("biology");
+            }
+            if (name.includes("math")) {
+              scope.enrolledSubjectNames.add("mathematics");
+              scope.enrolledSubjectNames.add("maths");
+              scope.enrolledSubjectNames.add("math");
+            }
+          }
+        });
+      }
+
+      scope.hasActiveEnrollments =
+        scope.enrolledCourseIds.size > 0 ||
+        scope.enrolledBatchIds.size > 0 ||
+        validEntitlements.length > 0;
+
+      return scope;
+    } catch (err) {
+      console.error("[ContentAccessService] Error in resolveStudentAcademicScope:", err);
+      return scope;
+    }
+  }
 }
+
+export interface StudentAcademicScope {
+  hasAllAccess: boolean;
+  hasActiveEnrollments: boolean;
+  enrolledCourseIds: Set<string>;
+  enrolledBatchIds: Set<string>;
+  enrolledBoardIds: Set<string>;
+  enrolledClassIds: Set<string>;
+  enrolledSubjectIds: Set<string>;
+  enrolledSubjectNames: Set<string>;
+  validEntitlements: Array<{ content_type: string; content_id?: string | null }>;
+}
+
