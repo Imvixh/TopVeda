@@ -24,8 +24,12 @@ export async function GET(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const adminClient = createAdminClient();
-    const data = await StudentTestService.getPublishedTests(adminClient, user?.id);
+    if (!user) {
+      return NextResponse.json([]);
+    }
+
+    const client = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const data = await StudentTestService.getPublishedTests(client, user.id);
 
     return NextResponse.json(data);
   } catch (err: unknown) {

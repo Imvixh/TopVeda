@@ -36,8 +36,8 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized. Please sign in." }, { status: 401 });
     }
 
-    const adminClient = createAdminClient();
-    const result = await StudentTestService.getAttemptScorecard(adminClient, user.id, attemptId);
+    const client = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const result = await StudentTestService.getAttemptScorecard(client, user.id, attemptId);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 404 });
