@@ -715,6 +715,8 @@ export class CmsTestService {
         }
       }
 
+      const insertedQIds: string[] = [];
+
       // Insert all questions and options sequentially/safely
       for (let i = 0; i < payload.questions.length; i++) {
         const q = payload.questions[i];
@@ -733,8 +735,18 @@ export class CmsTestService {
           .single();
 
         if (qInsErr || !newQ) {
+          // Atomicity rollback for new test creation to prevent partially created tests
+          if (!payload.id && savedTestId) {
+            if (insertedQIds.length > 0) {
+              await adminClient.from("student_test_question_options").delete().in("question_id", insertedQIds);
+              await adminClient.from("student_test_questions").delete().eq("test_id", savedTestId);
+            }
+            await adminClient.from("student_tests").delete().eq("id", savedTestId);
+          }
           return { success: false, error: `Failed to save question ${i + 1}: ${qInsErr?.message}` };
         }
+
+        insertedQIds.push(newQ.id);
 
         const optionsToInsert = q.options.map((opt, optIdx) => ({
           question_id: newQ.id,
@@ -749,6 +761,12 @@ export class CmsTestService {
           .insert(optionsToInsert);
 
         if (optInsErr) {
+          // Atomicity rollback for new test creation to prevent partially created tests
+          if (!payload.id && savedTestId) {
+            await adminClient.from("student_test_question_options").delete().in("question_id", insertedQIds);
+            await adminClient.from("student_test_questions").delete().eq("test_id", savedTestId);
+            await adminClient.from("student_tests").delete().eq("id", savedTestId);
+          }
           return { success: false, error: `Failed to save options for question ${i + 1}: ${optInsErr.message}` };
         }
       }

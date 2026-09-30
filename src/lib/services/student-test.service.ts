@@ -222,21 +222,57 @@ export class StudentTestService {
   }
 
   /**
-   * Fetches single test details and instruction parameters
+   * Authoritative server-side student test access & entitlement verification.
+   * Verifies that the student is enrolled in the matching Class and Subject (Course),
+   * or holds an active content entitlement.
    */
-  public static async getTestDetail(
+  public static async verifyStudentTestAccess(
     supabase: SupabaseClient,
     userId: string,
     testId: string
-  ) {
+  ): Promise<{
+    granted: boolean;
+    test?: {
+      id: string;
+      title: string;
+      slug: string;
+      description?: string | null;
+      subject_id?: string | null;
+      subject_name: string;
+      course_id?: string | null;
+      chapter_id?: string | null;
+      test_type: string;
+      duration_minutes: number;
+      total_marks: number;
+      passing_marks: number;
+      total_questions: number;
+      access_tier: string;
+      status: string;
+      is_visible: boolean;
+      cms_courses?: {
+        id: string;
+        board_id?: string | null;
+        class_id?: string | null;
+        subject_id?: string | null;
+      } | Array<{
+        id: string;
+        board_id?: string | null;
+        class_id?: string | null;
+        subject_id?: string | null;
+      }> | null;
+    };
+    error?: string;
+  }> {
     try {
-      const { data: test, error } = await supabase
+      // 1. Fetch test with course taxonomy
+      const { data: test, error: testErr } = await supabase
         .from("student_tests")
         .select(`
           id,
           title,
           slug,
           description,
+          subject_id,
           subject_name,
           course_id,
           chapter_id,
@@ -245,17 +281,162 @@ export class StudentTestService {
           total_marks,
           passing_marks,
           total_questions,
-          access_tier
+          access_tier,
+          status,
+          is_visible,
+          cms_courses (
+            id,
+            board_id,
+            class_id,
+            subject_id
+          )
         `)
         .eq("id", testId)
-        .eq("status", "PUBLISHED")
         .single();
 
-      if (error || !test) {
-        return { success: false, error: "Test not found or unavailable." };
+      if (testErr || !test) {
+        return { granted: false, error: "Test not found or unavailable." };
       }
 
-      // Check for recent completed attempt
+      if (test.status !== "PUBLISHED" || !test.is_visible) {
+        return { granted: false, error: "Test is not published or active." };
+      }
+
+      if (!userId) {
+        return { granted: false, error: "Authentication required to access this test." };
+      }
+
+      // 2. Role Check: Super Admin, Admin, and Teacher bypass student enrollment gating
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (
+        profile?.role === "SUPER_ADMIN" ||
+        profile?.role === "ADMIN" ||
+        profile?.role === "TEACHER"
+      ) {
+        return { granted: true, test };
+      }
+
+      // 3. Entitlement Vault Check (ALL_ACCESS or direct test entitlement)
+      const { data: entitlements } = await supabase
+        .from("student_content_entitlements")
+        .select("content_type, content_id, expires_at")
+        .eq("student_id", userId)
+        .eq("status", "ACTIVE");
+
+      const now = new Date();
+      const validEntitlements = (entitlements || []).filter(
+        (e) => !e.expires_at || new Date(e.expires_at) >= now
+      );
+
+      if (
+        validEntitlements.some(
+          (e) =>
+            e.content_type === "ALL_ACCESS" ||
+            (e.content_type === "TEST" && e.content_id === testId)
+        )
+      ) {
+        return { granted: true, test };
+      }
+
+      // 4. Student Course Enrollments & Course Entitlements Check
+      const { data: enrollments } = await supabase
+        .from("student_enrollments")
+        .select("course_id, batch_id")
+        .eq("student_id", userId)
+        .eq("status", "ACTIVE");
+
+      const enrolledCourseIds = new Set<string>(
+        (enrollments || []).map((e) => e.course_id).filter(Boolean)
+      );
+
+      validEntitlements.forEach((e) => {
+        if (e.content_type === "COURSE" && e.content_id) {
+          enrolledCourseIds.add(e.content_id);
+        }
+      });
+
+      if (enrolledCourseIds.size > 0) {
+        if (test.course_id) {
+          if (enrolledCourseIds.has(test.course_id)) {
+            return { granted: true, test };
+          }
+          return {
+            granted: false,
+            error: "Access denied. You are not enrolled in the class or subject for this test.",
+          };
+        }
+        // Open test without specific course binding
+        return { granted: true, test };
+      }
+
+      // 5. Fallback for unenrolled students using learning preferences (Class / Board)
+      const { data: prefs } = await supabase
+        .from("student_learning_preferences")
+        .select("board_id, class_id")
+        .eq("student_id", userId)
+        .maybeSingle();
+
+      if (prefs?.board_id || prefs?.class_id) {
+        if (test.course_id) {
+          const course = Array.isArray(test.cms_courses)
+            ? test.cms_courses[0]
+            : test.cms_courses;
+          if (course) {
+            if (prefs.class_id && course.class_id !== prefs.class_id) {
+              return {
+                granted: false,
+                error: "Access denied. Test is for a different class level.",
+              };
+            }
+            if (prefs.board_id && course.board_id !== prefs.board_id) {
+              return {
+                granted: false,
+                error: "Access denied. Test is for a different educational board.",
+              };
+            }
+          }
+        }
+        return { granted: true, test };
+      }
+
+      // 6. Free open tests
+      if (test.access_tier === "FREE" && !test.course_id) {
+        return { granted: true, test };
+      }
+
+      return {
+        granted: false,
+        error: "Access denied. Active enrollment required to access this test.",
+      };
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return { granted: false, error: error.message };
+    }
+  }
+
+  /**
+   * Fetches single test details and instruction parameters
+   */
+  public static async getTestDetail(
+    supabase: SupabaseClient,
+    userId: string,
+    testId: string
+  ) {
+    try {
+      // 1. Authoritative access & entitlement check
+      const accessCheck = await this.verifyStudentTestAccess(supabase, userId, testId);
+      if (!accessCheck.granted || !accessCheck.test) {
+        return { success: false, error: accessCheck.error || "Test not found or unavailable." };
+      }
+
+      const test = accessCheck.test;
+
+      // 2. Check for recent completed attempt
       const { data: lastAttempt } = await supabase
         .from("student_test_attempts")
         .select("id, status, score_obtained, percentage, passed, submitted_at")
@@ -269,7 +450,19 @@ export class StudentTestService {
       return {
         success: true,
         data: {
-          ...test,
+          id: test.id,
+          title: test.title,
+          slug: test.slug,
+          description: test.description,
+          subject_name: test.subject_name,
+          course_id: test.course_id,
+          chapter_id: test.chapter_id,
+          test_type: test.test_type,
+          duration_minutes: test.duration_minutes,
+          total_marks: test.total_marks,
+          passing_marks: test.passing_marks,
+          total_questions: test.total_questions,
+          access_tier: test.access_tier,
           previousAttempt: lastAttempt
             ? {
                 attemptId: lastAttempt.id,
@@ -296,16 +489,13 @@ export class StudentTestService {
     testId: string
   ): Promise<{ success: boolean; attemptId?: string; questions?: SafeTestQuestion[]; durationMinutes?: number; error?: string }> {
     try {
-      // 1. Verify test is published
-      const { data: test, error: testErr } = await supabase
-        .from("student_tests")
-        .select("id, title, duration_minutes, total_questions, status")
-        .eq("id", testId)
-        .single();
-
-      if (testErr || !test || test.status !== "PUBLISHED") {
-        return { success: false, error: "Test is not published or active." };
+      // 1. Authoritative access & entitlement check
+      const accessCheck = await this.verifyStudentTestAccess(supabase, userId, testId);
+      if (!accessCheck.granted || !accessCheck.test) {
+        return { success: false, error: accessCheck.error || "Test is not published or active." };
       }
+
+      const test = accessCheck.test;
 
       // 2. Fetch questions and safe options (Omits is_correct)
       const { data: questions, error: qErr } = await supabase

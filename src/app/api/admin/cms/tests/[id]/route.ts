@@ -36,8 +36,9 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized. Please sign in." }, { status: 401 });
     }
 
-    const adminClient = createAdminClient();
-    const result = await CmsTestService.getTestWithQuestions(adminClient, id);
+    // Use privileged service role client if configured, otherwise authenticated server client
+    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const result = await CmsTestService.getTestWithQuestions(dbClient, id);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 404 });
@@ -96,8 +97,10 @@ export async function PUT(
     const body: AdminTestUpsertPayload = await request.json();
     body.id = id;
 
-    const adminClient = createAdminClient();
-    const result = await CmsTestService.upsertTestWithQuestions(adminClient, body, user.id);
+    // Prefer privileged service-role admin client if SUPABASE_SERVICE_ROLE_KEY is present;
+    // Otherwise use authenticated Super Admin client authorized by RLS (is_admin_or_super_admin).
+    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const result = await CmsTestService.upsertTestWithQuestions(dbClient, body, user.id);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
@@ -157,8 +160,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden. Super Administrator privileges required." }, { status: 403 });
     }
 
-    const adminClient = createAdminClient();
-    const result = await CmsTestService.deleteOrArchiveTest(adminClient, id);
+    // Prefer privileged service-role admin client if SUPABASE_SERVICE_ROLE_KEY is present;
+    // Otherwise use authenticated Super Admin client authorized by RLS (is_admin_or_super_admin).
+    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const result = await CmsTestService.deleteOrArchiveTest(dbClient, id);
 
     return NextResponse.json(result);
   } catch (err: unknown) {

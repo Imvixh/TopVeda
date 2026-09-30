@@ -47,16 +47,19 @@ export async function GET(request: NextRequest) {
     const classId = searchParams.get("classId") || undefined;
     const subjectId = searchParams.get("subjectId") || undefined;
 
-    const adminClient = createAdminClient();
+    // Resolve privileged db client:
+    // If SUPABASE_SERVICE_ROLE_KEY is present, use privileged service-role admin client.
+    // Otherwise, use authenticated Super Admin / Admin server client respecting RLS.
+    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
 
     // Ensure initial demo data exists if empty
-    const { count } = await adminClient.from("student_tests").select("*", { count: "exact", head: true });
+    const { count } = await dbClient.from("student_tests").select("*", { count: "exact", head: true });
     if (!count || count === 0) {
-      await CmsTestService.seedDefaultDummyTests(adminClient);
+      await CmsTestService.seedDefaultDummyTests(dbClient);
     }
 
     const [catalogResult, taxonomy] = await Promise.all([
-      CmsTestService.getAdminTestsCatalog(adminClient, {
+      CmsTestService.getAdminTestsCatalog(dbClient, {
         search,
         testType,
         status,
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
         classId,
         subjectId,
       }),
-      CmsTestService.getAcademicTaxonomy(adminClient),
+      CmsTestService.getAcademicTaxonomy(dbClient),
     ]);
 
     return NextResponse.json({
@@ -116,8 +119,10 @@ export async function POST(request: NextRequest) {
 
     const payload: AdminTestUpsertPayload = await request.json();
 
-    const adminClient = createAdminClient();
-    const result = await CmsTestService.upsertTestWithQuestions(adminClient, payload, user.id);
+    // Prefer privileged service-role admin client if SUPABASE_SERVICE_ROLE_KEY is present;
+    // Otherwise use authenticated Super Admin client authorized by RLS (is_admin_or_super_admin).
+    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const result = await CmsTestService.upsertTestWithQuestions(dbClient, payload, user.id);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });

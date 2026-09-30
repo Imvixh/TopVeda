@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const adminClient = createAdminClient();
-    const taxonomy = await CmsTestService.getAcademicTaxonomy(adminClient);
+    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+    const taxonomy = await CmsTestService.getAcademicTaxonomy(dbClient);
 
     const validation = CmsTestService.validateAndParseJson(jsonString, taxonomy);
 
