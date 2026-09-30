@@ -13,10 +13,6 @@ import {
   QuestionEvaluationResult,
 } from "@/types/assessment.types";
 
-// Default Academic Scope Constants
-const DEFAULT_BOARD_ID = "10000000-0000-0000-0000-000000000001"; // CBSE Board
-const DEFAULT_CLASS_ID = "20000000-0000-0000-0000-000000000001"; // Class 10
-
 // Subject Visual Style Resolver
 function getSubjectTestTheme(subjectName: string) {
   const name = (subjectName || "").toLowerCase();
@@ -151,49 +147,21 @@ export class StudentTestService {
               });
             }
 
-            // Fetch student learning preferences for board/class fallback
-            const { data: prefs } = await supabase
-              .from("student_learning_preferences")
-              .select("board_id, class_id")
-              .eq("student_id", userId)
-              .maybeSingle();
-
             if (enrolledCourseIds.size > 0) {
-              // Eligible: tests linked to enrolled courses OR general free demo tests without course restrictions
+              // Eligible: tests strictly linked to enrolled courses
               eligibleTests = (tests || []).filter((t) => {
-                if (!t.course_id) return true; // General open test
-                if (enrolledCourseIds.has(t.course_id)) return true;
+                if (t.course_id && enrolledCourseIds.has(t.course_id)) return true;
                 return false;
               });
-            } else if (prefs?.board_id || prefs?.class_id) {
-              // Fallback to student target board & class preferences
-              eligibleTests = (tests || []).filter((t) => {
-                if (!t.course_id) return true;
-                const course = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
-                if (!course) return true;
-                const matchBoard = !prefs.board_id || course.board_id === prefs.board_id;
-                const matchClass = !prefs.class_id || course.class_id === prefs.class_id;
-                return matchBoard && matchClass;
-              });
             } else {
-              // Default new student: show CBSE Class 10 tests or general open tests
-              eligibleTests = (tests || []).filter((t) => {
-                if (!t.course_id) return t.access_tier === "FREE";
-                const course = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
-                if (!course) return false;
-                return course.board_id === DEFAULT_BOARD_ID && course.class_id === DEFAULT_CLASS_ID;
-              });
+              // No active enrollment / entitlements -> zero personalized tests
+              eligibleTests = [];
             }
           }
         }
       } else {
-        // Unauthenticated visitor: show CBSE Class 10 or open free tests
-        eligibleTests = (tests || []).filter((t) => {
-          if (!t.course_id) return t.access_tier === "FREE";
-          const course = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
-          if (!course) return false;
-          return course.board_id === DEFAULT_BOARD_ID && course.class_id === DEFAULT_CLASS_ID;
-        });
+        // Unauthenticated visitor: zero personalized tests in student portal
+        eligibleTests = [];
       }
 
       // 3. Fetch student's previous attempts if authenticated
@@ -418,48 +386,15 @@ export class StudentTestService {
             error: "Access denied. You are not enrolled in the class or subject for this test.",
           };
         }
-        // Open test without specific course binding
-        return { granted: true, test };
-      }
-
-      // 5. Fallback for unenrolled students using learning preferences (Class / Board)
-      const { data: prefs } = await supabase
-        .from("student_learning_preferences")
-        .select("board_id, class_id")
-        .eq("student_id", userId)
-        .maybeSingle();
-
-      if (prefs?.board_id || prefs?.class_id) {
-        if (test.course_id) {
-          const course = Array.isArray(test.cms_courses)
-            ? test.cms_courses[0]
-            : test.cms_courses;
-          if (course) {
-            if (prefs.class_id && course.class_id !== prefs.class_id) {
-              return {
-                granted: false,
-                error: "Access denied. Test is for a different class level.",
-              };
-            }
-            if (prefs.board_id && course.board_id !== prefs.board_id) {
-              return {
-                granted: false,
-                error: "Access denied. Test is for a different educational board.",
-              };
-            }
-          }
-        }
-        return { granted: true, test };
-      }
-
-      // 6. Free open tests without course restriction
-      if (test.access_tier === "FREE" && !test.course_id) {
-        return { granted: true, test };
+        return {
+          granted: false,
+          error: "Access denied. Active enrollment in the course or batch is required to access this test.",
+        };
       }
 
       return {
         granted: false,
-        error: "Access denied. Active enrollment required to access this test.",
+        error: "Access denied. Active enrollment in the course or batch is required to access this test.",
       };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));

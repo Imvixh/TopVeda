@@ -128,10 +128,20 @@ export function AdminApplicationFlow({
     const confirmVal = validateConfirmPassword(password, confirmPassword);
     if (!confirmVal.isValid) return setErrorMessage(confirmVal.error || "Passwords do not match.");
 
+    if (isSubmitting) return;
+
     const termsVal = validateTerms(termsAgreed);
     if (!termsVal.isValid) return setErrorMessage(termsVal.error || "Please accept the terms.");
 
+    const tokenToSubmit = turnstileToken;
+    if (!tokenToSubmit) {
+      turnstileRef.current?.reset();
+      return setErrorMessage("Please complete the security verification challenge before submitting.");
+    }
+
     setIsSubmitting(true);
+    setTurnstileToken(null);
+
     try {
       const res = await register({
         fullName: nameVal.normalizedValue!,
@@ -141,23 +151,21 @@ export function AdminApplicationFlow({
         confirmPassword,
         termsAgreed,
         role: "ADMIN",
-        turnstileToken: turnstileToken || undefined,
+        turnstileToken: tokenToSubmit,
       });
 
       if (!res.success) {
         setErrorMessage(res.error || "Registration failed. Please try again.");
-        turnstileRef.current?.reset();
-        setTurnstileToken(null);
       } else {
         // Step 2: Email Verification
         setStep(2);
       }
     } catch {
       setErrorMessage("Network error occurred during registration. Please retry.");
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
     } finally {
       setIsSubmitting(false);
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
     }
   };
 

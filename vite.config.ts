@@ -21,7 +21,7 @@ export default defineConfig({
       process.env.NEXT_PUBLIC_APP_URL || "https://topveda.in"
     ),
     "process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY": JSON.stringify(
-      process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "1x00000000000000000000AA"
+      process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || ""
     ),
   },
   plugins: [

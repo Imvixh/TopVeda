@@ -113,21 +113,111 @@ export class StudentLiveService {
         return { liveNow: [], upcoming: [], completed: [] };
       }
 
-      // 2. Fetch student's attendance records if authenticated
-      const attendanceMap = new Map<string, { isAttended: boolean; durationSeconds: number }>();
-      if (userId) {
-        const { data: attendanceData } = await supabase
-          .from("student_live_attendance")
-          .select("live_class_id, is_attended, duration_seconds")
-          .eq("student_id", userId);
-
-        (attendanceData || []).forEach((att) => {
-          attendanceMap.set(att.live_class_id, {
-            isAttended: att.is_attended,
-            durationSeconds: att.duration_seconds,
-          });
-        });
+      // 2. Unauthenticated visitors get zero personalized live classes
+      if (!userId) {
+        return { liveNow: [], upcoming: [], completed: [] };
       }
+
+      // 3. Check Role: Super Admin, Admin, and Teacher preview all visible classes
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      const isPrivileged =
+        profile?.role === "SUPER_ADMIN" ||
+        profile?.role === "ADMIN" ||
+        profile?.role === "TEACHER";
+
+      let authorizedClasses = classes || [];
+
+      if (!isPrivileged) {
+        // Fetch student enrollments
+        const { data: enrollments } = await supabase
+          .from("student_enrollments")
+          .select("course_id, batch_id")
+          .eq("student_id", userId)
+          .eq("status", "ACTIVE");
+
+        // Fetch student content entitlements
+        const { data: entitlements } = await supabase
+          .from("student_content_entitlements")
+          .select("content_type, content_id, expires_at")
+          .eq("student_id", userId)
+          .eq("status", "ACTIVE");
+
+        const now = new Date();
+        const validEntitlements = (entitlements || []).filter(
+          (e) => !e.expires_at || new Date(e.expires_at) >= now
+        );
+
+        const hasAllAccess = validEntitlements.some((e) => e.content_type === "ALL_ACCESS");
+
+        if (!hasAllAccess) {
+          const enrolledCourseIds = new Set<string>(
+            (enrollments || []).map((e) => e.course_id).filter(Boolean)
+          );
+          const enrolledBatchIds = new Set<string>(
+            (enrollments || []).map((e) => e.batch_id).filter(Boolean)
+          );
+          const directLiveClassIds = new Set<string>();
+
+          validEntitlements.forEach((e) => {
+            if (e.content_type === "COURSE" && e.content_id) {
+              enrolledCourseIds.add(e.content_id);
+            }
+            if (e.content_type === "BATCH" && e.content_id) {
+              enrolledBatchIds.add(e.content_id);
+            }
+            if (e.content_type === "LIVE_CLASS" && e.content_id) {
+              directLiveClassIds.add(e.content_id);
+            }
+          });
+
+          // Resolve course IDs from enrolled batches
+          if (enrolledBatchIds.size > 0) {
+            const { data: batches } = await supabase
+              .from("cms_batches")
+              .select("id, course_id")
+              .in("id", Array.from(enrolledBatchIds));
+            (batches || []).forEach((b) => {
+              if (b.course_id) enrolledCourseIds.add(b.course_id);
+            });
+          }
+
+          // If student has NO active enrollments/entitlements, return empty immediately
+          if (
+            enrolledCourseIds.size === 0 &&
+            enrolledBatchIds.size === 0 &&
+            directLiveClassIds.size === 0
+          ) {
+            return { liveNow: [], upcoming: [], completed: [] };
+          }
+
+          // Filter classes matching student's enrolled batches or courses
+          authorizedClasses = (classes || []).filter((c) => {
+            if (directLiveClassIds.has(c.id)) return true;
+            if (c.batch_id && enrolledBatchIds.has(c.batch_id)) return true;
+            if (c.course_id && enrolledCourseIds.has(c.course_id)) return true;
+            return false;
+          });
+        }
+      }
+
+      // 4. Fetch student's attendance records if authenticated
+      const attendanceMap = new Map<string, { isAttended: boolean; durationSeconds: number }>();
+      const { data: attendanceData } = await supabase
+        .from("student_live_attendance")
+        .select("live_class_id, is_attended, duration_seconds")
+        .eq("student_id", userId);
+
+      (attendanceData || []).forEach((att) => {
+        attendanceMap.set(att.live_class_id, {
+          isAttended: att.is_attended,
+          durationSeconds: att.duration_seconds,
+        });
+      });
 
       const now = new Date();
       const nowMs = now.getTime();
@@ -136,10 +226,9 @@ export class StudentLiveService {
       const upcomingList: StudentLiveClassCard[] = [];
       const completedList: StudentLiveClassCard[] = [];
 
-      (classes || []).forEach((c) => {
+      (authorizedClasses || []).forEach((c) => {
         const scheduledStart = new Date(c.scheduled_start);
         const scheduledStartMs = scheduledStart.getTime();
-        const scheduledEndMs = c.scheduled_end ? new Date(c.scheduled_end).getTime() : scheduledStartMs + 60 * 60 * 1000;
 
         const secondsToStart = Math.max(0, Math.floor((scheduledStartMs - nowMs) / 1000));
         const prepStartMs = scheduledStartMs - 10 * 60 * 1000;

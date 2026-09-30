@@ -230,7 +230,6 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
         const { data, error } = await supabase.auth.signInWithPassword({
           email: emailValidation.normalizedValue!,
           password,
-          options: turnstileToken ? { captchaToken: turnstileToken } : undefined,
         });
 
         if (error) {
@@ -451,7 +450,6 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
             typeof window !== "undefined"
               ? `${window.location.origin}/auth/callback`
               : undefined,
-          captchaToken: params.turnstileToken,
         },
       });
 
@@ -516,7 +514,6 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
         emailVal.normalizedValue!,
         {
           redirectTo: redirectUrl,
-          captchaToken: turnstileToken,
         }
       );
 

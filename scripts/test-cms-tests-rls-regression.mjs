@@ -464,12 +464,16 @@ async function runComprehensiveRegressionSuite() {
   console.log("\n[SECTION 15] Server-Side Grading with Fractional Negative Deductions...");
 
   // Create test with 2 questions: Q1 (+4 marks, -0.25 neg), Q2 (+4 marks, -0.75 neg)
+  const mathCourseForGrading = taxonomy.courses.find(c => c.board?.code === "CBSE" && c.class?.code === "CLASS_10" && c.subject?.code === "MATH") || taxonomy.courses[0];
+
   const gradingTestPayload = {
     title: "Automated Suite: Grading Calculation Test",
     testType: "test",
     status: "PUBLISHED",
     durationMinutes: 15,
     totalMarks: 8,
+    courseId: mathCourseForGrading.id,
+    subjectId: mathCourseForGrading.subject_id,
     questions: [
       {
         questionText: "Grading Test Q1",
@@ -496,6 +500,13 @@ async function runComprehensiveRegressionSuite() {
 
   const gTestRes = await CmsTestService.upsertTestWithQuestions(adminClient, gradingTestPayload);
   const gTestId = gTestRes.testId;
+
+  // Ensure student is enrolled in Math course
+  await adminClient.from("student_enrollments").upsert({
+    student_id: studentUser.id,
+    course_id: mathCourseForGrading.id,
+    status: "ACTIVE",
+  }, { onConflict: "student_id, course_id" });
 
   // Student starts attempt
   const startRes = await StudentTestService.startTestAttempt(adminClient, studentUser.id, gTestId);

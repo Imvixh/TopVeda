@@ -56,6 +56,8 @@ export function AuthModal({
 
   // Turnstile security verification token
   const [turnstileToken, setTurnstileToken] = React.useState<string | null>(null);
+  const turnstileTokenRef = React.useRef<string | null>(null);
+  const isSubmittingRef = React.useRef(false);
   const turnstileRef = React.useRef<TurnstileWidgetRef>(null);
 
   // Password visibility states
@@ -77,22 +79,57 @@ export function AuthModal({
   // Forgot Password Form State
   const [forgotEmail, setForgotEmail] = React.useState("");
 
-  // Sync mode when initialMode, initialLoginType, or initialRegistrationType changes
-  const [prevInitialMode, setPrevInitialMode] = React.useState(initialMode);
-  if (initialMode !== prevInitialMode) {
-    setPrevInitialMode(initialMode);
-    setMode(initialMode);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setRequireEmailVerification(false);
-    setTurnstileToken(null);
+  // Sync mode and reset state when isOpen, initialMode, initialLoginType, or initialRegistrationType changes
+  const [prevProps, setPrevProps] = React.useState({
+    isOpen,
+    initialMode,
+    initialLoginType,
+    initialRegistrationType,
+  });
+
+  if (
+    isOpen !== prevProps.isOpen ||
+    initialMode !== prevProps.initialMode ||
+    initialLoginType !== prevProps.initialLoginType ||
+    initialRegistrationType !== prevProps.initialRegistrationType
+  ) {
+    setPrevProps({
+      isOpen,
+      initialMode,
+      initialLoginType,
+      initialRegistrationType,
+    });
+    if (isOpen && !prevProps.isOpen) {
+      setMode(initialMode);
+      setLoginType(initialLoginType);
+      setRegType(initialRegistrationType);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      setRequireEmailVerification(false);
+      setIsSubmitting(false);
+      setTurnstileToken(null);
+    } else if (!isOpen && prevProps.isOpen) {
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      setIsSubmitting(false);
+      setTurnstileToken(null);
+    } else if (isOpen) {
+      if (initialMode !== prevProps.initialMode) setMode(initialMode);
+      if (initialLoginType !== prevProps.initialLoginType) setLoginType(initialLoginType);
+      if (initialRegistrationType !== prevProps.initialRegistrationType) setRegType(initialRegistrationType);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      setTurnstileToken(null);
+    }
   }
 
   const resetFormState = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setRequireEmailVerification(false);
+    isSubmittingRef.current = false;
     setIsSubmitting(false);
+    turnstileTokenRef.current = null;
     setTurnstileToken(null);
     turnstileRef.current?.reset();
   };
@@ -100,6 +137,28 @@ export function AuthModal({
   const switchMode = (newMode: AuthMode) => {
     setMode(newMode);
     resetFormState();
+  };
+
+  const handleLoginTypeChange = (type: LoginType) => {
+    if (type !== loginType) {
+      setLoginType(type);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
+  };
+
+  const handleRegTypeChange = (type: RegistrationType) => {
+    if (type !== regType) {
+      setRegType(type);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+    }
   };
 
   const handleClose = () => {
@@ -110,17 +169,29 @@ export function AuthModal({
   // Submit Handler for Student Registration, Login, and Forgot Password
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current || isSubmitting) return;
+
+    // 1. Atomically claim the current token for this single submission
+    const tokenToSubmit = turnstileTokenRef.current || turnstileToken;
+    if (!tokenToSubmit) {
+      setErrorMessage("Please complete the security verification challenge before submitting.");
+      turnstileRef.current?.reset();
+      return;
+    }
+
+    // 2. Immediately lock submission and invalidate stored token so it cannot be reused
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    turnstileTokenRef.current = null;
+    setTurnstileToken(null);
     setErrorMessage(null);
     setSuccessMessage(null);
-    setIsSubmitting(true);
 
     try {
       if (mode === "login") {
-        const res = await login(loginIdentifier, loginPassword, loginType, turnstileToken || undefined);
+        const res = await login(loginIdentifier, loginPassword, loginType, tokenToSubmit);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to sign in. Please verify your credentials.");
-          turnstileRef.current?.reset();
-          setTurnstileToken(null);
         } else {
           setSuccessMessage(
             loginType === "admin"
@@ -144,13 +215,11 @@ export function AuthModal({
           password: registerPassword,
           confirmPassword: registerConfirmPassword,
           termsAgreed,
-          turnstileToken: turnstileToken || undefined,
+          turnstileToken: tokenToSubmit,
         });
 
         if (!res.success) {
           setErrorMessage(res.error || "Registration failed. Please check your information.");
-          turnstileRef.current?.reset();
-          setTurnstileToken(null);
         } else {
           if (res.requireVerification) {
             setRequireEmailVerification(true);
@@ -164,11 +233,9 @@ export function AuthModal({
           }
         }
       } else if (mode === "forgot-password") {
-        const res = await requestPasswordReset(forgotEmail, turnstileToken || undefined);
+        const res = await requestPasswordReset(forgotEmail, tokenToSubmit);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to send reset link. Please try again.");
-          turnstileRef.current?.reset();
-          setTurnstileToken(null);
         } else {
           setSuccessMessage(
             "If an account exists for this email, we've sent a password reset link. Please check your email."
@@ -177,10 +244,13 @@ export function AuthModal({
       }
     } catch {
       setErrorMessage("A network or server error occurred. Please try again.");
-      turnstileRef.current?.reset();
-      setTurnstileToken(null);
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
+      // Ensure single-use token lifecycle: clear local state and reset widget
+      turnstileTokenRef.current = null;
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
     }
   };
 
@@ -233,11 +303,8 @@ export function AuthModal({
           <div className="flex p-1 rounded-xl bg-brand-bg-warm border border-brand-border text-xs font-semibold">
             <button
               type="button"
-              onClick={() => {
-                setLoginType("student");
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
+              disabled={isSubmitting}
+              onClick={() => handleLoginTypeChange("student")}
               className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 loginType === "student"
                   ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
@@ -249,11 +316,8 @@ export function AuthModal({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setLoginType("admin");
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
+              disabled={isSubmitting}
+              onClick={() => handleLoginTypeChange("admin")}
               className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 loginType === "admin"
                   ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
@@ -271,11 +335,8 @@ export function AuthModal({
           <div className="flex p-1 rounded-xl bg-brand-bg-warm border border-brand-border text-xs font-semibold">
             <button
               type="button"
-              onClick={() => {
-                setRegType("student");
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
+              disabled={isSubmitting}
+              onClick={() => handleRegTypeChange("student")}
               className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 regType === "student"
                   ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
@@ -287,11 +348,8 @@ export function AuthModal({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setRegType("admin");
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
+              disabled={isSubmitting}
+              onClick={() => handleRegTypeChange("admin")}
               className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
                 regType === "admin"
                   ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
@@ -558,9 +616,22 @@ export function AuthModal({
 
                     <TurnstileWidget
                       ref={turnstileRef}
-                      onVerify={(token) => setTurnstileToken(token)}
-                      onExpire={() => setTurnstileToken(null)}
-                      onError={() => setTurnstileToken(null)}
+                      onVerify={(token) => {
+                        turnstileTokenRef.current = token;
+                        setTurnstileToken(token);
+                      }}
+                      onExpire={() => {
+                        turnstileTokenRef.current = null;
+                        setTurnstileToken(null);
+                      }}
+                      onError={() => {
+                        turnstileTokenRef.current = null;
+                        setTurnstileToken(null);
+                      }}
+                      onTimeout={() => {
+                        turnstileTokenRef.current = null;
+                        setTurnstileToken(null);
+                      }}
                       action="forgot-password"
                     />
 
@@ -593,9 +664,22 @@ export function AuthModal({
               <>
                 <TurnstileWidget
                   ref={turnstileRef}
-                  onVerify={(token) => setTurnstileToken(token)}
-                  onExpire={() => setTurnstileToken(null)}
-                  onError={() => setTurnstileToken(null)}
+                  onVerify={(token) => {
+                    turnstileTokenRef.current = token;
+                    setTurnstileToken(token);
+                  }}
+                  onExpire={() => {
+                    turnstileTokenRef.current = null;
+                    setTurnstileToken(null);
+                  }}
+                  onError={() => {
+                    turnstileTokenRef.current = null;
+                    setTurnstileToken(null);
+                  }}
+                  onTimeout={() => {
+                    turnstileTokenRef.current = null;
+                    setTurnstileToken(null);
+                  }}
                   action={mode === "login" ? `${loginType}-login` : "student-register"}
                 />
 

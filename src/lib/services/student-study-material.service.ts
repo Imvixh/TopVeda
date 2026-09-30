@@ -57,26 +57,91 @@ export class StudentStudyMaterialService {
     if (!studentId) return [];
 
     try {
-      // Query active batch enrollments for this student
-      const { data: enrollments, error: enrollErr } = await supabase
-        .from("student_enrollments")
-        .select(`
-          id,
-          batch_id,
-          status
-        `)
-        .eq("student_id", studentId)
-        .eq("status", "ACTIVE");
+      // Check if user is Super Admin or Admin or Teacher
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", studentId)
+        .maybeSingle();
 
-      if (enrollErr || !enrollments || enrollments.length === 0) {
-        return [];
+      const isPrivileged =
+        profile?.role === "SUPER_ADMIN" ||
+        profile?.role === "ADMIN" ||
+        profile?.role === "TEACHER";
+
+      const enrolledBatchIds = new Set<string>();
+
+      if (isPrivileged) {
+        // Privileged users can view all published batches
+        const { data: allBatches } = await supabase
+          .from("cms_batches")
+          .select("id")
+          .eq("status", "PUBLISHED");
+        (allBatches || []).forEach((b) => enrolledBatchIds.add(b.id));
+      } else {
+        // Query active enrollments for this student
+        const { data: enrollments } = await supabase
+          .from("student_enrollments")
+          .select("id, batch_id, course_id, status")
+          .eq("student_id", studentId)
+          .eq("status", "ACTIVE");
+
+        // Query active entitlements for this student
+        const { data: entitlements } = await supabase
+          .from("student_content_entitlements")
+          .select("content_type, content_id, expires_at")
+          .eq("student_id", studentId)
+          .eq("status", "ACTIVE");
+
+        const now = new Date();
+        const validEntitlements = (entitlements || []).filter(
+          (e) => !e.expires_at || new Date(e.expires_at) >= now
+        );
+
+        const hasAllAccess = validEntitlements.some((e) => e.content_type === "ALL_ACCESS");
+
+        if (hasAllAccess) {
+          const { data: allBatches } = await supabase
+            .from("cms_batches")
+            .select("id")
+            .eq("status", "PUBLISHED");
+          (allBatches || []).forEach((b) => enrolledBatchIds.add(b.id));
+        } else {
+          const enrolledCourseIds = new Set<string>(
+            (enrollments || []).map((e) => e.course_id).filter(Boolean)
+          );
+
+          (enrollments || []).forEach((e) => {
+            if (e.batch_id) enrolledBatchIds.add(e.batch_id);
+          });
+
+          validEntitlements.forEach((e) => {
+            if (e.content_type === "BATCH" && e.content_id) {
+              enrolledBatchIds.add(e.content_id);
+            }
+            if (e.content_type === "COURSE" && e.content_id) {
+              enrolledCourseIds.add(e.content_id);
+            }
+          });
+
+          // Resolve batches belonging to enrolled courses
+          if (enrolledCourseIds.size > 0) {
+            const { data: courseBatches } = await supabase
+              .from("cms_batches")
+              .select("id")
+              .in("course_id", Array.from(enrolledCourseIds))
+              .eq("status", "PUBLISHED");
+            (courseBatches || []).forEach((b) => enrolledBatchIds.add(b.id));
+          }
+
+          // If no active enrollments or entitlements, return 0 batches
+          if (enrolledBatchIds.size === 0) {
+            return [];
+          }
+        }
       }
 
-      const enrolledBatchIds = enrollments
-        .map((e) => e.batch_id)
-        .filter((id): id is string => Boolean(id));
-
-      if (enrolledBatchIds.length === 0) {
+      if (enrolledBatchIds.size === 0) {
         return [];
       }
 
@@ -90,10 +155,10 @@ export class StudentStudyMaterialService {
           board_id,
           class_id
         `)
-        .in("id", enrolledBatchIds)
+        .in("id", Array.from(enrolledBatchIds))
         .eq("status", "PUBLISHED");
 
-      if (batchErr || !batchesData) {
+      if (batchErr || !batchesData || batchesData.length === 0) {
         return [];
       }
 
@@ -144,7 +209,7 @@ export class StudentStudyMaterialService {
 
   /**
    * Verifies whether the student has an active enrollment for the specified batch.
-   * Strict direct batch enrollment check.
+   * Checks direct batch enrollment, course-level enrollment, and content entitlements.
    */
   public static async verifyStudentBatchEnrollment(
     supabase: SupabaseClient,
@@ -154,6 +219,43 @@ export class StudentStudyMaterialService {
     if (!studentId || !batchId) return { isEnrolled: false };
 
     try {
+      // Role Check
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", studentId)
+        .maybeSingle();
+
+      if (
+        profile?.role === "SUPER_ADMIN" ||
+        profile?.role === "ADMIN" ||
+        profile?.role === "TEACHER"
+      ) {
+        return { isEnrolled: true };
+      }
+
+      // Check entitlements (ALL_ACCESS or direct BATCH)
+      const { data: entitlements } = await supabase
+        .from("student_content_entitlements")
+        .select("content_type, content_id, expires_at")
+        .eq("student_id", studentId)
+        .eq("status", "ACTIVE");
+
+      const now = new Date();
+      const validEntitlements = (entitlements || []).filter(
+        (e) => !e.expires_at || new Date(e.expires_at) >= now
+      );
+
+      if (
+        validEntitlements.some(
+          (e) =>
+            e.content_type === "ALL_ACCESS" ||
+            (e.content_type === "BATCH" && e.content_id === batchId)
+        )
+      ) {
+        return { isEnrolled: true };
+      }
+
       // Direct batch enrollment check
       const { data: directEnrollment } = await supabase
         .from("student_enrollments")
@@ -166,6 +268,36 @@ export class StudentStudyMaterialService {
 
       if (directEnrollment) {
         return { isEnrolled: true };
+      }
+
+      // Check course-level enrollment for this batch
+      const { data: batch } = await supabase
+        .from("cms_batches")
+        .select("course_id")
+        .eq("id", batchId)
+        .maybeSingle();
+
+      if (batch?.course_id) {
+        if (
+          validEntitlements.some(
+            (e) => e.content_type === "COURSE" && e.content_id === batch.course_id
+          )
+        ) {
+          return { isEnrolled: true };
+        }
+
+        const { data: courseEnrollment } = await supabase
+          .from("student_enrollments")
+          .select("id")
+          .eq("student_id", studentId)
+          .eq("course_id", batch.course_id)
+          .eq("status", "ACTIVE")
+          .limit(1)
+          .maybeSingle();
+
+        if (courseEnrollment) {
+          return { isEnrolled: true };
+        }
       }
 
       return { isEnrolled: false };

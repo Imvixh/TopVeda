@@ -93,38 +93,62 @@ export class ContentAccessService {
         if (liveClass.batch_id || liveClass.course_id) {
           let hasEnrollment = false;
 
-          const query = supabase
+          const { data: enrollments } = await supabase
             .from("student_enrollments")
-            .select("id")
+            .select("batch_id, course_id")
             .eq("student_id", userId)
             .eq("status", "ACTIVE");
 
-          if (liveClass.batch_id && liveClass.course_id) {
-            query.or(`batch_id.eq.${liveClass.batch_id},course_id.eq.${liveClass.course_id}`);
-          } else if (liveClass.batch_id) {
-            query.eq("batch_id", liveClass.batch_id);
-          } else if (liveClass.course_id) {
-            query.eq("course_id", liveClass.course_id);
-          }
+          const enrolledBatchIds = new Set<string>(
+            (enrollments || []).map((e) => e.batch_id).filter(Boolean)
+          );
+          const enrolledCourseIds = new Set<string>(
+            (enrollments || []).map((e) => e.course_id).filter(Boolean)
+          );
 
-          const { data: enrollments } = await query.maybeSingle();
-          if (enrollments) {
-            hasEnrollment = true;
-          }
+          // Check direct content entitlements
+          const { data: entitlements } = await supabase
+            .from("student_content_entitlements")
+            .select("content_type, content_id, expires_at")
+            .eq("student_id", userId)
+            .eq("status", "ACTIVE");
 
-          // Check direct content or ALL_ACCESS entitlements
-          if (!hasEnrollment) {
-            const { data: entitlement } = await supabase
-              .from("student_content_entitlements")
-              .select("id, expires_at")
-              .eq("student_id", userId)
-              .eq("status", "ACTIVE")
-              .or(`content_id.eq.${contentId},content_type.eq.ALL_ACCESS`)
-              .maybeSingle();
+          const validEntitlements = (entitlements || []).filter(
+            (e) => !e.expires_at || new Date(e.expires_at) >= now
+          );
 
-            if (entitlement && (!entitlement.expires_at || new Date(entitlement.expires_at) >= now)) {
-              hasEnrollment = true;
+          validEntitlements.forEach((e) => {
+            if (e.content_type === "COURSE" && e.content_id) {
+              enrolledCourseIds.add(e.content_id);
             }
+            if (e.content_type === "BATCH" && e.content_id) {
+              enrolledBatchIds.add(e.content_id);
+            }
+          });
+
+          // Resolve courses from enrolled batches
+          if (enrolledBatchIds.size > 0) {
+            const { data: batches } = await supabase
+              .from("cms_batches")
+              .select("id, course_id")
+              .in("id", Array.from(enrolledBatchIds));
+            (batches || []).forEach((b) => {
+              if (b.course_id) enrolledCourseIds.add(b.course_id);
+            });
+          }
+
+          if (
+            validEntitlements.some(
+              (e) =>
+                e.content_type === "ALL_ACCESS" ||
+                (e.content_type === "LIVE_CLASS" && e.content_id === contentId)
+            )
+          ) {
+            hasEnrollment = true;
+          } else if (liveClass.batch_id && enrolledBatchIds.has(liveClass.batch_id)) {
+            hasEnrollment = true;
+          } else if (liveClass.course_id && enrolledCourseIds.has(liveClass.course_id)) {
+            hasEnrollment = true;
           }
 
           if (!hasEnrollment) {
