@@ -88,6 +88,8 @@ async function runStudentLifecycleTestSuite() {
   const taxonomy = await CmsTestService.getAcademicTaxonomy(adminClient);
   const mathSubject = taxonomy.subjects.find((s) => s.code === "MATH") || taxonomy.subjects[0];
   const mathCourse = taxonomy.courses.find((c) => c.subject_id === mathSubject?.id) || taxonomy.courses[0];
+  const sciSubject = taxonomy.subjects.find((s) => s.code === "SCI" || s.name === "Science") || taxonomy.subjects[1];
+  const sciCourse = taxonomy.courses.find((c) => c.subject_id === sciSubject?.id) || taxonomy.courses[1];
 
   // Fetch or setup two distinct student IDs for authorization testing
   const { data: studentProfiles } = await adminClient
@@ -99,13 +101,20 @@ async function runStudentLifecycleTestSuite() {
   const studentA = studentProfiles?.[0] || { id: "11111111-1111-1111-1111-111111111111" };
   const studentB = studentProfiles?.[1] || { id: "22222222-2222-2222-2222-222222222222" };
 
-  console.log(`  Student A ID: ${studentA.id}`);
-  console.log(`  Student B ID: ${studentB.id}`);
+  console.log(`  Student A ID: ${studentA.id} (Enrolled in Math)`);
+  console.log(`  Student B ID: ${studentB.id} (Enrolled in Science)`);
 
   // Enroll Student A in mathCourse
   await adminClient.from("student_enrollments").upsert({
     student_id: studentA.id,
     course_id: mathCourse.id,
+    status: "ACTIVE",
+  }, { onConflict: "student_id, course_id" });
+
+  // Enroll Student B in sciCourse
+  await adminClient.from("student_enrollments").upsert({
+    student_id: studentB.id,
+    course_id: sciCourse.id,
     status: "ACTIVE",
   }, { onConflict: "student_id, course_id" });
 
@@ -160,6 +169,19 @@ async function runStudentLifecycleTestSuite() {
   const createRes = await CmsTestService.upsertTestWithQuestions(adminClient, testPayload);
   assert(createRes.success === true, "1.1 Super Admin created test record", createRes.error);
   const testId = createRes.testId;
+
+  // ---------------------------------------------------------------------------
+  // STEP 1.5: Published Test Catalog Visibility (Positive & Negative Isolation)
+  // ---------------------------------------------------------------------------
+  console.log("\n[SECTION 1.5] Student Catalog Visibility & Entitlement Gating...");
+
+  const catalogStudentA = await StudentTestService.getPublishedTests(adminClient, studentA.id);
+  const isVisibleStudentA = catalogStudentA.some((t) => t.id === testId);
+  assert(isVisibleStudentA === true, "1.5.1 Eligible enrolled Student A sees matching published test in catalog");
+
+  const catalogStudentB = await StudentTestService.getPublishedTests(adminClient, studentB.id);
+  const isVisibleStudentB = catalogStudentB.some((t) => t.id === testId);
+  assert(isVisibleStudentB === false, "1.5.2 Student B (without Math enrollment) does NOT see test in catalog");
 
   // ---------------------------------------------------------------------------
   // STEP 2: Pre-Submission Checks (Progress NOT completed before submit)

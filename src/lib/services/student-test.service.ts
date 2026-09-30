@@ -13,6 +13,10 @@ import {
   QuestionEvaluationResult,
 } from "@/types/assessment.types";
 
+// Default Academic Scope Constants
+const DEFAULT_BOARD_ID = "10000000-0000-0000-0000-000000000001"; // CBSE Board
+const DEFAULT_CLASS_ID = "20000000-0000-0000-0000-000000000001"; // Class 10
+
 // Subject Visual Style Resolver
 function getSubjectTestTheme(subjectName: string) {
   const name = (subjectName || "").toLowerCase();
@@ -125,11 +129,27 @@ export class StudentTestService {
 
           if (!hasAllAccess) {
             const enrolledCourseIds = new Set<string>((enrollments || []).map((e) => e.course_id).filter(Boolean));
+            const batchIds: string[] = (enrollments || []).map((e) => e.batch_id).filter(Boolean);
+
             (entitlements || []).forEach((e) => {
               if (e.content_type === "COURSE" && e.content_id) {
                 enrolledCourseIds.add(e.content_id);
               }
+              if (e.content_type === "BATCH" && e.content_id) {
+                batchIds.push(e.content_id);
+              }
             });
+
+            // Resolve course IDs from enrolled batches
+            if (batchIds.length > 0) {
+              const { data: batches } = await supabase
+                .from("cms_batches")
+                .select("id, course_id")
+                .in("id", batchIds);
+              (batches || []).forEach((b) => {
+                if (b.course_id) enrolledCourseIds.add(b.course_id);
+              });
+            }
 
             // Fetch student learning preferences for board/class fallback
             const { data: prefs } = await supabase
@@ -156,14 +176,24 @@ export class StudentTestService {
                 return matchBoard && matchClass;
               });
             } else {
-              // Default new student: show only general open free tests without course binding
-              eligibleTests = (tests || []).filter((t) => !t.course_id && t.access_tier === "FREE");
+              // Default new student: show CBSE Class 10 tests or general open tests
+              eligibleTests = (tests || []).filter((t) => {
+                if (!t.course_id) return t.access_tier === "FREE";
+                const course = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
+                if (!course) return false;
+                return course.board_id === DEFAULT_BOARD_ID && course.class_id === DEFAULT_CLASS_ID;
+              });
             }
           }
         }
       } else {
-        // Unauthenticated visitor: show only general open free tests without course binding
-        eligibleTests = (tests || []).filter((t) => !t.course_id && t.access_tier === "FREE");
+        // Unauthenticated visitor: show CBSE Class 10 or open free tests
+        eligibleTests = (tests || []).filter((t) => {
+          if (!t.course_id) return t.access_tier === "FREE";
+          const course = Array.isArray(t.cms_courses) ? t.cms_courses[0] : t.cms_courses;
+          if (!course) return false;
+          return course.board_id === DEFAULT_BOARD_ID && course.class_id === DEFAULT_CLASS_ID;
+        });
       }
 
       // 3. Fetch student's previous attempts if authenticated
@@ -356,12 +386,27 @@ export class StudentTestService {
       const enrolledCourseIds = new Set<string>(
         (enrollments || []).map((e) => e.course_id).filter(Boolean)
       );
+      const batchIds: string[] = (enrollments || []).map((e) => e.batch_id).filter(Boolean);
 
       validEntitlements.forEach((e) => {
         if (e.content_type === "COURSE" && e.content_id) {
           enrolledCourseIds.add(e.content_id);
         }
+        if (e.content_type === "BATCH" && e.content_id) {
+          batchIds.push(e.content_id);
+        }
       });
+
+      // Resolve course IDs from enrolled batches
+      if (batchIds.length > 0) {
+        const { data: batches } = await supabase
+          .from("cms_batches")
+          .select("id, course_id")
+          .in("id", batchIds);
+        (batches || []).forEach((b) => {
+          if (b.course_id) enrolledCourseIds.add(b.course_id);
+        });
+      }
 
       if (enrolledCourseIds.size > 0) {
         if (test.course_id) {
@@ -407,7 +452,7 @@ export class StudentTestService {
         return { granted: true, test };
       }
 
-      // 6. Free open tests
+      // 6. Free open tests without course restriction
       if (test.access_tier === "FREE" && !test.course_id) {
         return { granted: true, test };
       }
