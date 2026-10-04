@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/landing/navbar";
 import { Hero } from "@/components/landing/hero";
 import { PlatformHighlights } from "@/components/landing/platform-highlights";
@@ -13,17 +14,16 @@ import { Testimonials } from "@/components/landing/testimonials";
 import { FAQ } from "@/components/landing/faq";
 import { FinalCTA } from "@/components/landing/final-cta";
 import { Footer } from "@/components/landing/footer";
-import { AuthModal, AuthMode, LoginType, RegistrationType } from "@/components/auth/auth-modal";
+import { AuthModal, AuthMode } from "@/components/auth/auth-modal";
 import { LegalModal, LegalType } from "@/components/legal/legal-modal";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 
 export default function LandingPage() {
+  const router = useRouter();
   // Auth Modal State
   const [authModalOpen, setAuthModalOpen] = React.useState(false);
   const [authMode, setAuthMode] = React.useState<AuthMode>("login");
-  const [authLoginType, setAuthLoginType] = React.useState<LoginType>("student");
-  const [authRegType, setAuthRegType] = React.useState<RegistrationType>("student");
 
   // Legal Modal State
   const [legalModalOpen, setLegalModalOpen] = React.useState(false);
@@ -32,15 +32,13 @@ export default function LandingPage() {
   // Educator Interest Notice State
   const [teachModalOpen, setTeachModalOpen] = React.useState(false);
 
-  const handleOpenLogin = (portal: LoginType = "student") => {
+  const handleOpenLogin = () => {
     setAuthMode("login");
-    setAuthLoginType(portal);
     setAuthModalOpen(true);
   };
 
-  const handleOpenRegister = (type: RegistrationType = "student") => {
+  const handleOpenRegister = () => {
     setAuthMode("register");
-    setAuthRegType(type);
     setAuthModalOpen(true);
   };
 
@@ -63,41 +61,27 @@ export default function LandingPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const authParam = params.get("auth");
-      const typeParam = params.get("type") || params.get("portal") || params.get("role");
 
       if (authParam === "login") {
         setTimeout(() => {
           setAuthMode("login");
-          setAuthLoginType(typeParam === "admin" ? "admin" : "student");
-          setAuthModalOpen(true);
-        }, 0);
-      } else if (authParam === "admin-login") {
-        setTimeout(() => {
-          setAuthMode("login");
-          setAuthLoginType("admin");
           setAuthModalOpen(true);
         }, 0);
       } else if (authParam === "register") {
         setTimeout(() => {
           setAuthMode("register");
-          setAuthRegType(typeParam === "admin" ? "admin" : "student");
-          setAuthModalOpen(true);
-        }, 0);
-      } else if (authParam === "admin-register" || authParam === "admin-application") {
-        setTimeout(() => {
-          setAuthMode("register");
-          setAuthRegType("admin");
           setAuthModalOpen(true);
         }, 0);
       } else if (authParam === "forgot-password" || authParam === "forgot") {
         setTimeout(() => {
           setAuthMode("forgot-password");
-          setAuthLoginType(typeParam === "admin" ? "admin" : "student");
           setAuthModalOpen(true);
         }, 0);
+      } else if (authParam === "admin-login" || authParam === "admin-register" || authParam === "admin-application") {
+        router.push("/admin");
       }
     }
-  }, []);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-brand-bg-warm text-brand-text-primary flex flex-col selection:bg-brand-bg-peach selection:text-brand-orange">
@@ -154,8 +138,6 @@ export default function LandingPage() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         initialMode={authMode}
-        initialLoginType={authLoginType}
-        initialRegistrationType={authRegType}
         onOpenTerms={handleOpenTerms}
       />
 

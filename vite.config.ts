@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import vinext from "vinext";
 import { cloudflare } from "@cloudflare/vite-plugin";
+import fs from "node:fs";
 
 export default defineConfig(({ mode }) => {
   const isProduction = mode === "production" || process.env.NODE_ENV === "production";
@@ -25,17 +26,32 @@ export default defineConfig(({ mode }) => {
 
   // Production environment resolution:
   // Must use explicit production build env / .env.production, and NEVER accept local development test key
-  let turnstileSiteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "";
-  if (!turnstileSiteKey) {
-    if (!isProduction) {
-      turnstileSiteKey = env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "";
+  let turnstileSiteKey = "";
+  if (isProduction) {
+    const rawProc = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
+    if (rawProc && rawProc !== "1x00000000000000000000AA") {
+      turnstileSiteKey = rawProc;
     } else {
-      // In production mode, ignore test key that might be present in local development .env.local
-      const candidate = env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
-      if (candidate && candidate !== "1x00000000000000000000AA") {
-        turnstileSiteKey = candidate;
+      const rawEnv = env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
+      if (rawEnv && rawEnv !== "1x00000000000000000000AA") {
+        turnstileSiteKey = rawEnv;
+      } else {
+        // Fallback: Read directly from .env.production if .env.local or process.env masked it
+        try {
+          if (fs.existsSync(".env.production")) {
+            const prodContent = fs.readFileSync(".env.production", "utf8");
+            const match = prodContent.match(/NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY=([^\r\n]+)/);
+            if (match && match[1].trim() && match[1].trim() !== "1x00000000000000000000AA") {
+              turnstileSiteKey = match[1].trim().replace(/^["']|["']$/g, "");
+            }
+          }
+        } catch {
+          // ignore
+        }
       }
     }
+  } else {
+    turnstileSiteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "";
   }
 
   // Strict Production Environment Guard

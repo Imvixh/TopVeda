@@ -66,8 +66,7 @@ export class StudentStudyMaterialService {
 
       const isPrivileged =
         profile?.role === "SUPER_ADMIN" ||
-        profile?.role === "ADMIN" ||
-        profile?.role === "TEACHER";
+        profile?.role === "ADMIN";
 
       const enrolledBatchIds = new Set<string>();
 
@@ -228,8 +227,7 @@ export class StudentStudyMaterialService {
 
       if (
         profile?.role === "SUPER_ADMIN" ||
-        profile?.role === "ADMIN" ||
-        profile?.role === "TEACHER"
+        profile?.role === "ADMIN"
       ) {
         return { isEnrolled: true };
       }

@@ -160,27 +160,32 @@ export async function updateSession(request: NextRequest) {
   }
 
   // --------------------------------------------------------------------------
-  // 4. PROTECTED ADMIN ROUTES: /admin/*
+  // 4. PROTECTED ADMIN ROUTES: /admin and /admin/*
   // --------------------------------------------------------------------------
-  if (pathname.startsWith("/admin")) {
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    // A. Unauthenticated access to /admin renders the dedicated Admin Auth page
     if (!user) {
+      if (pathname === "/admin") {
+        return supabaseResponse;
+      }
+      // Sub-routes redirect unauthenticated users to /admin
       const url = request.nextUrl.clone();
-      url.pathname = "/";
-      url.searchParams.set("auth", "login");
-      url.searchParams.set("portal", "admin");
+      url.pathname = "/admin";
       url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);
     }
 
     if (!userRole) {
+      if (pathname === "/admin") {
+        return supabaseResponse;
+      }
       const url = request.nextUrl.clone();
-      url.pathname = "/";
-      url.searchParams.set("auth", "login");
-      url.searchParams.set("portal", "admin");
+      url.pathname = "/admin";
       url.searchParams.set("error", "unauthorized");
       return NextResponse.redirect(url);
     }
 
+    // B. Reject Student attempting Admin Portal
     if (userRole === "STUDENT") {
       const url = request.nextUrl.clone();
       url.pathname = "/student";
@@ -188,32 +193,33 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
+    // C. Administrator Scoping
     if (userRole === "ADMIN") {
       // Normal Admins cannot access Super Admin CMS suite or Application Review vault
       if (pathname.startsWith("/admin/cms") || pathname.startsWith("/admin/applications")) {
         return NextResponse.redirect(new URL("/admin", request.url));
       }
 
-      // Verify APPROVED status
-      const { data: app } = await supabase
-        .from("admin_applications")
-        .select("status")
-        .eq("user_id", user.id)
-        .eq("status", "APPROVED")
-        .maybeSingle();
+      // Verify APPROVED status for sub-routes
+      if (pathname.startsWith("/admin/")) {
+        const { data: app } = await supabase
+          .from("admin_applications")
+          .select("status")
+          .eq("user_id", user.id)
+          .eq("status", "APPROVED")
+          .maybeSingle();
 
-      if (!app) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/";
-        url.searchParams.set("auth", "login");
-        url.searchParams.set("portal", "admin");
-        url.searchParams.set("error", "pending");
-        return NextResponse.redirect(url);
+        if (!app) {
+          const url = request.nextUrl.clone();
+          url.pathname = "/admin";
+          url.searchParams.set("error", "pending");
+          return NextResponse.redirect(url);
+        }
       }
     }
 
+    // D. Super Administrator MFA Gate
     if (userRole === "SUPER_ADMIN") {
-      // Mandatory AAL2 Multi-Factor Authentication Enforcement for Super Admin
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (aalData?.currentLevel !== "aal2") {
         const url = request.nextUrl.clone();
@@ -222,7 +228,6 @@ export async function updateSession(request: NextRequest) {
         url.searchParams.set("redirect", pathname);
         return NextResponse.redirect(url);
       }
-      // SUPER_ADMIN at AAL2 is allowed full access to /admin, /admin/cms, /admin/applications, /admin/profile, /admin/content
     }
   }
 

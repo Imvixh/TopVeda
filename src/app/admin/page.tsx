@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   RefreshCw,
 } from "lucide-react";
+import { AdminAuthView } from "@/components/auth/admin-auth-view";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AdminFoundationPage() {
@@ -111,6 +112,33 @@ export default function AdminFoundationPage() {
           <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
           <p className="text-xs font-semibold text-brand-text-muted">Verifying Admin Authorization...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AdminAuthView onSuccess={() => router.refresh()} />;
+  }
+
+  // Guard: Logged in non-admin (e.g. STUDENT)
+  if (profile && profile.role !== "ADMIN" && profile.role !== "SUPER_ADMIN") {
+    return (
+      <div className="min-h-screen bg-brand-bg-warm flex items-center justify-center p-4">
+        <Card className="max-w-md w-full p-6 text-center space-y-4">
+          <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+          <h2 className="text-xl font-bold text-brand-text-primary">Access Restricted</h2>
+          <p className="text-sm text-brand-text-muted">
+            You are signed in as a {profile.role}. This portal is strictly restricted to Administrators and Faculty.
+          </p>
+          <div className="flex justify-center gap-3 pt-2">
+            <Button variant="outline" onClick={() => router.push("/student")}>
+              Go to Student Dashboard
+            </Button>
+            <Button variant="ghost" onClick={handleLogout}>
+              Sign Out
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }

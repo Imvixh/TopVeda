@@ -1854,7 +1854,7 @@ export class CmsService {
         supabase
           .from("profiles")
           .select("id, full_name, email, phone, avatar_url, qualification, location, address, bio, role, created_at")
-          .in("role", ["ADMIN", "SUPER_ADMIN", "TEACHER", "EDUCATOR"])
+          .in("role", ["ADMIN", "SUPER_ADMIN"])
           .order("full_name", { ascending: true }),
         supabase
           .from("cms_live_classes")

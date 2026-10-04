@@ -106,7 +106,7 @@ export class StudentTestService {
           .eq("id", userId)
           .maybeSingle();
 
-        const isPrivileged = profile?.role === "SUPER_ADMIN" || profile?.role === "ADMIN" || profile?.role === "TEACHER";
+        const isPrivileged = profile?.role === "SUPER_ADMIN" || profile?.role === "ADMIN";
 
         if (!isPrivileged) {
           const scope = await ContentAccessService.resolveStudentAcademicScope(supabase, userId);
@@ -312,8 +312,7 @@ export class StudentTestService {
 
       if (
         profile?.role === "SUPER_ADMIN" ||
-        profile?.role === "ADMIN" ||
-        profile?.role === "TEACHER"
+        profile?.role === "ADMIN"
       ) {
         return { granted: true, test };
       }

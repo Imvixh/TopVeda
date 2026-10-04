@@ -18,6 +18,7 @@
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_",
     "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_zoSwfBIXs97hyeS0OfP2ig_SqtDAQK_",
     "NEXT_PUBLIC_APP_URL": "https://topveda.in",
+    "NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY": "0x4AAAAAAFHxSEIMvYFpoutX",
     "GOOGLE_YOUTUBE_REDIRECT_URI": "https://topveda.in/api/youtube/oauth/callback"
   }
 }

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile || (profile.role !== "SUPER_ADMIN" && profile.role !== "ADMIN" && profile.role !== "TEACHER")) {
+    if (!profile || (profile.role !== "SUPER_ADMIN" && profile.role !== "ADMIN")) {
       return NextResponse.json({ error: "Forbidden. Admin privileges required." }, { status: 403 });
     }
 

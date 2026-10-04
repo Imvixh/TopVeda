@@ -6,32 +6,28 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TopVedaLogo } from "@/components/brand/logo";
-import { AdminApplicationFlow } from "@/components/auth/admin-application-flow";
 import { TurnstileWidget, TurnstileWidgetRef } from "@/components/auth/turnstile-widget";
 import { useAuth } from "@/hooks/use-auth";
-import { AuthMode, LoginType, RegistrationType } from "@/types/auth.types";
-import { 
-  Mail, 
-  Lock, 
-  User, 
-  CheckCircle2, 
-  ArrowRight, 
-  Eye, 
-  EyeOff, 
+import { AuthMode } from "@/types/auth.types";
+import {
+  Mail,
+  Lock,
+  User,
+  CheckCircle2,
+  ArrowRight,
+  Eye,
+  EyeOff,
   Loader2,
   AlertCircle,
   GraduationCap,
-  Shield
 } from "lucide-react";
 
-export type { AuthMode, LoginType, RegistrationType };
+export type { AuthMode };
 
 export interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: AuthMode;
-  initialLoginType?: LoginType;
-  initialRegistrationType?: RegistrationType;
   onOpenTerms?: () => void;
 }
 
@@ -39,16 +35,12 @@ export function AuthModal({
   isOpen,
   onClose,
   initialMode = "login",
-  initialLoginType = "student",
-  initialRegistrationType = "student",
   onOpenTerms,
 }: AuthModalProps) {
   const router = useRouter();
   const { login, register, requestPasswordReset } = useAuth();
 
   const [mode, setMode] = React.useState<AuthMode>(initialMode);
-  const [loginType, setLoginType] = React.useState<LoginType>(initialLoginType);
-  const [regType, setRegType] = React.useState<RegistrationType>(initialRegistrationType);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
@@ -79,30 +71,19 @@ export function AuthModal({
   // Forgot Password Form State
   const [forgotEmail, setForgotEmail] = React.useState("");
 
-  // Sync mode and reset state when isOpen, initialMode, initialLoginType, or initialRegistrationType changes
+  // Sync mode and reset state when isOpen or initialMode changes
   const [prevProps, setPrevProps] = React.useState({
     isOpen,
     initialMode,
-    initialLoginType,
-    initialRegistrationType,
   });
 
-  if (
-    isOpen !== prevProps.isOpen ||
-    initialMode !== prevProps.initialMode ||
-    initialLoginType !== prevProps.initialLoginType ||
-    initialRegistrationType !== prevProps.initialRegistrationType
-  ) {
+  if (isOpen !== prevProps.isOpen || initialMode !== prevProps.initialMode) {
     setPrevProps({
       isOpen,
       initialMode,
-      initialLoginType,
-      initialRegistrationType,
     });
     if (isOpen && !prevProps.isOpen) {
       setMode(initialMode);
-      setLoginType(initialLoginType);
-      setRegType(initialRegistrationType);
       setErrorMessage(null);
       setSuccessMessage(null);
       setRequireEmailVerification(false);
@@ -115,8 +96,6 @@ export function AuthModal({
       setTurnstileToken(null);
     } else if (isOpen) {
       if (initialMode !== prevProps.initialMode) setMode(initialMode);
-      if (initialLoginType !== prevProps.initialLoginType) setLoginType(initialLoginType);
-      if (initialRegistrationType !== prevProps.initialRegistrationType) setRegType(initialRegistrationType);
       setErrorMessage(null);
       setSuccessMessage(null);
       setTurnstileToken(null);
@@ -137,28 +116,6 @@ export function AuthModal({
   const switchMode = (newMode: AuthMode) => {
     setMode(newMode);
     resetFormState();
-  };
-
-  const handleLoginTypeChange = (type: LoginType) => {
-    if (type !== loginType) {
-      setLoginType(type);
-      setErrorMessage(null);
-      setSuccessMessage(null);
-      turnstileTokenRef.current = null;
-      setTurnstileToken(null);
-      turnstileRef.current?.reset();
-    }
-  };
-
-  const handleRegTypeChange = (type: RegistrationType) => {
-    if (type !== regType) {
-      setRegType(type);
-      setErrorMessage(null);
-      setSuccessMessage(null);
-      turnstileTokenRef.current = null;
-      setTurnstileToken(null);
-      turnstileRef.current?.reset();
-    }
   };
 
   const handleClose = () => {
@@ -189,25 +146,17 @@ export function AuthModal({
 
     try {
       if (mode === "login") {
-        const res = await login(loginIdentifier, loginPassword, loginType, tokenToSubmit);
+        const res = await login(loginIdentifier, loginPassword, "student", tokenToSubmit);
         if (!res.success) {
           setErrorMessage(res.error || "Failed to sign in. Please verify your credentials.");
         } else {
-          setSuccessMessage(
-            loginType === "admin"
-              ? "Welcome to TopVeda Administrator Portal!"
-              : "Welcome back to TopVeda!"
-          );
+          setSuccessMessage("Welcome back to TopVeda!");
           setTimeout(() => {
             handleClose();
-            if (loginType === "admin") {
-              router.push("/admin");
-            } else {
-              router.push("/student");
-            }
+            router.push("/student");
           }, 600);
         }
-      } else if (mode === "register" && regType === "student") {
+      } else if (mode === "register") {
         const res = await register({
           fullName: registerName,
           email: registerEmail,
@@ -247,7 +196,6 @@ export function AuthModal({
     } finally {
       isSubmittingRef.current = false;
       setIsSubmitting(false);
-      // Ensure single-use token lifecycle: clear local state and reset widget
       turnstileTokenRef.current = null;
       setTurnstileToken(null);
       turnstileRef.current?.reset();
@@ -264,14 +212,18 @@ export function AuthModal({
         {/* Brand Header */}
         <div className="text-center space-y-2 flex flex-col items-center">
           <TopVedaLogo size={36} />
+          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-brand-bg-peach border border-brand-orange-border text-brand-orange text-[11px] font-bold tracking-wide uppercase">
+            <GraduationCap className="h-3.5 w-3.5" />
+            Student Portal
+          </div>
           <h2 className="text-xl font-bold text-brand-text-primary">
-            {mode === "login" && (loginType === "student" ? "Student Sign In" : "Admin Sign In")}
-            {mode === "register" && (regType === "student" ? "Student Registration" : "Admin Registration")}
+            {mode === "login" && "Student Sign In"}
+            {mode === "register" && "Student Registration"}
             {mode === "forgot-password" && "Forgot Password?"}
           </h2>
           <p className="text-xs text-brand-text-muted">
-            {mode === "login" && (loginType === "student" ? "Sign in to access your live classes, test series, and notes" : "Sign in with your verified administrator credentials")}
-            {mode === "register" && (regType === "student" ? "Join thousands of students learning smarter" : "Apply for administrator privileges with government ID verification")}
+            {mode === "login" && "Sign in to access your live classes, test series, and notes"}
+            {mode === "register" && "Join thousands of students learning smarter with TopVeda"}
             {mode === "forgot-password" && "Enter your registered email address and we'll send you a password reset link."}
           </p>
         </div>
@@ -295,70 +247,6 @@ export function AuthModal({
           >
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
             <div className="flex-1 font-medium">{successMessage}</div>
-          </div>
-        )}
-
-        {/* LOGIN PORTAL SELECTOR TABS (Student Sign In vs Admin Sign In) */}
-        {mode === "login" && (
-          <div className="flex p-1 rounded-xl bg-brand-bg-warm border border-brand-border text-xs font-semibold">
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleLoginTypeChange("student")}
-              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                loginType === "student"
-                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
-                  : "text-brand-text-muted hover:text-brand-text-primary"
-              }`}
-            >
-              <GraduationCap className="h-4 w-4" />
-              <span>Student Sign In</span>
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleLoginTypeChange("admin")}
-              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                loginType === "admin"
-                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
-                  : "text-brand-text-muted hover:text-brand-text-primary"
-              }`}
-            >
-              <Shield className="h-4 w-4" />
-              <span>Admin Sign In</span>
-            </button>
-          </div>
-        )}
-
-        {/* REGISTRATION ROLE SELECTOR TABS (Student Registration vs Admin Registration) */}
-        {mode === "register" && !requireEmailVerification && (
-          <div className="flex p-1 rounded-xl bg-brand-bg-warm border border-brand-border text-xs font-semibold">
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleRegTypeChange("student")}
-              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                regType === "student"
-                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
-                  : "text-brand-text-muted hover:text-brand-text-primary"
-              }`}
-            >
-              <GraduationCap className="h-4 w-4" />
-              <span>Student Registration</span>
-            </button>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => handleRegTypeChange("admin")}
-              className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                regType === "admin"
-                  ? "bg-brand-surface text-brand-orange shadow-sm font-bold border border-brand-orange-border/50"
-                  : "text-brand-text-muted hover:text-brand-text-primary"
-              }`}
-            >
-              <Shield className="h-4 w-4" />
-              <span>Admin Registration</span>
-            </button>
           </div>
         )}
 
@@ -388,15 +276,6 @@ export function AuthModal({
               </Button>
             </div>
           </div>
-        ) : mode === "register" && regType === "admin" ? (
-          /* =========================================================
-              ADMIN APPLICATION FLOW WIZARD
-             ========================================================= */
-          <AdminApplicationFlow
-            onSuccess={handleClose}
-            onOpenTerms={onOpenTerms}
-            onSwitchToLogin={() => switchMode("login")}
-          />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* =========================================================
@@ -408,175 +287,180 @@ export function AuthModal({
                   label="Email or Mobile Number"
                   placeholder="name@gmail.com or 10-digit mobile"
                   type="text"
-                  value={loginIdentifier}
-                  onChange={(e) => setLoginIdentifier(e.target.value)}
-                  icon={<Mail className="h-4 w-4" />}
-                  autoComplete="username"
                   required
                   disabled={isSubmitting}
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  icon={<Mail className="h-4 w-4 text-brand-text-muted" />}
+                  autoComplete="username"
                 />
-                <div className="relative">
-                  <Input
-                    label="Password"
-                    placeholder="Enter your password"
-                    type={showPassword ? "text" : "password"}
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    icon={<Lock className="h-4 w-4" />}
-                    autoComplete="current-password"
-                    required
-                    disabled={isSubmitting}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600 focus:outline-none"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-[11px] text-brand-text-muted">
-                    Use registered <span className="font-semibold text-brand-text-primary">Gmail</span> or <span className="font-semibold text-brand-text-primary">Mobile</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => switchMode("forgot-password")}
-                    className="font-semibold text-brand-orange hover:underline focus:outline-none"
-                  >
-                    Forgot password?
-                  </button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-brand-text-primary">
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => switchMode("forgot-password")}
+                      className="text-xs font-semibold text-brand-orange hover:underline focus:outline-none"
+                      disabled={isSubmitting}
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••••••"
+                      required
+                      disabled={isSubmitting}
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      icon={<Lock className="h-4 w-4 text-brand-text-muted" />}
+                      autoComplete="current-password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-text-primary focus:outline-none"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </>
             )}
 
             {/* =========================================================
-                2. STUDENT REGISTER MODE FORM
+                2. STUDENT REGISTRATION MODE FORM
                ========================================================= */}
-            {mode === "register" && regType === "student" && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {mode === "register" && (
+              <div className="space-y-3.5">
+                <Input
+                  label="Full Name"
+                  placeholder="e.g. Rahul Sharma"
+                  type="text"
+                  required
+                  disabled={isSubmitting}
+                  value={registerName}
+                  onChange={(e) => setRegisterName(e.target.value)}
+                  icon={<User className="h-4 w-4 text-brand-text-muted" />}
+                  autoComplete="name"
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <Input
-                    label="Full Name"
-                    placeholder="e.g. Aarav Sharma"
-                    type="text"
-                    value={registerName}
-                    onChange={(e) => setRegisterName(e.target.value)}
-                    icon={<User className="h-4 w-4" />}
-                    autoComplete="name"
+                    label="Email Address"
+                    placeholder="name@gmail.com"
+                    type="email"
                     required
                     disabled={isSubmitting}
-                  />
-                  <Input
-                    label="Gmail Address"
-                    placeholder="yourname@gmail.com"
-                    type="email"
                     value={registerEmail}
                     onChange={(e) => setRegisterEmail(e.target.value)}
-                    icon={<Mail className="h-4 w-4" />}
+                    icon={<Mail className="h-4 w-4 text-brand-text-muted" />}
                     autoComplete="email"
-                    hint="Must be @gmail.com"
+                    hint="Strictly valid @gmail.com required"
+                  />
+
+                  <Input
+                    label="Mobile Number"
+                    placeholder="10-digit number"
+                    type="tel"
                     required
                     disabled={isSubmitting}
+                    value={registerPhone}
+                    onChange={(e) => setRegisterPhone(e.target.value)}
+                    autoComplete="tel"
+                    hint="Indian 10-digit number (6-9 start)"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-brand-text-primary mb-1">
-                    Mobile Number (India) <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex rounded-xl border border-brand-border bg-brand-surface focus-within:border-brand-orange focus-within:ring-2 focus-within:ring-brand-orange/20 overflow-hidden">
-                    <span className="inline-flex items-center px-3 text-xs font-bold text-brand-text-muted bg-brand-bg-warm border-r border-brand-border select-none">
-                      +91
-                    </span>
-                    <input
-                      type="tel"
-                      placeholder="9876543210 (10 digits)"
-                      value={registerPhone}
-                      onChange={(e) => setRegisterPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      className="w-full px-3 py-2.5 text-sm bg-transparent text-brand-text-primary placeholder:text-gray-400 focus:outline-none"
-                      autoComplete="tel"
-                      required
-                      disabled={isSubmitting}
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-brand-text-primary">
+                      Create Password
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••••••"
+                        required
+                        disabled={isSubmitting}
+                        value={registerPassword}
+                        onChange={(e) => setRegisterPassword(e.target.value)}
+                        icon={<Lock className="h-4 w-4 text-brand-text-muted" />}
+                        autoComplete="new-password"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-text-primary focus:outline-none"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-brand-text-primary">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="••••••••••••"
+                        required
+                        disabled={isSubmitting}
+                        value={registerConfirmPassword}
+                        onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                        icon={<Lock className="h-4 w-4 text-brand-text-muted" />}
+                        autoComplete="new-password"
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-text-primary focus:outline-none"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="relative">
-                    <Input
-                      label="Create Password"
-                      placeholder="Min 8 chars (Aa1@)"
-                      type={showPassword ? "text" : "password"}
-                      value={registerPassword}
-                      onChange={(e) => setRegisterPassword(e.target.value)}
-                      icon={<Lock className="h-4 w-4" />}
-                      autoComplete="new-password"
-                      required
-                      disabled={isSubmitting}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600 focus:outline-none"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-
-                  <div className="relative">
-                    <Input
-                      label="Confirm Password"
-                      placeholder="Re-enter password"
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={registerConfirmPassword}
-                      onChange={(e) => setRegisterConfirmPassword(e.target.value)}
-                      icon={<Lock className="h-4 w-4" />}
-                      autoComplete="new-password"
-                      required
-                      disabled={isSubmitting}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-[34px] text-gray-400 hover:text-gray-600 focus:outline-none"
-                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-brand-bg-warm/80 p-2.5 text-[11px] text-brand-text-muted space-y-1 border border-brand-border/60">
-                  <p className="font-semibold text-brand-text-primary">Password Requirements:</p>
-                  <p>• At least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special symbol.</p>
-                </div>
-
-                <label className="flex items-start gap-2.5 cursor-pointer select-none text-xs text-brand-text-muted pt-1">
+                {/* Terms Agreement Checkbox */}
+                <div className="flex items-start gap-2 pt-1">
                   <input
                     type="checkbox"
+                    id="terms-checkbox"
+                    required
                     checked={termsAgreed}
                     onChange={(e) => setTermsAgreed(e.target.checked)}
-                    className="mt-0.5 rounded border-brand-border text-brand-orange focus:ring-brand-orange h-4 w-4"
-                    required
                     disabled={isSubmitting}
+                    className="mt-0.5 h-4 w-4 rounded border-brand-border text-brand-orange focus:ring-brand-orange"
                   />
-                  <span className="leading-snug">
-                    I agree to the{" "}
+                  <label htmlFor="terms-checkbox" className="text-xs text-brand-text-muted leading-tight">
+                    I agree to the TopVeda{" "}
                     <button
                       type="button"
                       onClick={onOpenTerms}
                       className="font-semibold text-brand-orange hover:underline focus:outline-none"
                     >
-                      Terms & Conditions
-                    </button>{" "}
-                    and Privacy Policy.
-                  </span>
-                </label>
-              </>
+                      Terms of Service &amp; Privacy Policy
+                    </button>
+                  </label>
+                </div>
+              </div>
             )}
 
             {/* =========================================================
@@ -584,78 +468,37 @@ export function AuthModal({
                ========================================================= */}
             {mode === "forgot-password" && (
               <>
-                {successMessage ? (
-                  <div className="py-2 text-center space-y-4">
-                    <p className="text-xs text-brand-text-muted leading-relaxed">
-                      Please check your inbox and click the reset password link to create a new password. If you don&apos;t see the email, check your Spam or Promotions folder.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="md"
-                      onClick={() => switchMode("login")}
-                      className="w-full text-xs font-semibold"
-                    >
-                      Back to Sign In
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      label="Email Address"
-                      placeholder="yourname@gmail.com"
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      icon={<Mail className="h-4 w-4" />}
-                      autoComplete="email"
-                      hint="Enter your registered @gmail.com address"
-                      required
-                      disabled={isSubmitting}
-                    />
+                <Input
+                  label="Registered Email Address"
+                  placeholder="name@gmail.com"
+                  type="email"
+                  required
+                  disabled={isSubmitting}
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  icon={<Mail className="h-4 w-4 text-brand-text-muted" />}
+                  autoComplete="email"
+                />
 
-                    <TurnstileWidget
-                      ref={turnstileRef}
-                      onVerify={(token) => {
-                        turnstileTokenRef.current = token;
-                        setTurnstileToken(token);
-                      }}
-                      onExpire={() => {
-                        turnstileTokenRef.current = null;
-                        setTurnstileToken(null);
-                      }}
-                      onError={() => {
-                        turnstileTokenRef.current = null;
-                        setTurnstileToken(null);
-                      }}
-                      onTimeout={() => {
-                        turnstileTokenRef.current = null;
-                        setTurnstileToken(null);
-                      }}
-                      action="forgot-password"
-                    />
-
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="lg"
-                      className="w-full mt-2 shadow-subtle"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Sending Reset Link...
-                        </>
-                      ) : (
-                        <>
-                          Send Reset Link
-                          <ArrowRight className="h-4 w-4 ml-1.5" />
-                        </>
-                      )}
-                    </Button>
-                  </>
-                )}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  className="w-full mt-2 shadow-subtle"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending Reset Link...
+                    </>
+                  ) : (
+                    <>
+                      Send Reset Link
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </>
+                  )}
+                </Button>
               </>
             )}
 
@@ -680,7 +523,7 @@ export function AuthModal({
                     turnstileTokenRef.current = null;
                     setTurnstileToken(null);
                   }}
-                  action={mode === "login" ? `${loginType}-login` : "student-register"}
+                  action={mode === "login" ? "student-login" : "student-register"}
                 />
 
                 <Button
@@ -688,7 +531,7 @@ export function AuthModal({
                   variant="primary"
                   size="lg"
                   className="w-full mt-2 shadow-subtle"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !turnstileToken}
                 >
                   {isSubmitting ? (
                     <>
@@ -697,7 +540,7 @@ export function AuthModal({
                     </>
                   ) : (
                     <>
-                      {mode === "login" && (loginType === "admin" ? "Sign In as Administrator" : "Sign In as Student")}
+                      {mode === "login" && "Sign In as Student"}
                       {mode === "register" && "Create Student Account"}
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </>

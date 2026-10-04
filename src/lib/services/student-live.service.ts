@@ -130,8 +130,7 @@ export class StudentLiveService {
 
       const isPrivileged =
         profile?.role === "SUPER_ADMIN" ||
-        profile?.role === "ADMIN" ||
-        profile?.role === "TEACHER";
+        profile?.role === "ADMIN";
 
       let authorizedClasses = classes || [];
 
