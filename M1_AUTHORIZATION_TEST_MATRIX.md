@@ -1,12 +1,12 @@
 # TopVeda Milestone M1 — Authorization Test Matrix
 
-**Objective:** Exhaustive empirical validation of TopVeda's Three-Role Security Model (`STUDENT`, `ADMIN`, `SUPER_ADMIN`), assigned teacher scoping, Storage isolation, and historical enrollment entitlement.
+**Objective:** Exhaustive empirical validation of TopVeda's Three-Role Security Model (`STUDENT`, `ADMIN`, `SUPER_ADMIN`), assigned teacher scoping, Storage isolation, live class workflow, and historical enrollment entitlement.
 
 ---
 
 ## Authorization Test Cases
 
-| Test ID | Security Invariant | Actor / Context | Operation / Action | Target Resource | Expected Outcome | Execution Status |
+| Test ID | Security Invariant / Workflow | Actor / Context | Operation / Action | Target Resource | Expected Outcome | Execution Status |
 |---|---|---|---|---|---|---|
 | **ATM-01** | Profile Self-Role Mutation Protection | `STUDENT` | `UPDATE profiles SET role = 'SUPER_ADMIN' WHERE id = auth.uid()` | `public.profiles` | **REJECTED**: Trigger `handle_profile_role_guard` raises exception. Role remains unchanged. | `PLANNED` |
 | **ATM-02** | Profile Self-Status Mutation Protection | `ADMIN` (Suspended) | `UPDATE profiles SET status = 'ACTIVE' WHERE id = auth.uid()` | `public.profiles` | **REJECTED**: Trigger exception: Only Super Administrators can alter account status. | `PLANNED` |
@@ -27,6 +27,18 @@
 | **ATM-17** | Expired Student Enrollment Lockout | `STUDENT` (Expired) | `SELECT * FROM cms_lectures WHERE batch_id = expired_batch` | `public.cms_lectures` | **REJECTED**: `is_actively_enrolled_in_batch` returns false. | `PLANNED` |
 | **ATM-18** | Completed Student Historical Learning Read | `STUDENT` (Completed) | `SELECT * FROM cms_study_materials WHERE batch_id = completed_batch` | `public.cms_study_materials` | **ALLOWED**: Historical study materials returned. | `PLANNED` |
 | **ATM-19** | Completed Student Mutation Lockout | `STUDENT` (Completed) | `record_live_attendance_heartbeat(live_class_id)` | Database RPC | **REJECTED**: Exception: Active enrollment required. | `PLANNED` |
-| **ATM-20** | Live Class Operation & Rescheduling | `ADMIN` (Assigned) | `UPDATE cms_live_classes SET live_status = 'LIVE', is_live = TRUE` | `public.cms_live_classes` | **ALLOWED**: Live status and stream URL updated. | `PLANNED` |
+| **ATM-20** | Live Class Operation & Rescheduling | `ADMIN` (Assigned) | `UPDATE cms_live_classes SET live_status = 'LIVE', is_live = TRUE` | `public.cms_live_classes` | **ALLOWED**: Live status and stream URL updated without Super Admin approval. | `PLANNED` |
 | **ATM-21** | Live Class Attendance Finalization | `ADMIN` (Assigned) | `finalize_live_class_attendance(live_class_id)` | Database RPC | **ALLOWED**: Absent records inserted; session finalized. | `PLANNED` |
-| **ATM-22** | Service-Role API Caller Role Enforcement | Anonymous / Invalid | POST to `/api/admin/tests/create` with service-role header without user session | Next.js API Route | **REJECTED**: 401/403 Server-Side Gate Rejection. | `PLANNED` |
+| **ATM-22** | Service-Role API Caller Role Enforcement | Anonymous / Invalid | POST to `/api/admin/cms/tests` with service-role header without user session | Next.js API Route | **REJECTED**: 401/403 Server-Side Gate Rejection. | `PLANNED` |
+| **ATM-23** | Assigned Teacher Schedules Live Class | `ADMIN` (Assigned) | `POST /api/teacher/live/create` for assigned batch/subject | `public.cms_live_classes` | **ALLOWED**: Class created with `live_status = 'SCHEDULED'`. No approval needed. | `PLANNED` |
+| **ATM-24** | Unassigned Teacher Live Scheduling Block | `ADMIN` (Unassigned) | `POST /api/teacher/live/create` for unassigned batch/subject | `public.cms_live_classes` | **REJECTED**: 403 Forbidden / RLS violation. | `PLANNED` |
+| **ATM-25** | Teacher Attend Window Gate (>10m Before) | `ADMIN` (Assigned) | `GET /api/teacher/live/session` at T-11m | Live Session API | **UNAVAILABLE**: `canJoin: false`, `accessMode: 'WAITING_ROOM'`. Attend disabled. | `PLANNED` |
+| **ATM-26** | Teacher Attend Window Access (<=10m Before) | `ADMIN` (Assigned) | `GET /api/teacher/live/session` at T-10m | Live Session API | **ALLOWED**: `canJoin: true`, `accessMode: 'TEACHER_PREPARATION'`. Attend active. | `PLANNED` |
+| **ATM-27** | Teacher Live Session Conduct Window | `ADMIN` (Assigned) | `GET /api/teacher/live/session` at T+0m to T+End | Live Session API | **ALLOWED**: `canJoin: true`, `accessMode: 'LIVE_BROADCAST'`. | `PLANNED` |
+| **ATM-28** | Student Early Join Block (<T-0m) | `STUDENT` (Enrolled) | `GET /api/teacher/live/session` at T-5m | Live Session API | **BLOCKED**: `canJoin: false`, `accessMode: 'WAITING_ROOM'`. | `PLANNED` |
+| **ATM-29** | Student Join at Scheduled Start (>=T-0m) | `STUDENT` (Enrolled) | `GET /api/teacher/live/session` at T+0m | Live Session API | **ALLOWED**: `canJoin: true`, `accessMode: 'STUDENT_JOIN'`. | `PLANNED` |
+| **ATM-30** | Teacher Completes Live Session Directly | `ADMIN` (Assigned) | `POST /api/teacher/live/end` | `public.cms_live_classes` | **ALLOWED**: `live_status = 'COMPLETED'`, `is_live = false`. No approval required. | `PLANNED` |
+| **ATM-31** | Teacher Submits Completed Class Recording | `ADMIN` (Assigned) | `POST /api/teacher/lectures/upload` with `live_class_id` | `public.cms_lectures` | **ALLOWED**: Recording created as `DRAFT` / `PENDING_REVIEW`. | `PLANNED` |
+| **ATM-32** | Teacher Cannot Self-Publish Recording | `ADMIN` (Assigned) | `UPDATE cms_lectures SET status = 'PUBLISHED' WHERE id = recording_id` | `public.cms_lectures` | **REJECTED**: Trigger `handle_cms_review_guard` blocks self-publishing. | `PLANNED` |
+| **ATM-33** | Super Admin Reviews & Publishes Recording | `SUPER_ADMIN` | `POST /api/admin/cms/publish` for recording lecture | `public.cms_lectures` | **ALLOWED**: Status transitioned to `PUBLISHED`. | `PLANNED` |
+| **ATM-34** | Student Access Gating on Unpublished Recording | `STUDENT` (Enrolled) | `GET /api/student/lectures/[id]` for unpublished recording | `public.cms_lectures` | **REJECTED**: 404/403; 0 rows returned by RLS. | `PLANNED` |

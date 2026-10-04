@@ -153,14 +153,15 @@ BEGIN
         'test_attachments_anon_select',
         'test_attachments_authenticated_select',
         'test_attachments_manage_policy',
-        'lecture_thumbnails_select_policy',
+        'lecture_thumbnails_anon_select',
+        'lecture_thumbnails_authenticated_select',
         'lecture_thumbnails_authenticated_insert',
         'lecture_thumbnails_authenticated_update',
         'lecture_thumbnails_authenticated_delete'
       );
 
-    IF v_count < 12 THEN
-        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Missing canonical Storage RLS policies (found %/12).', v_count;
+    IF v_count < 13 THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Missing canonical Storage RLS policies (found %/13).', v_count;
     END IF;
 
     RAISE NOTICE 'SUCCESS: All TopVeda Milestone M1 Postflight Security Invariants Verified!';

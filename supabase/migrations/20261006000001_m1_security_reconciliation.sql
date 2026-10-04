@@ -3,7 +3,7 @@
 -- File: supabase/migrations/20261006000001_m1_security_reconciliation.sql
 -- Architecture: Version 7.0 Approved Three-Role Model ('STUDENT', 'ADMIN', 'SUPER_ADMIN')
 -- Governs: Role Functions, Strict Teacher Scoping, Profile Guard, Decoupled Preview RLS,
---          Exact Storage Object Binding, and Foreign Key / Index Reconciliation
+--          Exact Storage Object Binding, Live Class Workflow, and Foreign Key / Index Reconciliation
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -35,9 +35,8 @@ BEGIN
 END $$;
 
 -- ------------------------------------------------------------------------------
--- 2. Consolidate Profile Role & Status Guard (Defect 5, 8)
+-- 2. Consolidate Profile Role & Status Guard
 -- ------------------------------------------------------------------------------
--- Drops duplicate triggers/functions and establishes canonical handle_profile_role_guard()
 DROP TRIGGER IF EXISTS trg_guard_profile_privileged_fields ON public.profiles;
 DROP FUNCTION IF EXISTS public.guard_profile_privileged_fields();
 
@@ -87,7 +86,7 @@ CREATE TRIGGER trg_profile_role_guard
     EXECUTE FUNCTION public.handle_profile_role_guard();
 
 -- ------------------------------------------------------------------------------
--- 3. Decoupled Security Definer Role & Scoping Functions (Defects 1, 6)
+-- 3. Decoupled Security Definer Role & Scoping Functions
 -- ------------------------------------------------------------------------------
 
 -- 3.1 Super Admin Authority (Active Super Admin account verified)
@@ -157,7 +156,7 @@ AS $$
   );
 $$;
 
--- 3.5 Strict Subject-Scoped Teacher Assignment Validation (Defect 1)
+-- 3.5 Strict Subject-Scoped Teacher Assignment Validation
 -- If p_subject_id is NOT NULL: Match exact subject OR batch lead (bt.subject_id IS NULL)
 -- If p_subject_id is NULL: Match ONLY batch lead (bt.subject_id IS NULL)
 CREATE OR REPLACE FUNCTION public.is_batch_subject_teacher(p_batch_id UUID, p_subject_id UUID)
@@ -256,10 +255,65 @@ AS $$
 $$;
 
 -- ------------------------------------------------------------------------------
--- 4. Constraint & Foreign-Key Reconciliation on cms_batch_teachers (Defect 7)
+-- 4. Status Transition & Review Metadata Guard Trigger
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.handle_cms_review_guard()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
+AS $$
+BEGIN
+    -- Super Admin has full publishing & review authority
+    IF public.is_super_admin() THEN
+        RETURN NEW;
+    END IF;
+
+    -- Block non-super-admins from moving academic content to APPROVED, PUBLISHED, or ARCHIVED
+    IF NEW.status IN ('APPROVED', 'PUBLISHED', 'ARCHIVED') AND (OLD.status IS NULL OR OLD.status NOT IN ('APPROVED', 'PUBLISHED', 'ARCHIVED')) THEN
+        IF auth.uid() IS NOT NULL AND NOT public.is_super_admin() THEN
+            RAISE EXCEPTION 'Unauthorized: Only Super Administrators can approve, publish, or archive content.';
+        END IF;
+    END IF;
+
+    -- Block non-super-admins from manipulating review audit timestamps or review notes
+    IF (NEW.reviewed_by IS DISTINCT FROM OLD.reviewed_by OR NEW.reviewed_at IS DISTINCT FROM OLD.reviewed_at) THEN
+        IF auth.uid() IS NOT NULL AND NOT public.is_super_admin() THEN
+            RAISE EXCEPTION 'Unauthorized: Only Super Administrators can record review decisions.';
+        END IF;
+    END IF;
+
+    -- Prevent modifying immutable scope fields (batch_id, subject_id) on existing records
+    IF TG_TABLE_NAME IN ('cms_lectures', 'cms_study_materials') THEN
+        IF NEW.batch_id IS DISTINCT FROM OLD.batch_id THEN
+            RAISE EXCEPTION 'Unauthorized: Batch assignment cannot be changed after creation.';
+        END IF;
+        IF NEW.subject_id IS DISTINCT FROM OLD.subject_id THEN
+            RAISE EXCEPTION 'Unauthorized: Subject assignment cannot be changed after creation.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_guard_cms_lectures_review ON public.cms_lectures;
+CREATE TRIGGER trg_guard_cms_lectures_review
+    BEFORE UPDATE ON public.cms_lectures
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_cms_review_guard();
+
+DROP TRIGGER IF EXISTS trg_guard_cms_study_materials_review ON public.cms_study_materials;
+CREATE TRIGGER trg_guard_cms_study_materials_review
+    BEFORE UPDATE ON public.cms_study_materials
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_cms_review_guard();
+
+-- ------------------------------------------------------------------------------
+-- 5. Constraint & Foreign-Key Reconciliation on cms_batch_teachers
 -- ------------------------------------------------------------------------------
 
--- 4.1 Drop Conflicting Legacy Unique Constraints Safely
+-- 5.1 Drop Conflicting Legacy Unique Constraints Safely
 DO $$
 BEGIN
     IF EXISTS (
@@ -277,7 +331,7 @@ BEGIN
     END IF;
 END $$;
 
--- 4.2 Reconcile Duplicate Foreign Keys on cms_batch_teachers Safely
+-- 5.2 Reconcile Duplicate Foreign Keys on cms_batch_teachers Safely
 DO $$
 BEGIN
     IF EXISTS (
@@ -301,7 +355,7 @@ BEGIN
     END IF;
 END $$;
 
--- 4.3 Enforce Verified Partial Unique Indexes
+-- 5.3 Enforce Verified Partial Unique Indexes
 CREATE UNIQUE INDEX IF NOT EXISTS uq_batch_teacher_subject_not_null
     ON public.cms_batch_teachers(batch_id, teacher_id, subject_id)
     WHERE subject_id IS NOT NULL;
@@ -311,7 +365,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_batch_teacher_subject_null
     WHERE subject_id IS NULL;
 
 -- ------------------------------------------------------------------------------
--- 5. RLS Policy Replacement on cms_batch_teachers (Defect 1)
+-- 6. RLS Policy Replacement on cms_batch_teachers
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.cms_batch_teachers ENABLE ROW LEVEL SECURITY;
 
@@ -322,12 +376,10 @@ DROP POLICY IF EXISTS "cms_batch_teachers_admin_manage" ON public.cms_batch_teac
 DROP POLICY IF EXISTS "super_admin_manage_batch_teachers" ON public.cms_batch_teachers;
 DROP POLICY IF EXISTS "cms_batch_teachers_select" ON public.cms_batch_teachers;
 DROP POLICY IF EXISTS "cms_batch_teachers_super_admin_manage" ON public.cms_batch_teachers;
+DROP POLICY IF EXISTS "cms_batch_teachers_select_policy" ON public.cms_batch_teachers;
 
 -- Privacy-Scoped SELECT Policy:
--- 1. Super Admin: full visibility
--- 2. Teacher: own assignments and assigned batch-mates
--- 3. Student: teachers in valid actively or historically enrolled batches
-CREATE POLICY "cms_batch_teachers_select"
+CREATE POLICY "cms_batch_teachers_select_policy"
     ON public.cms_batch_teachers FOR SELECT
     TO authenticated
     USING (
@@ -353,7 +405,7 @@ CREATE POLICY "cms_batch_teachers_super_admin_manage"
     WITH CHECK (public.is_super_admin());
 
 -- ------------------------------------------------------------------------------
--- 6. RLS Policy Replacement on public.profiles (Defect 5)
+-- 7. RLS Policy Replacement on public.profiles
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
@@ -386,7 +438,7 @@ CREATE POLICY "profiles_super_admin_update"
     WITH CHECK (public.is_super_admin());
 
 -- ------------------------------------------------------------------------------
--- 7. RLS Policy Replacement on student_tests (Defect 6 - Super Admin Exclusivity)
+-- 8. RLS Policy Replacement on student_tests (Super Admin Exclusivity)
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.student_tests ENABLE ROW LEVEL SECURITY;
 
@@ -400,13 +452,13 @@ DROP POLICY IF EXISTS "student_tests_select_policy" ON public.student_tests;
 DROP POLICY IF EXISTS "student_tests_anon_select" ON public.student_tests;
 DROP POLICY IF EXISTS "student_tests_authenticated_select" ON public.student_tests;
 
--- 7.1 Anonymous Public Preview SELECT (Pure static column evaluation, zero function execution dependency)
+-- 8.1 Anonymous Public Preview SELECT
 CREATE POLICY "student_tests_anon_select"
     ON public.student_tests FOR SELECT
     TO anon
     USING (status = 'PUBLISHED' AND is_curated_preview = TRUE);
 
--- 7.2 Authenticated SELECT (Super Admin OR Enrolled Students on published tests)
+-- 8.2 Authenticated SELECT (Super Admin OR Enrolled Students on published tests)
 CREATE POLICY "student_tests_authenticated_select"
     ON public.student_tests FOR SELECT
     TO authenticated
@@ -420,7 +472,7 @@ CREATE POLICY "student_tests_authenticated_select"
         )
     );
 
--- 7.3 Super Admin Full Management (Zero Teacher Access)
+-- 8.3 Super Admin Full Management (Zero Teacher Access)
 CREATE POLICY "student_tests_super_admin_manage"
     ON public.student_tests FOR ALL
     TO authenticated
@@ -428,7 +480,7 @@ CREATE POLICY "student_tests_super_admin_manage"
     WITH CHECK (public.is_super_admin());
 
 -- ------------------------------------------------------------------------------
--- 8. RLS Policy Replacement on cms_lectures (Defects 1, 2)
+-- 9. RLS Policy Replacement on cms_lectures
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.cms_lectures ENABLE ROW LEVEL SECURITY;
 
@@ -451,13 +503,13 @@ DROP POLICY IF EXISTS "cms_lectures_teacher_insert" ON public.cms_lectures;
 DROP POLICY IF EXISTS "cms_lectures_teacher_update" ON public.cms_lectures;
 DROP POLICY IF EXISTS "cms_lectures_teacher_delete" ON public.cms_lectures;
 
--- 8.1 Anonymous Public Preview SELECT
+-- 9.1 Anonymous Public Preview SELECT
 CREATE POLICY "cms_lectures_anon_select"
     ON public.cms_lectures FOR SELECT
     TO anon
     USING (status = 'PUBLISHED' AND is_curated_preview = TRUE);
 
--- 8.2 Authenticated SELECT
+-- 9.2 Authenticated SELECT
 CREATE POLICY "cms_lectures_authenticated_select"
     ON public.cms_lectures FOR SELECT
     TO authenticated
@@ -475,14 +527,14 @@ CREATE POLICY "cms_lectures_authenticated_select"
         )
     );
 
--- 8.3 Super Admin Full Management
+-- 9.3 Super Admin Full Management
 CREATE POLICY "cms_lectures_super_admin_manage"
     ON public.cms_lectures FOR ALL
     TO authenticated
     USING (public.is_super_admin())
     WITH CHECK (public.is_super_admin());
 
--- 8.4 Teacher Scoped Insert (Initial DRAFT status in assigned batch & subject)
+-- 9.4 Teacher Scoped Insert (Initial DRAFT status in assigned batch & subject)
 CREATE POLICY "cms_lectures_teacher_insert"
     ON public.cms_lectures FOR INSERT
     TO authenticated
@@ -494,7 +546,7 @@ CREATE POLICY "cms_lectures_teacher_insert"
         AND created_by = auth.uid()
     );
 
--- 8.5 Teacher Scoped Update (Drafts / Submissions in assigned batch & subject)
+-- 9.5 Teacher Scoped Update (Drafts / Submissions in assigned batch & subject)
 CREATE POLICY "cms_lectures_teacher_update"
     ON public.cms_lectures FOR UPDATE
     TO authenticated
@@ -513,7 +565,7 @@ CREATE POLICY "cms_lectures_teacher_update"
         AND status IN ('DRAFT', 'PENDING_REVIEW')
     );
 
--- 8.6 Teacher Scoped Delete (Owned Drafts only)
+-- 9.6 Teacher Scoped Delete (Owned Drafts only)
 CREATE POLICY "cms_lectures_teacher_delete"
     ON public.cms_lectures FOR DELETE
     TO authenticated
@@ -526,7 +578,7 @@ CREATE POLICY "cms_lectures_teacher_delete"
     );
 
 -- ------------------------------------------------------------------------------
--- 9. RLS Policy Replacement on cms_study_materials (Defects 1, 2, 4)
+-- 10. RLS Policy Replacement on cms_study_materials
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.cms_study_materials ENABLE ROW LEVEL SECURITY;
 
@@ -544,13 +596,13 @@ DROP POLICY IF EXISTS "cms_study_materials_teacher_insert" ON public.cms_study_m
 DROP POLICY IF EXISTS "cms_study_materials_teacher_update" ON public.cms_study_materials;
 DROP POLICY IF EXISTS "cms_study_materials_teacher_delete" ON public.cms_study_materials;
 
--- 9.1 Anonymous Public Preview SELECT
+-- 10.1 Anonymous Public Preview SELECT
 CREATE POLICY "cms_study_materials_anon_select"
     ON public.cms_study_materials FOR SELECT
     TO anon
     USING (status = 'PUBLISHED' AND is_curated_preview = TRUE);
 
--- 9.2 Authenticated SELECT
+-- 10.2 Authenticated SELECT
 CREATE POLICY "cms_study_materials_authenticated_select"
     ON public.cms_study_materials FOR SELECT
     TO authenticated
@@ -568,14 +620,14 @@ CREATE POLICY "cms_study_materials_authenticated_select"
         )
     );
 
--- 9.3 Super Admin Full Management
+-- 10.3 Super Admin Full Management
 CREATE POLICY "cms_study_materials_super_admin_manage"
     ON public.cms_study_materials FOR ALL
     TO authenticated
     USING (public.is_super_admin())
     WITH CHECK (public.is_super_admin());
 
--- 9.4 Teacher Scoped Insert (Strict Lecture Attachment & Subject Equality)
+-- 10.4 Teacher Scoped Insert (Strict Lecture Attachment & Subject Equality)
 CREATE POLICY "cms_study_materials_teacher_insert"
     ON public.cms_study_materials FOR INSERT
     TO authenticated
@@ -594,7 +646,7 @@ CREATE POLICY "cms_study_materials_teacher_insert"
         )
     );
 
--- 9.5 Teacher Scoped Update (Strict Lecture Attachment Preservation)
+-- 10.5 Teacher Scoped Update (Strict Lecture Attachment Preservation)
 CREATE POLICY "cms_study_materials_teacher_update"
     ON public.cms_study_materials FOR UPDATE
     TO authenticated
@@ -620,7 +672,7 @@ CREATE POLICY "cms_study_materials_teacher_update"
         )
     );
 
--- 9.6 Teacher Scoped Delete
+-- 10.6 Teacher Scoped Delete
 CREATE POLICY "cms_study_materials_teacher_delete"
     ON public.cms_study_materials FOR DELETE
     TO authenticated
@@ -633,7 +685,8 @@ CREATE POLICY "cms_study_materials_teacher_delete"
     );
 
 -- ------------------------------------------------------------------------------
--- 10. RLS Policy Replacement on cms_live_classes (Defects 1, 2, 4)
+-- 11. RLS Policy Replacement on cms_live_classes
+-- (Teacher schedules, operates, attends without Super Admin approval)
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.cms_live_classes ENABLE ROW LEVEL SECURITY;
 
@@ -654,13 +707,13 @@ DROP POLICY IF EXISTS "cms_live_classes_teacher_insert" ON public.cms_live_class
 DROP POLICY IF EXISTS "cms_live_classes_teacher_update" ON public.cms_live_classes;
 DROP POLICY IF EXISTS "cms_live_classes_teacher_delete" ON public.cms_live_classes;
 
--- 10.1 Anonymous Public Preview SELECT
+-- 11.1 Anonymous Public Preview SELECT
 CREATE POLICY "cms_live_classes_anon_select"
     ON public.cms_live_classes FOR SELECT
     TO anon
     USING (status = 'PUBLISHED' AND is_curated_preview = TRUE);
 
--- 10.2 Authenticated SELECT
+-- 11.2 Authenticated SELECT
 CREATE POLICY "cms_live_classes_authenticated_select"
     ON public.cms_live_classes FOR SELECT
     TO authenticated
@@ -668,9 +721,9 @@ CREATE POLICY "cms_live_classes_authenticated_select"
         public.is_super_admin()
         OR (status = 'PUBLISHED' AND is_curated_preview = TRUE)
         OR (
-            status = 'PUBLISHED' 
-            AND batch_id IS NOT NULL 
+            batch_id IS NOT NULL 
             AND public.has_batch_read_entitlement(batch_id)
+            AND (status = 'PUBLISHED' OR (is_visible = TRUE AND live_status IN ('SCHEDULED', 'LIVE', 'COMPLETED')))
         )
         OR (
             batch_id IS NOT NULL 
@@ -678,14 +731,14 @@ CREATE POLICY "cms_live_classes_authenticated_select"
         )
     );
 
--- 10.3 Super Admin Full Management
+-- 11.3 Super Admin Full Management
 CREATE POLICY "cms_live_classes_super_admin_manage"
     ON public.cms_live_classes FOR ALL
     TO authenticated
     USING (public.is_super_admin())
     WITH CHECK (public.is_super_admin());
 
--- 10.4 Teacher Scheduling (Initial DRAFT in assigned batch & subject)
+-- 11.4 Teacher Scheduling (Direct scheduling in assigned batch & subject without Super Admin approval)
 CREATE POLICY "cms_live_classes_teacher_insert"
     ON public.cms_live_classes FOR INSERT
     TO authenticated
@@ -694,10 +747,10 @@ CREATE POLICY "cms_live_classes_teacher_insert"
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND educator_id = auth.uid()
-        AND status = 'DRAFT'
+        AND status IN ('DRAFT', 'PUBLISHED')
     );
 
--- 10.5 Teacher Operational Update (Allows rescheduling & live operation while preventing self-publishing)
+-- 11.5 Teacher Operational Update (Reschedule, operate, attend, complete assigned sessions)
 CREATE POLICY "cms_live_classes_teacher_update"
     ON public.cms_live_classes FOR UPDATE
     TO authenticated
@@ -714,7 +767,7 @@ CREATE POLICY "cms_live_classes_teacher_update"
         AND educator_id = auth.uid()
     );
 
--- 10.6 Teacher Scoped Delete (Owned Drafts only)
+-- 11.6 Teacher Scoped Delete (Owned Drafts / Cancelled sessions only)
 CREATE POLICY "cms_live_classes_teacher_delete"
     ON public.cms_live_classes FOR DELETE
     TO authenticated
@@ -723,18 +776,18 @@ CREATE POLICY "cms_live_classes_teacher_delete"
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND educator_id = auth.uid()
-        AND status = 'DRAFT'
+        AND (status = 'DRAFT' OR live_status = 'CANCELLED')
     );
 
 -- ------------------------------------------------------------------------------
--- 11. Storage CRUD Security Policies — Exact Record Binding (Defects 2, 3)
+-- 12. Storage CRUD Security Policies — Exact Record Binding
 -- Canonical Path Formats:
 --   study-materials:    <batch_id>/<material_id>/<filename>
 --   test-attachments:   <batch_id>/<test_id>/<filename>
 --   lecture-thumbnails: <batch_id>/<lecture_id>/<filename>
 -- ------------------------------------------------------------------------------
 
--- 11.1 STUDY-MATERIALS BUCKET
+-- 12.1 STUDY-MATERIALS BUCKET
 DROP POLICY IF EXISTS "access_study_materials" ON storage.objects;
 DROP POLICY IF EXISTS "admin_upload_study_materials" ON storage.objects;
 DROP POLICY IF EXISTS "admin_update_own_study_materials" ON storage.objects;
@@ -755,6 +808,7 @@ CREATE POLICY "study_materials_anon_select"
     TO anon
     USING (
         bucket_id = 'study-materials'
+        AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
         AND EXISTS (
             SELECT 1 FROM public.cms_study_materials sm
             WHERE sm.id = ((storage.foldername(name))[2])::UUID
@@ -772,15 +826,18 @@ CREATE POLICY "study_materials_authenticated_select"
         bucket_id = 'study-materials'
         AND (
             public.is_super_admin()
-            OR EXISTS (
-                SELECT 1 FROM public.cms_study_materials sm
-                WHERE sm.id = ((storage.foldername(name))[2])::UUID
-                  AND sm.batch_id = ((storage.foldername(name))[1])::UUID
-                  AND (
-                      (sm.status = 'PUBLISHED' AND sm.is_curated_preview = TRUE)
-                      OR (sm.status = 'PUBLISHED' AND public.has_batch_read_entitlement(sm.batch_id))
-                      OR (public.is_batch_subject_teacher(sm.batch_id, sm.subject_id))
-                  )
+            OR (
+                name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
+                AND EXISTS (
+                    SELECT 1 FROM public.cms_study_materials sm
+                    WHERE sm.id = ((storage.foldername(name))[2])::UUID
+                      AND sm.batch_id = ((storage.foldername(name))[1])::UUID
+                      AND (
+                          (sm.status = 'PUBLISHED' AND sm.is_curated_preview = TRUE)
+                          OR (sm.status = 'PUBLISHED' AND public.has_batch_read_entitlement(sm.batch_id))
+                          OR (public.is_batch_subject_teacher(sm.batch_id, sm.subject_id))
+                      )
+                )
             )
         )
     );
@@ -795,6 +852,7 @@ CREATE POLICY "study_materials_authenticated_insert"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = ((storage.foldername(name))[2])::UUID
@@ -817,6 +875,7 @@ CREATE POLICY "study_materials_authenticated_update"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = ((storage.foldername(name))[2])::UUID
@@ -834,6 +893,7 @@ CREATE POLICY "study_materials_authenticated_update"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = ((storage.foldername(name))[2])::UUID
@@ -856,6 +916,7 @@ CREATE POLICY "study_materials_authenticated_delete"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = ((storage.foldername(name))[2])::UUID
@@ -868,7 +929,7 @@ CREATE POLICY "study_materials_authenticated_delete"
         )
     );
 
--- 11.2 TEST-ATTACHMENTS BUCKET (Super Admin exclusive write)
+-- 12.2 TEST-ATTACHMENTS BUCKET (Super Admin exclusive write)
 DROP POLICY IF EXISTS "test_attachments_select_policy" ON storage.objects;
 DROP POLICY IF EXISTS "test_attachments_insert_policy" ON storage.objects;
 DROP POLICY IF EXISTS "test_attachments_update_policy" ON storage.objects;
@@ -883,9 +944,11 @@ CREATE POLICY "test_attachments_anon_select"
     TO anon
     USING (
         bucket_id = 'test-attachments'
+        AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
         AND EXISTS (
             SELECT 1 FROM public.student_tests st
             WHERE st.id = ((storage.foldername(name))[2])::UUID
+              AND st.batch_id = ((storage.foldername(name))[1])::UUID
               AND st.status = 'PUBLISHED'
               AND st.is_curated_preview = TRUE
         )
@@ -899,13 +962,17 @@ CREATE POLICY "test_attachments_authenticated_select"
         bucket_id = 'test-attachments'
         AND (
             public.is_super_admin()
-            OR EXISTS (
-                SELECT 1 FROM public.student_tests st
-                WHERE st.id = ((storage.foldername(name))[2])::UUID
-                  AND (
-                      (st.status = 'PUBLISHED' AND st.is_curated_preview = TRUE)
-                      OR (st.status = 'PUBLISHED' AND st.batch_id IS NOT NULL AND public.has_batch_read_entitlement(st.batch_id))
-                  )
+            OR (
+                name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
+                AND EXISTS (
+                    SELECT 1 FROM public.student_tests st
+                    WHERE st.id = ((storage.foldername(name))[2])::UUID
+                      AND st.batch_id = ((storage.foldername(name))[1])::UUID
+                      AND (
+                          (st.status = 'PUBLISHED' AND st.is_curated_preview = TRUE)
+                          OR (st.status = 'PUBLISHED' AND public.has_batch_read_entitlement(st.batch_id))
+                      )
+                )
             )
         )
     );
@@ -917,7 +984,7 @@ CREATE POLICY "test_attachments_manage_policy"
     USING (bucket_id = 'test-attachments' AND public.is_super_admin())
     WITH CHECK (bucket_id = 'test-attachments' AND public.is_super_admin());
 
--- 11.3 LECTURE-THUMBNAILS BUCKET
+-- 12.3 LECTURE-THUMBNAILS BUCKET (Exact Record Binding)
 DROP POLICY IF EXISTS "public_read_lecture_thumbnails" ON storage.objects;
 DROP POLICY IF EXISTS "access_lecture_thumbnails" ON storage.objects;
 DROP POLICY IF EXISTS "admin_upload_lecture_thumbnails" ON storage.objects;
@@ -927,15 +994,53 @@ DROP POLICY IF EXISTS "lecture_thumbnails_select_policy" ON storage.objects;
 DROP POLICY IF EXISTS "lecture_thumbnails_insert_policy" ON storage.objects;
 DROP POLICY IF EXISTS "lecture_thumbnails_update_policy" ON storage.objects;
 DROP POLICY IF EXISTS "lecture_thumbnails_delete_policy" ON storage.objects;
+DROP POLICY IF EXISTS "lecture_thumbnails_anon_select" ON storage.objects;
+DROP POLICY IF EXISTS "lecture_thumbnails_authenticated_select" ON storage.objects;
 DROP POLICY IF EXISTS "lecture_thumbnails_authenticated_insert" ON storage.objects;
 DROP POLICY IF EXISTS "lecture_thumbnails_authenticated_update" ON storage.objects;
 DROP POLICY IF EXISTS "lecture_thumbnails_authenticated_delete" ON storage.objects;
 
-CREATE POLICY "lecture_thumbnails_select_policy"
+-- SELECT (Anon): Published Curated Preview Lecture Thumbnails
+CREATE POLICY "lecture_thumbnails_anon_select"
     ON storage.objects FOR SELECT
-    TO anon, authenticated
-    USING (bucket_id = 'lecture-thumbnails');
+    TO anon
+    USING (
+        bucket_id = 'lecture-thumbnails'
+        AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
+        AND EXISTS (
+            SELECT 1 FROM public.cms_lectures l
+            WHERE l.id = ((storage.foldername(name))[2])::UUID
+              AND l.batch_id = ((storage.foldername(name))[1])::UUID
+              AND l.status = 'PUBLISHED'
+              AND l.is_curated_preview = TRUE
+        )
+    );
 
+-- SELECT (Authenticated): Super Admin, Enrolled Student, or Assigned Subject Teacher
+CREATE POLICY "lecture_thumbnails_authenticated_select"
+    ON storage.objects FOR SELECT
+    TO authenticated
+    USING (
+        bucket_id = 'lecture-thumbnails'
+        AND (
+            public.is_super_admin()
+            OR (
+                name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
+                AND EXISTS (
+                    SELECT 1 FROM public.cms_lectures l
+                    WHERE l.id = ((storage.foldername(name))[2])::UUID
+                      AND l.batch_id = ((storage.foldername(name))[1])::UUID
+                      AND (
+                          (l.status = 'PUBLISHED' AND l.is_curated_preview = TRUE)
+                          OR (l.status = 'PUBLISHED' AND public.has_batch_read_entitlement(l.batch_id))
+                          OR (public.is_batch_subject_teacher(l.batch_id, l.subject_id))
+                      )
+                )
+            )
+        )
+    );
+
+-- INSERT: Super Admin OR Assigned Teacher for Draft/Pending Lecture
 CREATE POLICY "lecture_thumbnails_authenticated_insert"
     ON storage.objects FOR INSERT
     TO authenticated
@@ -945,6 +1050,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_insert"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = ((storage.foldername(name))[2])::UUID
@@ -957,6 +1063,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_insert"
         )
     );
 
+-- UPDATE: Super Admin OR Assigned Teacher on Draft Lecture
 CREATE POLICY "lecture_thumbnails_authenticated_update"
     ON storage.objects FOR UPDATE
     TO authenticated
@@ -966,6 +1073,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_update"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = ((storage.foldername(name))[2])::UUID
@@ -983,6 +1091,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_update"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = ((storage.foldername(name))[2])::UUID
@@ -995,6 +1104,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_update"
         )
     );
 
+-- DELETE: Super Admin OR Assigned Teacher on Draft Lecture
 CREATE POLICY "lecture_thumbnails_authenticated_delete"
     ON storage.objects FOR DELETE
     TO authenticated
@@ -1004,6 +1114,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_delete"
             public.is_super_admin()
             OR (
                 public.is_admin()
+                AND name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/.+'
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = ((storage.foldername(name))[2])::UUID
@@ -1017,15 +1128,22 @@ CREATE POLICY "lecture_thumbnails_authenticated_delete"
     );
 
 -- ------------------------------------------------------------------------------
--- 12. Function Privilege Hardening (Exact Revocations & Grants)
+-- 13. Function Privilege Hardening (Exact Revocations & Grants)
 -- ------------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.is_super_admin() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_super_admin() FROM anon;
 REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_admin() FROM anon;
 REVOKE ALL ON FUNCTION public.is_student() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_student() FROM anon;
 REVOKE ALL ON FUNCTION public.is_batch_teacher(UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_batch_teacher(UUID) FROM anon;
 REVOKE ALL ON FUNCTION public.is_batch_subject_teacher(UUID, UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_batch_subject_teacher(UUID, UUID) FROM anon;
 REVOKE ALL ON FUNCTION public.is_actively_enrolled_in_batch(UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_actively_enrolled_in_batch(UUID) FROM anon;
 REVOKE ALL ON FUNCTION public.has_batch_read_entitlement(UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.has_batch_read_entitlement(UUID) FROM anon;
 REVOKE ALL ON FUNCTION public.can_student_access_content(BOOLEAN, UUID, TEXT) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.is_super_admin() TO authenticated;

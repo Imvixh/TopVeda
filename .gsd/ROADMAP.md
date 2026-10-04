@@ -1,23 +1,23 @@
 ---
 milestone: M1
 version: 7.0
-updated: 2026-10-05T00:31:00+05:30
+updated: 2026-10-05T00:55:00+05:30
 ---
 
 # Roadmap
 
 > **Current Milestone:** M1 — Role System, Security Functions & Authorization Foundation  
-> **Status:** Preflight Audit Complete / Migration Draft Verified / Local Build Passed / Awaiting Owner SQL Approval Gate
+> **Status:** Implementation Complete / Local Builds Passed / Migration Runnable / Awaiting Owner Supabase Execution Gate
 
 ## Must-Haves (from SPEC)
 
 - [x] Version 7.0 Architecture document amended in place to 3 approved roles (`STUDENT`, `ADMIN` [Teacher], `SUPER_ADMIN`).
 - [x] Complete security reconciliation audit compiled in `M1_FINAL_SECURITY_AUDIT.md`.
-- [x] Corrected forward migration `20261006000001_m1_security_reconciliation.sql` drafted and verified locally.
+- [x] Corrected forward migration `20261006000001_m1_security_reconciliation.sql` drafted, verified locally, and runnable in Supabase SQL Editor.
 - [x] Read-only preflight inspection queries prepared in `M1_PREFLIGHT.sql`.
 - [x] Postflight exception-raising assertion suite prepared in `M1_POSTFLIGHT.sql`.
-- [x] 22-test authorization matrix documented in `M1_AUTHORIZATION_TEST_MATRIX.md`.
-- [x] Application TypeScript check (`npx tsc --noEmit`) and Next.js production build (`npm run build`) completed successfully with 0 errors.
+- [x] 34-test authorization matrix documented in `M1_AUTHORIZATION_TEST_MATRIX.md` (ATM-01 to ATM-34).
+- [x] Application TypeScript check (`npx tsc --noEmit` / `npm run typecheck`) and Next.js production build (`npm run build`) completed successfully with 0 errors.
 - [ ] Manual remote application of `20261006000001_m1_security_reconciliation.sql` in Supabase SQL Editor.
 - [ ] Execution and passage of `M1_POSTFLIGHT.sql` assertions against remote database.
 
@@ -25,37 +25,36 @@ updated: 2026-10-05T00:31:00+05:30
 
 ## Phases
 
-### Phase 1: Architecture & Preflight Security Audit
+### Phase 1: Architecture & Security Reconciliation Implementation
 **Status:** ✅ Complete
-**Objective:** Amend `PROJECT_ARCHITECTURE_V7.0.md` in place and produce complete second-pass audit report and corrected migration.
+**Objective:** Amend `PROJECT_ARCHITECTURE_V7.0.md` in place and produce runnable, reconciled migration and assertion scripts.
 
 **Deliverables:**
 - [x] `PROJECT_ARCHITECTURE_V7.0.md` (Reconciled in place)
 - [x] `.gsd/SPEC.md` (`Status: FINALIZED`)
-- [x] `M1_FINAL_SECURITY_AUDIT.md` (Includes full Traceability Matrix)
+- [x] `M1_FINAL_SECURITY_AUDIT.md` (Includes live-class workflow & full Traceability Matrix)
 - [x] `supabase/migrations/20261006000001_m1_security_reconciliation.sql`
 - [x] `M1_PREFLIGHT.sql`
 - [x] `M1_POSTFLIGHT.sql`
-- [x] `M1_AUTHORIZATION_TEST_MATRIX.md` (22 test cases)
+- [x] `M1_AUTHORIZATION_TEST_MATRIX.md` (34 test cases)
 
 ---
 
 ### Phase 2: Remote Database Migration & Postflight Verification Gate
-**Status:** 🔄 Awaiting Owner Review & SQL Execution
+**Status:** 🔄 Ready for Owner Execution
 **Objective:** Apply `20261006000001_m1_security_reconciliation.sql` in Supabase and run verification assertions.
 
-**Plans:**
-- [ ] Plan 2.1: Owner executes preflight queries (`M1_PREFLIGHT.sql`).
-- [ ] Plan 2.2: Owner executes forward migration (`20261006000001_m1_security_reconciliation.sql`).
-- [ ] Plan 2.3: Execute postflight assertions (`M1_POSTFLIGHT.sql`).
+**Steps:**
+- [ ] Step 1: Owner executes preflight queries (`M1_PREFLIGHT.sql`).
+- [ ] Step 2: Owner executes forward migration (`20261006000001_m1_security_reconciliation.sql`).
+- [ ] Step 3: Owner executes postflight assertions (`M1_POSTFLIGHT.sql`).
 
 ---
 
-### Phase 3: Application & API Layer Verification
-**Status:** 🔄 In Progress (Local Build & Type Checks Completed)
+### Phase 3: Post-Migration Application Verification
+**Status:** 🔄 Local Verification Complete (Remote Gate Pending)
 **Objective:** Verify application routes and client services against the reconciled schema.
 
-**Plans:**
-- [x] Plan 3.1: Execute `npx tsc --noEmit` and `npm run build` (Executed: 0 errors, 99/99 routes built).
-- [ ] Plan 3.2: Verify API routes and client services operate against remote database post-migration.
-- [ ] Plan 3.3: Record empirical evidence in `.gsd/STATE.md` and declare M1 complete.
+**Steps:**
+- [x] Step 3.1: Execute `npm run typecheck` and `npm run build` (0 errors, 99/99 routes built).
+- [ ] Step 3.2: Verify live application post-migration.

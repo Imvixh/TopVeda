@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-05T00:31:00+05:30
+updated: 2026-10-05T00:55:00+05:30
 ---
 
 # Project State
@@ -8,33 +8,28 @@ updated: 2026-10-05T00:31:00+05:30
 
 **Milestone:** M1 — Role System, Security Functions & Authorization Foundation  
 **Phase:** 1 — Architecture Reconciliation & Preflight Audit  
-**Status:** planning / preflight audit complete / local build passed / awaiting owner approval  
+**Status:** implementation complete / local verification passed / ready for owner Supabase execution  
 **Plan:** Plan 1.2 — Audit Report, Corrected Migration & Preflight Review Gate  
 
 ## Last Action
 
-1. Authored exhaustive second-pass security audit with finding-to-migration-to-postflight-to-test traceability matrix in [M1_FINAL_SECURITY_AUDIT.md](file:///D:/TopVeda/TopVeda/M1_FINAL_SECURITY_AUDIT.md).
-2. Authored the fully corrected forward migration in [supabase/migrations/20261006000001_m1_security_reconciliation.sql](file:///D:/TopVeda/TopVeda/supabase/migrations/20261006000001_m1_security_reconciliation.sql):
-   - Strict subject-scoped teacher checks with NULL-safe batch lead handling (`is_batch_subject_teacher`).
-   - Storage authorization strictly bound to database records across all 3 buckets (`study-materials`, `test-attachments`, `lecture-thumbnails`).
-   - Live class operational status decoupled from academic review status, enabling assigned teachers to operate live sessions without self-publishing.
-   - Study material attachment strictly validates lecture existence, batch, and subject equality.
-   - Profile trigger `handle_profile_role_guard` upgraded to protect `status`, `role`, and `email`.
-   - Anonymous preview SELECT policies decoupled from authenticated policies to eliminate function execution permission errors.
-   - Assignment privacy model enforced on `cms_batch_teachers` with legacy policies explicitly dropped.
-   - Conflicting constraint `uq_cms_batch_teacher` safely dropped and partial unique indexes enforced.
-3. Authored [M1_PREFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_PREFLIGHT.sql) containing read-only inspection queries.
-4. Authored [M1_POSTFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_POSTFLIGHT.sql) containing exception-raising verification assertions.
-5. Authored [M1_AUTHORIZATION_TEST_MATRIX.md](file:///D:/TopVeda/TopVeda/M1_AUTHORIZATION_TEST_MATRIX.md) covering all 22 required security invariants (ATM-01 to ATM-22).
-6. Maintained `.gsd/SPEC.md` as `FINALIZED` and synchronized with [PROJECT_ARCHITECTURE_V7.0.md](file:///D:/TopVeda/TopVeda/PROJECT_ARCHITECTURE_V7.0.md).
-7. Executed local TypeScript check (`npx tsc --noEmit`) and Next.js production build (`npm run build`): **0 errors, 99/99 pages statically/dynamically compiled successfully**.
+1. Finalized [supabase/migrations/20261006000001_m1_security_reconciliation.sql](file:///D:/TopVeda/TopVeda/supabase/migrations/20261006000001_m1_security_reconciliation.sql):
+   - Implemented direct live-class scheduling, attendance, and operation for assigned teachers without Super Admin approval.
+   - Enforced exact Storage object-to-record binding with regex validation across `study-materials`, `test-attachments`, and `lecture-thumbnails`.
+   - Hardened function execution privileges (revoked from PUBLIC and anon, granted only to authorized roles).
+   - Consolidated `handle_profile_role_guard()` and `handle_cms_review_guard()` triggers.
+   - Decoupled `anon` preview SELECT policies from authenticated policies.
+   - Dropped conflicting `uq_cms_batch_teacher` constraint and created partial unique indexes.
+2. Synchronized [M1_PREFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_PREFLIGHT.sql) and [M1_POSTFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_POSTFLIGHT.sql).
+3. Expanded [M1_AUTHORIZATION_TEST_MATRIX.md](file:///D:/TopVeda/TopVeda/M1_AUTHORIZATION_TEST_MATRIX.md) to 34 test cases (ATM-01 to ATM-34), including 12 explicit live-class timing and workflow tests.
+4. Executed `npm run typecheck` (`tsc --noEmit`) and `npm run build`: **0 errors, 99/99 routes successfully built**.
 
 ## Next Steps
 
-1. Present the complete M1 deliverable package to the owner.
-2. Await owner review and manual execution in the Supabase SQL Editor.
-3. Upon confirmation of SQL execution, run postflight assertions (`M1_POSTFLIGHT.sql`) and live API validation.
-4. Advance Milestone M1 to verified status.
+1. Owner executes [M1_PREFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_PREFLIGHT.sql) in Supabase SQL Editor.
+2. Owner executes [supabase/migrations/20261006000001_m1_security_reconciliation.sql](file:///D:/TopVeda/TopVeda/supabase/migrations/20261006000001_m1_security_reconciliation.sql) in Supabase SQL Editor.
+3. Owner executes [M1_POSTFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_POSTFLIGHT.sql) in Supabase SQL Editor to verify invariants.
+4. Owner confirms remote execution success to formally mark Milestone M1 complete.
 
 ## Active Decisions
 
@@ -42,15 +37,10 @@ updated: 2026-10-05T00:31:00+05:30
 |---|---|---|---|
 | Role Model | Strictly 3 roles: `STUDENT`, `ADMIN`, `SUPER_ADMIN` | 2026-10-05 | `profiles.role`, all RLS policies, routing |
 | Teacher Identity | `ADMIN` is the teacher role; scoped via `cms_batch_teachers` | 2026-10-05 | Content creation, live classes, storage |
+| Live Class Operation | Direct scheduling & operation by assigned ADMIN; recording review by SUPER_ADMIN | 2026-10-05 | Live class RLS, attendance, session route |
 | Test Authority | Exclusively `SUPER_ADMIN` | 2026-10-05 | Test creation APIs, test RLS, teacher portal |
-| Storage Binding | Exact database record association | 2026-10-05 | Storage RLS on `study-materials`, `test-attachments`, `lecture-thumbnails` |
-| Migration Strategy | Forward non-destructive migration (`20261006000001_...`) | 2026-10-05 | Supabase schema, RLS, functions |
+| Storage Binding | Exact database record association via `<batch>/<record>/<file>` | 2026-10-05 | Storage RLS on all 3 buckets |
 
 ## Blockers
 
-- None. Preflight audit, local code edits, and build checks are complete. Remote database execution is pending owner approval.
-
-## Governance & Safety
-
-- No remote database changes have been applied.
-- Zero data deletion or irreversible schema operations proposed.
+- None. All local implementations and builds are complete. Remote SQL execution is queued for owner execution.
