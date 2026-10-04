@@ -79,12 +79,23 @@ BEGIN
         RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Duplicate trigger trg_guard_profile_privileged_fields still exists.';
     END IF;
 
-    -- 6. Assert: All 8 core security definer functions exist with correct pinned search_path
+    -- 6. Assert: CMS review guard triggers exist on lectures, study materials, and live classes
+    SELECT COUNT(*) INTO v_count
+    FROM pg_trigger
+    WHERE tgname IN ('trg_guard_cms_lectures_review', 'trg_guard_cms_study_materials_review', 'trg_guard_cms_live_classes')
+      AND tgenabled = 'O';
+
+    IF v_count <> 3 THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Expected 3 CMS guard triggers, found %.', v_count;
+    END IF;
+
+    -- 7. Assert: All 8 core security definer functions + try_cast_uuid exist with correct pinned search_path
     SELECT COUNT(*) INTO v_count
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public'
       AND p.proname IN (
+        'try_cast_uuid',
         'is_super_admin', 'is_admin', 'is_student',
         'is_batch_teacher', 'is_batch_subject_teacher',
         'is_actively_enrolled_in_batch', 'has_batch_read_entitlement',
@@ -92,11 +103,11 @@ BEGIN
       )
       AND p.prosecdef = TRUE;
 
-    IF v_count <> 8 THEN
-        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Expected 8 SECURITY DEFINER functions, found %.', v_count;
+    IF v_count <> 9 THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Expected 9 SECURITY DEFINER functions, found %.', v_count;
     END IF;
 
-    -- 7. Assert: ZERO security functions have default PUBLIC execute privilege
+    -- 8. Assert: ZERO security functions have default PUBLIC execute privilege
     SELECT COUNT(*) INTO v_count
     FROM information_schema.routine_privileges
     WHERE specific_schema = 'public'
@@ -112,7 +123,7 @@ BEGIN
         RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: % security functions have unrevoked PUBLIC privileges.', v_count;
     END IF;
 
-    -- 8. Assert: RLS is enabled on all 6 critical tables
+    -- 9. Assert: RLS is enabled on all 6 critical tables
     SELECT COUNT(*) INTO v_count
     FROM pg_tables
     WHERE schemaname = 'public'
@@ -123,7 +134,7 @@ BEGIN
         RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Expected RLS active on 6 tables, found %.', v_count;
     END IF;
 
-    -- 9. Assert: Dedicated anon preview policies exist on all 4 CMS/Test tables
+    -- 10. Assert: Dedicated anon preview policies exist on all 4 CMS/Test tables
     SELECT COUNT(*) INTO v_count
     FROM pg_policies
     WHERE schemaname = 'public'
@@ -139,7 +150,7 @@ BEGIN
         RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: Expected 4 anon preview policies, found %.', v_count;
     END IF;
 
-    -- 10. Assert: Storage RLS policies exist on storage.objects
+    -- 11. Assert: Storage RLS policies exist on storage.objects
     SELECT COUNT(*) INTO v_count
     FROM pg_policies
     WHERE schemaname = 'storage'
