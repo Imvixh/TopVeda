@@ -9,7 +9,29 @@
 DO $$
 DECLARE
     v_count INT;
+    v_uuid UUID;
 BEGIN
+    -- 0. Assert: try_cast_uuid exception-safety and correctness
+    SELECT public.try_cast_uuid('123e4567-e89b-12d3-a456-426614174000') INTO v_uuid;
+    IF v_uuid IS NULL OR v_uuid <> '123e4567-e89b-12d3-a456-426614174000'::UUID THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: try_cast_uuid failed on valid UUID input.';
+    END IF;
+
+    SELECT public.try_cast_uuid('not-a-uuid') INTO v_uuid;
+    IF v_uuid IS NOT NULL THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: try_cast_uuid failed to return NULL for invalid string.';
+    END IF;
+
+    SELECT public.try_cast_uuid(NULL) INTO v_uuid;
+    IF v_uuid IS NOT NULL THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: try_cast_uuid failed to return NULL for NULL input.';
+    END IF;
+
+    SELECT public.try_cast_uuid('malformed/path/with/slashes') INTO v_uuid;
+    IF v_uuid IS NOT NULL THEN
+        RAISE EXCEPTION 'POSTFLIGHT ASSERTION FAILED: try_cast_uuid failed to return NULL for malformed path.';
+    END IF;
+
     -- 1. Assert: No legacy broad or obsolete assignment policies exist
     SELECT COUNT(*) INTO v_count
     FROM pg_policies
