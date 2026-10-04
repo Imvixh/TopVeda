@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 
 declare global {
   interface Window {
@@ -63,14 +64,17 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
     const containerRef = React.useRef<HTMLDivElement>(null);
     const widgetIdRef = React.useRef<string | null>(null);
     const generationRef = React.useRef(0);
-    const [isLoaded, setIsLoaded] = React.useState(false);
+
+    const [status, setStatus] = React.useState<"loading" | "ready" | "error">("loading");
+    const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
     // Turnstile Site Key (Public)
     // Development: configured key or official Cloudflare testing sitekey
-    // Production: MUST be configured via NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY (no fallback to test key)
+    // Production: MUST be configured via NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY (never fallback to test key)
+    const isProduction = process.env.NODE_ENV === "production";
     const siteKey =
       process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY ||
-      (process.env.NODE_ENV !== "production" ? "1x00000000000000000000AA" : "");
+      (!isProduction ? "1x00000000000000000000AA" : "");
 
     const onVerifyRef = React.useRef(onVerify);
     onVerifyRef.current = onVerify;
@@ -86,15 +90,34 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
 
     // Render widget helper
     const renderWidget = React.useCallback(() => {
-      if (!containerRef.current || !window.turnstile) return;
+      if (!containerRef.current) return;
 
       const currentGen = ++generationRef.current;
 
+      if (isProduction && siteKey === "1x00000000000000000000AA") {
+        console.error("[TurnstileWidget] Security configuration error: Dummy test sitekey detected in production environment.");
+        setStatus("error");
+        setErrorMessage("Security verification is misconfigured for production.");
+        if (onErrorRef.current) onErrorRef.current("invalid-production-sitekey");
+        return;
+      }
+
       if (!siteKey) {
-        if (process.env.NODE_ENV === "production") {
+        if (isProduction) {
           console.error("[TurnstileWidget] Production Turnstile site key is missing.");
         }
+        setStatus("error");
+        setErrorMessage(
+          isProduction
+            ? "Security verification is not configured in production."
+            : "Turnstile site key is not configured."
+        );
         if (onErrorRef.current) onErrorRef.current("missing-sitekey");
+        return;
+      }
+
+      if (!window.turnstile) {
+        setStatus("loading");
         return;
       }
 
@@ -117,6 +140,8 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
           sitekey: siteKey,
           callback: (token: string) => {
             if (currentGen === generationRef.current) {
+              setStatus("ready");
+              setErrorMessage(null);
               onVerifyRef.current(token);
             }
           },
@@ -126,12 +151,18 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
             }
           },
           "error-callback": (errorCode?: string) => {
-            if (currentGen === generationRef.current && onErrorRef.current) {
-              onErrorRef.current(errorCode);
+            if (currentGen === generationRef.current) {
+              setStatus("error");
+              setErrorMessage("Security verification failed. Please try again.");
+              if (onErrorRef.current) {
+                onErrorRef.current(errorCode);
+              }
             }
           },
           "timeout-callback": () => {
             if (currentGen === generationRef.current) {
+              setStatus("error");
+              setErrorMessage("Security verification timed out. Please try again.");
               if (onTimeoutRef.current) {
                 onTimeoutRef.current();
               } else if (onExpireRef.current) {
@@ -146,27 +177,29 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
         });
 
         widgetIdRef.current = id;
-        setIsLoaded(true);
+        setStatus("ready");
+        setErrorMessage(null);
       } catch {
-        // Gracefully handle render error
+        setStatus("error");
+        setErrorMessage("Failed to initialize security verification challenge.");
+        if (onErrorRef.current) onErrorRef.current("render-error");
       }
-    }, [siteKey, theme, size, action]);
+    }, [siteKey, theme, size, action, isProduction]);
 
     // Expose imperative methods to parent
     React.useImperativeHandle(ref, () => ({
       reset: () => {
-        generationRef.current++;
-        if (typeof window !== "undefined" && window.turnstile) {
-          if (widgetIdRef.current) {
-            try {
-              window.turnstile.reset(widgetIdRef.current);
-              return;
-            } catch {
-              // If reset fails, re-render the widget
-            }
+        setStatus("loading");
+        setErrorMessage(null);
+        if (typeof window !== "undefined" && window.turnstile && widgetIdRef.current) {
+          try {
+            window.turnstile.reset(widgetIdRef.current);
+            return;
+          } catch {
+            // If reset fails, re-render the widget
           }
-          renderWidget();
         }
+        renderWidget();
       },
       remove: () => {
         generationRef.current++;
@@ -177,6 +210,9 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
             // Ignore removal errors
           }
           widgetIdRef.current = null;
+        }
+        if (containerRef.current) {
+          containerRef.current.innerHTML = "";
         }
       },
       getWidgetId: () => widgetIdRef.current,
@@ -195,43 +231,59 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
     // Load Cloudflare Turnstile script idempotently & mount widget
     React.useEffect(() => {
       let isMounted = true;
+      let checkInterval: NodeJS.Timeout | null = null;
+
+      const handleScriptError = () => {
+        if (!isMounted) return;
+        setStatus("error");
+        setErrorMessage("Security check could not be loaded. Please check your connection or ad blocker.");
+        if (onErrorRef.current) onErrorRef.current("script-load-error");
+      };
 
       const init = () => {
         if (!isMounted) return;
+
         if (window.turnstile) {
           renderWidget();
-        } else {
-          // Check if script is already in DOM
-          const SCRIPT_ID = "cf-turnstile-script";
-          let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-
-          if (!script) {
-            script = document.createElement("script");
-            script.id = SCRIPT_ID;
-            script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-            script.async = true;
-            script.defer = true;
-            document.head.appendChild(script);
-          }
-
-          const checkInterval = setInterval(() => {
-            if (window.turnstile) {
-              clearInterval(checkInterval);
-              if (isMounted) renderWidget();
-            }
-          }, 50);
-
-          return () => {
-            clearInterval(checkInterval);
-          };
+          return;
         }
+
+        // Check if script is already in DOM
+        const SCRIPT_ID = "cf-turnstile-script";
+        let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+
+        if (!script) {
+          script = document.createElement("script");
+          script.id = SCRIPT_ID;
+          script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+          script.async = true;
+          script.defer = true;
+          script.onerror = handleScriptError;
+          document.head.appendChild(script);
+        } else {
+          script.addEventListener("error", handleScriptError);
+        }
+
+        const startTime = Date.now();
+        checkInterval = setInterval(() => {
+          if (window.turnstile) {
+            if (checkInterval) clearInterval(checkInterval);
+            if (isMounted) renderWidget();
+          } else if (Date.now() - startTime > 10000) {
+            // 10 second timeout
+            if (checkInterval) clearInterval(checkInterval);
+            if (isMounted && !window.turnstile) {
+              handleScriptError();
+            }
+          }
+        }, 50);
       };
 
-      const cleanupScriptCheck = init();
+      init();
 
       return () => {
         isMounted = false;
-        if (cleanupScriptCheck) cleanupScriptCheck();
+        if (checkInterval) clearInterval(checkInterval);
         if (widgetIdRef.current && typeof window !== "undefined" && window.turnstile) {
           try {
             window.turnstile.remove(widgetIdRef.current);
@@ -246,9 +298,30 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
     return (
       <div className={`flex flex-col items-center justify-center my-2 ${className}`}>
         <div ref={containerRef} className="min-h-[65px] flex items-center justify-center" />
-        {!isLoaded && (
-          <div className="text-[11px] text-brand-text-muted animate-pulse">
-            Loading security check...
+        {status === "loading" && (
+          <div className="text-[11px] text-brand-text-muted animate-pulse flex items-center justify-center gap-1.5 py-1">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-orange" />
+            <span>Loading security check...</span>
+          </div>
+        )}
+        {status === "error" && (
+          <div className="flex flex-col items-center justify-center gap-1.5 py-1 text-center animate-in fade-in-50 duration-150">
+            <div className="flex items-center gap-1 text-[11px] text-red-600 font-medium">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <span>{errorMessage || "Security check failed."}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setStatus("loading");
+                setErrorMessage(null);
+                renderWidget();
+              }}
+              className="text-[11px] font-semibold text-brand-orange hover:underline focus:outline-none flex items-center gap-1 mt-0.5"
+            >
+              <RefreshCw className="h-3 w-3" />
+              <span>Retry security check</span>
+            </button>
           </div>
         )}
       </div>

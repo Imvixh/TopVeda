@@ -216,15 +216,15 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
       let authUser: User | null = null;
 
       if (trimmedId.includes("@")) {
+        const emailValidation = validateEmail(trimmedId);
+        if (!emailValidation.isValid) {
+          return { success: false, error: emailValidation.error };
+        }
+
         // Mandatory Server-Side Turnstile Verification for Email Authentication
         const turnstileCheck = await verifyTurnstileOnServer(turnstileToken);
         if (!turnstileCheck.success) {
           return { success: false, error: turnstileCheck.error };
-        }
-
-        const emailValidation = validateEmail(trimmedId);
-        if (!emailValidation.isValid) {
-          return { success: false, error: emailValidation.error };
         }
 
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -394,12 +394,6 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
 
   // Register a new Account (supports role STUDENT or ADMIN)
   const register = async (params: RegisterParams): Promise<AuthResponse> => {
-    // 1. Mandatory Server-Side Turnstile Verification
-    const turnstileCheck = await verifyTurnstileOnServer(params.turnstileToken);
-    if (!turnstileCheck.success) {
-      return { success: false, error: turnstileCheck.error };
-    }
-
     const nameVal = validateFullName(params.fullName);
     if (!nameVal.isValid) return { success: false, error: nameVal.error };
 
@@ -417,6 +411,12 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
 
     const termsVal = validateTerms(params.termsAgreed);
     if (!termsVal.isValid) return { success: false, error: termsVal.error };
+
+    // 1. Mandatory Server-Side Turnstile Verification
+    const turnstileCheck = await verifyTurnstileOnServer(params.turnstileToken);
+    if (!turnstileCheck.success) {
+      return { success: false, error: turnstileCheck.error };
+    }
 
     const normalizedEmail = emailVal.normalizedValue!;
     const normalizedPhone = phoneVal.normalizedValue!;
@@ -489,15 +489,15 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
 
   // Password Reset Request (Native Supabase Auth with Enumeration Protection)
   const requestPasswordReset = async (email: string, turnstileToken?: string): Promise<AuthResponse> => {
+    const emailVal = validateEmail(email);
+    if (!emailVal.isValid) {
+      return { success: false, error: emailVal.error };
+    }
+
     // 1. Mandatory Server-Side Turnstile Verification
     const turnstileCheck = await verifyTurnstileOnServer(turnstileToken);
     if (!turnstileCheck.success) {
       return { success: false, error: turnstileCheck.error };
-    }
-
-    const emailVal = validateEmail(email);
-    if (!emailVal.isValid) {
-      return { success: false, error: emailVal.error };
     }
 
     try {
