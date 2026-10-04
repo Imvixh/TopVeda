@@ -48,10 +48,13 @@ export default defineConfig(({ mode }) => {
         } catch {
           // ignore
         }
+        if (!turnstileSiteKey) {
+          turnstileSiteKey = "0x4AAAAAAFHxSEIMvYFpoutX";
+        }
       }
     }
   } else {
-    turnstileSiteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "";
+    turnstileSiteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY || "1x00000000000000000000AA";
   }
 
   // Strict Production Environment Guard
