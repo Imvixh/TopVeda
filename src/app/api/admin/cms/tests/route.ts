@@ -35,8 +35,8 @@ export async function GET(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (!profile || (profile.role !== "SUPER_ADMIN" && profile.role !== "ADMIN")) {
-      return NextResponse.json({ error: "Forbidden. Admin privileges required." }, { status: 403 });
+    if (!profile || profile.role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden. Super Administrator privileges required." }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -47,16 +47,8 @@ export async function GET(request: NextRequest) {
     const classId = searchParams.get("classId") || undefined;
     const subjectId = searchParams.get("subjectId") || undefined;
 
-    // Resolve privileged db client:
-    // If SUPABASE_SERVICE_ROLE_KEY is present, use privileged service-role admin client.
-    // Otherwise, use authenticated Super Admin / Admin server client respecting RLS.
+    // Resolve db client: use service-role if configured or authenticated super admin client
     const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
-
-    // Ensure initial demo data exists if empty
-    const { count } = await dbClient.from("student_tests").select("*", { count: "exact", head: true });
-    if (!count || count === 0) {
-      await CmsTestService.seedDefaultDummyTests(dbClient);
-    }
 
     const [catalogResult, taxonomy] = await Promise.all([
       CmsTestService.getAdminTestsCatalog(dbClient, {

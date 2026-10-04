@@ -36,6 +36,17 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized. Please sign in." }, { status: 401 });
     }
 
+    // Strictly enforce SUPER_ADMIN role check
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile || profile.role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden. Super Administrator privileges required." }, { status: 403 });
+    }
+
     // Use privileged service role client if configured, otherwise authenticated server client
     const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
     const result = await CmsTestService.getTestWithQuestions(dbClient, id);
