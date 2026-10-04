@@ -70,10 +70,11 @@ export const TurnstileWidget = React.forwardRef<TurnstileWidgetRef, TurnstileWid
 
     // Turnstile Site Key (Public)
     // Development: configured key or official Cloudflare testing sitekey
-    // Production: MUST be configured via NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY (never fallback to test key)
+    // Production: MUST be configured via NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY or NEXT_PUBLIC_TURNSTILE_SITE_KEY (never fallback to test key)
     const isProduction = process.env.NODE_ENV === "production";
     const siteKey =
       process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY ||
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ||
       (!isProduction ? "1x00000000000000000000AA" : "");
 
     const onVerifyRef = React.useRef(onVerify);

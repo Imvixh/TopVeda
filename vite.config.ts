@@ -70,6 +70,11 @@ export default defineConfig(({ mode }) => {
 
   const resolvedTurnstileKey = turnstileSiteKey || (isProduction ? "" : "1x00000000000000000000AA");
 
+  if (isProduction && resolvedTurnstileKey) {
+    process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY = resolvedTurnstileKey;
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = resolvedTurnstileKey;
+  }
+
   return {
     define: {
       "process.env.NEXT_PUBLIC_SUPABASE_URL": JSON.stringify(supabaseUrl),
@@ -77,6 +82,7 @@ export default defineConfig(({ mode }) => {
       "process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(supabaseAnonKey),
       "process.env.NEXT_PUBLIC_APP_URL": JSON.stringify(appUrl),
       "process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY": JSON.stringify(resolvedTurnstileKey),
+      "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": JSON.stringify(resolvedTurnstileKey),
     },
     plugins: [
       vinext(),
