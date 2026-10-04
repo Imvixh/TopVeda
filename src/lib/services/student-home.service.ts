@@ -372,26 +372,79 @@ export async function fetchPublishedLiveClasses(
   if (!supabase) return [];
 
   try {
-    const { data, error } = await supabase
-      .from("cms_live_classes")
-      .select("id, is_live, status_text, live_status, subject, topic, educator_name, educator_avatar_url, thumbnail_url, time_display, cta_text, scheduled_start, display_order, educator_id, created_by, profiles:educator_id(avatar_url, full_name), creator_profile:created_by(avatar_url, full_name)")
-      .eq("is_visible", true)
-      .in("live_status", ["SCHEDULED", "LIVE"])
-      .order("scheduled_start", { ascending: true });
+    let data: Array<{
+      id: string;
+      is_live?: boolean | null;
+      status_text?: string | null;
+      live_status?: string | null;
+      subject?: string | null;
+      topic: string;
+      educator_name?: string | null;
+      educator_avatar_url?: string | null;
+      thumbnail_url?: string | null;
+      time_display?: string | null;
+      cta_text?: string | null;
+      scheduled_start?: string | null;
+      display_order?: number | null;
+      profiles?: { avatar_url?: string | null; full_name?: string | null } | null;
+      creator_profile?: { avatar_url?: string | null; full_name?: string | null } | null;
+    }> | null = null;
+    try {
+      const { data: viewData, error: viewErr } = await supabase
+        .from("cms_live_class_public_previews_view")
+        .select("id, is_live, status_text, live_status, subject, topic, educator_name, educator_avatar_url, thumbnail_url, time_display, cta_text, scheduled_start, display_order")
+        .order("scheduled_start", { ascending: true });
 
-    if (error) {
-      console.warn("[StudentHomeService] Failed to fetch live classes:", error.message);
-      return [];
+      if (!viewErr && viewData && viewData.length > 0) {
+        data = viewData;
+      }
+    } catch {
+      // ignore view error and fallback to base table query
+    }
+
+    if (!data) {
+      const { data: baseData, error } = await supabase
+        .from("cms_live_classes")
+        .select("id, is_live, status_text, live_status, subject, topic, educator_name, educator_avatar_url, thumbnail_url, time_display, cta_text, scheduled_start, display_order, educator_id, created_by, profiles:educator_id(avatar_url, full_name), creator_profile:created_by(avatar_url, full_name)")
+        .eq("is_visible", true)
+        .in("live_status", ["SCHEDULED", "LIVE"])
+        .order("scheduled_start", { ascending: true });
+
+      if (error) {
+        console.warn("[StudentHomeService] Failed to fetch live classes:", error.message);
+        return [];
+      }
+      data = baseData as any;
     }
 
     const nowMs = Date.now();
-    return (data || []).map((l) => {
+    const rows = (data || []) as Array<{
+      id: string;
+      is_live?: boolean | null;
+      status_text?: string | null;
+      live_status?: string | null;
+      subject?: string | null;
+      topic: string;
+      educator_name?: string | null;
+      educator_avatar_url?: string | null;
+      thumbnail_url?: string | null;
+      time_display?: string | null;
+      cta_text?: string | null;
+      scheduled_start?: string | null;
+      display_order?: number | null;
+      profiles?: { avatar_url?: string | null; full_name?: string | null } | Array<{ avatar_url?: string | null; full_name?: string | null }> | null;
+      creator_profile?: { avatar_url?: string | null; full_name?: string | null } | Array<{ avatar_url?: string | null; full_name?: string | null }> | null;
+    }>;
+
+    return rows.map((l) => {
       const scheduledStartMs = l.scheduled_start ? new Date(l.scheduled_start).getTime() : 0;
-      const isLiveActive = l.live_status === "LIVE" || l.is_live;
-      const isLiveNow = isLiveActive && (scheduledStartMs === 0 || nowMs >= scheduledStartMs);
+      const isLiveActive = Boolean(l.live_status === "LIVE" || l.is_live);
+      const isLiveNow: boolean = Boolean(isLiveActive && (scheduledStartMs === 0 || nowMs >= scheduledStartMs));
 
       // Resolve Teacher Profile: profiles.avatar_url > educator_avatar_url > thumbnail_url
-      const profileData = (l.profiles || l.creator_profile) as { avatar_url?: string; full_name?: string } | null;
+      const prof = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles;
+      const creator = Array.isArray(l.creator_profile) ? l.creator_profile[0] : l.creator_profile;
+      const profileData = prof || creator || null;
       const resolvedAvatar =
         formatAvatarUrl(profileData?.avatar_url) ||
         formatAvatarUrl(l.educator_avatar_url) ||
@@ -402,11 +455,11 @@ export async function fetchPublishedLiveClasses(
         id: l.id,
         isLive: isLiveNow,
         statusText: isLiveNow ? "LIVE" : "UPCOMING",
-        subject: l.subject,
+        subject: l.subject || "Academic",
         topic: l.topic,
         educatorName: profileData?.full_name || l.educator_name || "Educator",
         educatorAvatar: resolvedAvatar,
-        time: l.scheduled_start ? formatLiveTimeDisplay(l.scheduled_start) : l.time_display,
+        time: l.scheduled_start ? formatLiveTimeDisplay(l.scheduled_start) : (l.time_display || "Live Today"),
         ctaText: isLiveNow ? "Join Class" : (l.cta_text || "Reminder"),
         ctaVariant: isLiveNow ? "primary" : "reminder",
       };

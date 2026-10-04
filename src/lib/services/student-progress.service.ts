@@ -7,6 +7,7 @@
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
+import { ContentAccessService } from "@/lib/services/content-access.service";
 import {
   StudentProgressSummary,
   CourseBatchProgressItem,
@@ -609,11 +610,12 @@ export class StudentProgressService {
 
     try {
       const now = new Date();
+      const nowMs = now.getTime();
 
       // 1. Fetch live class to verify timing and status server-side
       const { data: liveClass, error: fetchErr } = await supabase
         .from("cms_live_classes")
-        .select("id, live_status, scheduled_start, scheduled_end")
+        .select("id, live_status, scheduled_start, scheduled_end, batch_id, course_id")
         .eq("id", liveClassId)
         .single();
 
@@ -621,13 +623,31 @@ export class StudentProgressService {
         return { success: false, isAttended: false, error: "Live class not found." };
       }
 
-      // Live class must be active (LIVE or within scheduled window)
+      // Timing check: Reject whenever now < scheduled_start, regardless of live_status
       const scheduledStart = new Date(liveClass.scheduled_start);
-      if (now < scheduledStart && liveClass.live_status === "SCHEDULED") {
+      const scheduledStartMs = scheduledStart.getTime();
+      if (nowMs < scheduledStartMs) {
         return {
           success: false,
           isAttended: false,
-          error: "Session has not started yet. Early access window is reserved for educators.",
+          error: "Session has not started yet. Attendance recording opens at scheduled start time.",
+        };
+      }
+
+      // Lifecycle status check: Require live_status = 'LIVE'; reject SCHEDULED, COMPLETED, CANCELLED, and TERMINATED
+      if (liveClass.live_status === "SCHEDULED") {
+        return {
+          success: false,
+          isAttended: false,
+          error: "Session is scheduled but not currently live. Attendance can only be recorded during an active broadcast.",
+        };
+      }
+
+      if (liveClass.live_status === "COMPLETED") {
+        return {
+          success: false,
+          isAttended: false,
+          error: "Live class has concluded. Attendance cannot be recorded after session completion.",
         };
       }
 
@@ -639,9 +659,47 @@ export class StudentProgressService {
         };
       }
 
+      if (liveClass.live_status !== "LIVE") {
+        return {
+          success: false,
+          isAttended: false,
+          error: `Attendance cannot be recorded for class status '${liveClass.live_status}'.`,
+        };
+      }
+
+      // 2. Verify caller is an active STUDENT with active enrollment in the live class's batch
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profile?.role !== "STUDENT") {
+        return {
+          success: false,
+          isAttended: false,
+          error: "Forbidden: Attendance tracking is exclusively for enrolled students.",
+        };
+      }
+
+      const access = await ContentAccessService.checkAccess(supabase, {
+        userId,
+        contentType: "LIVE_CLASS",
+        contentId: liveClassId,
+        isTeacherOrAdmin: false,
+      });
+
+      if (!access.granted) {
+        return {
+          success: false,
+          isAttended: false,
+          error: access.reason || "Forbidden: Active student enrollment required to record attendance.",
+        };
+      }
+
       const nowIso = now.toISOString();
 
-      // 2. Fetch existing attendance row
+      // 3. Fetch existing attendance row
       const { data: existing } = await supabase
         .from("student_live_attendance")
         .select("id, duration_seconds")
@@ -649,10 +707,11 @@ export class StudentProgressService {
         .eq("live_class_id", liveClassId)
         .maybeSingle();
 
-      const newDuration = (existing?.duration_seconds || 0) + Math.min(heartbeatDurationSeconds, 60);
+      const heartbeatSeconds = Math.min(Math.max(heartbeatDurationSeconds, 1), 60);
+      const newDuration = (existing?.duration_seconds || 0) + heartbeatSeconds;
 
-      // 3. Server-authoritative upsert into student_live_attendance
-      await supabase.from("student_live_attendance").upsert(
+      // 4. Server-authoritative upsert into student_live_attendance
+      const { error: upsertErr } = await supabase.from("student_live_attendance").upsert(
         {
           student_id: userId,
           live_class_id: liveClassId,
@@ -665,13 +724,17 @@ export class StudentProgressService {
         { onConflict: "student_id, live_class_id" }
       );
 
-      // 4. Append to student_learning_activity log
+      if (upsertErr) {
+        return { success: false, isAttended: false, error: upsertErr.message };
+      }
+
+      // 5. Append to student_learning_activity log
       await supabase.from("student_learning_activity").insert({
         student_id: userId,
         activity_type: "LIVE_ATTENDANCE",
         entity_type: "LIVE_CLASS",
         entity_id: liveClassId,
-        duration_seconds: Math.min(heartbeatDurationSeconds, 60),
+        duration_seconds: heartbeatSeconds,
         activity_date: nowIso.split("T")[0],
         metadata: { liveClassId, totalAttendedSeconds: newDuration },
       });

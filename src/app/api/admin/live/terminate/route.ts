@@ -47,10 +47,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Fetch Live Class
+    // 3. Fetch Live Class with safe projection
     const { data: liveClass, error: fetchErr } = await supabase
       .from("cms_live_classes")
-      .select("*")
+      .select(`
+        id,
+        topic,
+        subject,
+        educator_name,
+        live_status,
+        is_live,
+        educator_id,
+        created_by,
+        submitted_by
+      `)
       .eq("id", liveClassId)
       .single();
 
@@ -58,17 +68,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Live Class not found." }, { status: 404 });
     }
 
+    // Fetch private provider session id via admin client
+    const { createAdminClient } = await import("@/lib/supabase/server");
+    const adminClient = createAdminClient();
+    const { data: privRow } = await adminClient
+      .from("cms_live_classes")
+      .select("provider_session_id")
+      .eq("id", liveClassId)
+      .single();
+
     // 4. Sever session at provider level
-    if (liveClass.provider_session_id) {
+    if (privRow?.provider_session_id) {
       await StreamingService.terminateLiveSession(
-        liveClass.provider_session_id,
+        privRow.provider_session_id,
         terminationReason.trim()
       );
     }
 
     const nowIso = new Date().toISOString();
 
-    // 5. Update Database Record to TERMINATED with Audit Logs
+    // 5. Update Database Record to TERMINATED with Audit Logs and safe column projection
     const { data: terminatedClass, error: updateErr } = await supabase
       .from("cms_live_classes")
       .update({
@@ -82,7 +101,20 @@ export async function POST(request: NextRequest) {
         updated_at: nowIso,
       })
       .eq("id", liveClassId)
-      .select()
+      .select(`
+        id,
+        topic,
+        subject,
+        educator_name,
+        live_status,
+        is_live,
+        status_text,
+        cta_text,
+        terminated_at,
+        terminated_by,
+        termination_reason,
+        updated_at
+      `)
       .single();
 
     if (updateErr) {
@@ -101,12 +133,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { stream_key: _k, ...sanitizedClass } = terminatedClass;
-
     return NextResponse.json({
       success: true,
       message: "Live class session has been terminated and access severed.",
-      liveClass: sanitizedClass,
+      liveClass: terminatedClass,
       auditLog: {
         terminatedBy: profile?.full_name || "Super Admin",
         terminatedAt: nowIso,

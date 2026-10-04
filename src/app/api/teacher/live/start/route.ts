@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StreamingService } from "@/lib/services/streaming.service";
 import { getTMinus10TimeIST } from "@/lib/utils/timezone";
 
@@ -38,7 +39,26 @@ export async function POST(request: NextRequest) {
     // 2. Fetch Live Class & Check Ownership / Authorization
     const { data: liveClass, error: fetchErr } = await supabase
       .from("cms_live_classes")
-      .select("*")
+      .select(`
+        id,
+        topic,
+        subject,
+        educator_name,
+        scheduled_start,
+        scheduled_end,
+        live_status,
+        is_live,
+        status_text,
+        cta_text,
+        educator_id,
+        created_by,
+        submitted_by,
+        batch_id,
+        subject_id,
+        stream_provider,
+        termination_reason,
+        started_at
+      `)
       .eq("id", liveClassId)
       .single();
 
@@ -53,12 +73,23 @@ export async function POST(request: NextRequest) {
       .single();
 
     const isSuperAdmin = profile?.role === "SUPER_ADMIN";
-    const isOwnerTeacher =
+    let isAuthorizedTeacher =
+      isSuperAdmin ||
       liveClass.educator_id === user.id ||
       liveClass.created_by === user.id ||
       liveClass.submitted_by === user.id;
 
-    if (!isSuperAdmin && !isOwnerTeacher) {
+    if (!isAuthorizedTeacher && profile?.role === "ADMIN" && liveClass.batch_id) {
+      const { data: isAssigned } = await supabase.rpc("is_batch_subject_teacher", {
+        p_batch_id: liveClass.batch_id,
+        p_subject_id: liveClass.subject_id || null,
+      });
+      if (isAssigned) {
+        isAuthorizedTeacher = true;
+      }
+    }
+
+    if (!isAuthorizedTeacher) {
       return NextResponse.json(
         { error: "Forbidden: You are not authorized to start this Live Class session." },
         { status: 403 }
@@ -97,12 +128,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Start provider session
-    if (liveClass.provider_session_id) {
-      await StreamingService.startLiveSession(liveClass.provider_session_id);
+    // 4. Fetch private provider credentials server-side via admin client
+    const adminClient = createAdminClient();
+    const { data: privRow } = await adminClient
+      .from("cms_live_classes")
+      .select("provider_session_id, stream_room_url")
+      .eq("id", liveClassId)
+      .single();
+
+    // 5. Start provider session
+    if (privRow?.provider_session_id) {
+      await StreamingService.startLiveSession(privRow.provider_session_id);
     }
 
-    // 5. Update Database State to LIVE
+    // 6. Update Database State to LIVE
     const nowIso = new Date().toISOString();
     const { data: updatedClass, error: updateErr } = await supabase
       .from("cms_live_classes")
@@ -115,24 +154,36 @@ export async function POST(request: NextRequest) {
         updated_at: nowIso,
       })
       .eq("id", liveClassId)
-      .select()
+      .select(`
+        id,
+        batch_id,
+        subject,
+        topic,
+        educator_name,
+        scheduled_start,
+        scheduled_end,
+        live_status,
+        is_live,
+        status_text,
+        cta_text,
+        started_at,
+        updated_at
+      `)
       .single();
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message || "Failed to activate live class." }, { status: 500 });
     }
 
-    const broadcastId = updatedClass.provider_session_id;
+    const broadcastId = privRow?.provider_session_id;
     const isRealYt = broadcastId && !broadcastId.startsWith("dev_yt_");
     const studioPublishUrl = isRealYt ? "https://www.youtube.com/webcam" : null;
-    const resolvedStreamRoomUrl = updatedClass.stream_room_url || studioPublishUrl || `/student/live/${updatedClass.id}`;
-
-    const { stream_key: _internalKey, ...sanitizedClass } = updatedClass;
+    const resolvedStreamRoomUrl = privRow?.stream_room_url || studioPublishUrl || `/student/live/${updatedClass.id}`;
 
     return NextResponse.json({
       success: true,
       message: "Live Class session started successfully.",
-      liveClass: sanitizedClass,
+      liveClass: updatedClass,
       streamRoomUrl: resolvedStreamRoomUrl,
       studioPublishUrl,
     });

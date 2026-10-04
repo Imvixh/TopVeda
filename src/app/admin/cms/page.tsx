@@ -89,7 +89,7 @@ export default function SuperAdminCmsDashboardPage() {
           supabase.from("cms_batches").select("*", { count: "exact", head: true }),
           supabase.from("cms_lectures").select("*", { count: "exact", head: true }),
           supabase.from("cms_study_materials").select("*", { count: "exact", head: true }),
-          supabase.from("cms_live_classes").select("*", { count: "exact", head: true }).eq("status", "PUBLISHED"),
+          supabase.from("cms_live_classes").select("id", { count: "exact", head: true }).eq("status", "PUBLISHED"),
           supabase.from("cms_pending_reviews_view").select("*", { count: "exact", head: true }),
           supabase.from("cms_lectures").select("*", { count: "exact", head: true }).eq("status", "PUBLISHED"),
           supabase.from("cms_batches").select("*", { count: "exact", head: true }).eq("status", "PUBLISHED"),

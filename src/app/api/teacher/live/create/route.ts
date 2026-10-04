@@ -68,15 +68,38 @@ export async function POST(request: NextRequest) {
       thumbnailUrl,
     } = body;
 
-    // 3. Validate mandatory metadata
+    // 3. Validate mandatory metadata and batch/subject assignment requirements
     if (!topic?.trim()) {
       return NextResponse.json({ error: "Live Class topic / lecture title is required." }, { status: 400 });
     }
     if (!subject?.trim()) {
       return NextResponse.json({ error: "Subject is required." }, { status: 400 });
     }
+    if (!batchId) {
+      return NextResponse.json({ error: "Batch assignment (batchId) is required to schedule a live class." }, { status: 400 });
+    }
+    if (!subjectId) {
+      return NextResponse.json({ error: "Subject assignment (subjectId) is required to schedule a live class." }, { status: 400 });
+    }
     if (!scheduledStart) {
       return NextResponse.json({ error: "Scheduled start date and time are required." }, { status: 400 });
+    }
+
+    const isSuperAdmin = profile.role === "SUPER_ADMIN";
+
+    // 3b. Verify teacher assignment before creating streaming provider session
+    if (!isSuperAdmin) {
+      const { data: isAssigned, error: assignErr } = await supabase.rpc("is_batch_subject_teacher", {
+        p_batch_id: batchId,
+        p_subject_id: subjectId,
+      });
+
+      if (assignErr || !isAssigned) {
+        return NextResponse.json(
+          { error: "Forbidden: You are not assigned to teach this subject in the selected batch." },
+          { status: 403 }
+        );
+      }
     }
 
     const startTimestamp = new Date(scheduledStart).getTime();
@@ -129,7 +152,7 @@ export async function POST(request: NextRequest) {
     const educatorAvatar = profile.avatar_url || null;
     const educatorName = profile.full_name || "Educator";
 
-    // 6. Initialize Provider Session
+    // 6. Initialize Provider Session (Only after authorization passes)
     const tempClassId = crypto.randomUUID();
     const sessionConfig = await StreamingService.createLiveSession({
       liveClassId: tempClassId,
@@ -141,8 +164,7 @@ export async function POST(request: NextRequest) {
       client: supabase,
     });
 
-    // 7. Insert Live Class into Database
-    // Note: Live classes created by teachers require no Super Admin approval and are directly scheduled and visible to students.
+    // 7. Insert Live Class into Database with explicit safe projection
     const { data: newLiveClass, error: insertError } = await supabase
       .from("cms_live_classes")
       .insert({
@@ -177,7 +199,37 @@ export async function POST(request: NextRequest) {
         created_by: user.id,
         submitted_by: user.id,
       })
-      .select()
+      .select(`
+        id,
+        board_id,
+        class_id,
+        subject_id,
+        course_id,
+        chapter_id,
+        batch_id,
+        subject,
+        topic,
+        description,
+        thumbnail_url,
+        educator_name,
+        educator_avatar_url,
+        educator_id,
+        scheduled_start,
+        scheduled_end,
+        time_display,
+        is_live,
+        status_text,
+        live_status,
+        cta_text,
+        stream_provider,
+        recording_status,
+        is_visible,
+        status,
+        created_by,
+        submitted_by,
+        created_at,
+        updated_at
+      `)
       .single();
 
     if (insertError) {
@@ -210,13 +262,10 @@ export async function POST(request: NextRequest) {
       scheduledStart: newLiveClass.scheduled_start,
     });
 
-    // Strip internal stream key before returning response to client
-    const { stream_key: _internalKey, ...sanitizedResponse } = newLiveClass;
-
     return NextResponse.json({
       success: true,
       message: "Live class scheduled successfully.",
-      liveClass: sanitizedResponse,
+      liveClass: newLiveClass,
     });
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));

@@ -933,10 +933,50 @@ export class CmsService {
     }
   }
 
+  public static readonly SAFE_LIVE_CLASS_SELECT = `
+    id,
+    batch_id,
+    board_id,
+    class_id,
+    subject_id,
+    course_id,
+    chapter_id,
+    subject,
+    topic,
+    description,
+    educator_name,
+    educator_avatar_url,
+    educator_id,
+    scheduled_start,
+    scheduled_end,
+    time_display,
+    is_live,
+    status_text,
+    live_status,
+    cta_text,
+    display_order,
+    is_visible,
+    status,
+    created_by,
+    updated_by,
+    submitted_by,
+    thumbnail_url,
+    stream_provider,
+    recording_status,
+    started_at,
+    ended_at,
+    terminated_at,
+    terminated_by,
+    termination_reason,
+    is_curated_preview,
+    created_at,
+    updated_at
+  `;
+
   static async getLiveClasses(supabase: SupabaseClient): Promise<CmsLiveClass[]> {
     const { data } = await supabase
       .from("cms_live_classes")
-      .select("*")
+      .select(CmsService.SAFE_LIVE_CLASS_SELECT)
       .order("scheduled_start", { ascending: true });
     return (data as CmsLiveClass[]) || [];
   }
@@ -952,9 +992,18 @@ export class CmsService {
       };
       let res;
       if (liveClass.id) {
-        res = await supabase.from("cms_live_classes").update(payload).eq("id", liveClass.id).select().single();
+        res = await supabase
+          .from("cms_live_classes")
+          .update(payload)
+          .eq("id", liveClass.id)
+          .select(CmsService.SAFE_LIVE_CLASS_SELECT)
+          .single();
       } else {
-        res = await supabase.from("cms_live_classes").insert(payload).select().single();
+        res = await supabase
+          .from("cms_live_classes")
+          .insert(payload)
+          .select(CmsService.SAFE_LIVE_CLASS_SELECT)
+          .single();
       }
       if (res.error) throw new Error(res.error.message);
       return { data: res.data as CmsLiveClass, error: null };
@@ -1521,7 +1570,7 @@ export class CmsService {
       // 4. Live Classes
       const { data: liveClasses } = await supabase
         .from("cms_live_classes")
-        .select("*")
+        .select(CmsService.SAFE_LIVE_CLASS_SELECT)
         .or(`created_by.eq.${userId},submitted_by.eq.${userId},educator_id.eq.${userId}`);
       if (liveClasses) {
         for (const lc of liveClasses) {
@@ -1536,11 +1585,11 @@ export class CmsService {
             created_at: lc.created_at,
             updated_at: lc.updated_at,
             submitted_at: lc.created_at,
-            reviewed_at: lc.reviewed_at,
-            reviewed_by: lc.reviewed_by,
-            review_note: lc.review_note,
-            starts_at: lc.starts_at,
-            ends_at: lc.ends_at,
+            reviewed_at: (lc as { reviewed_at?: string | null }).reviewed_at || null,
+            reviewed_by: (lc as { reviewed_by?: string | null }).reviewed_by || null,
+            review_note: (lc as { review_note?: string | null }).review_note || null,
+            starts_at: lc.scheduled_start,
+            ends_at: lc.scheduled_end,
             details: lc,
           });
         }
@@ -1651,7 +1700,7 @@ export class CmsService {
     try {
       const { data, error } = await supabase
         .from("cms_live_classes")
-        .select("*, cms_boards(name), cms_class_levels(name), cms_subjects(name), cms_courses(title)")
+        .select(`${CmsService.SAFE_LIVE_CLASS_SELECT}, cms_boards(name), cms_class_levels(name), cms_subjects(name), cms_courses(title)`)
         .or(`educator_id.eq.${teacherId},created_by.eq.${teacherId}`)
         .order("scheduled_start", { ascending: true });
 
@@ -1694,7 +1743,7 @@ export class CmsService {
     try {
       const { data: liveClass, error: fetchErr } = await supabase
         .from("cms_live_classes")
-        .select("*")
+        .select(CmsService.SAFE_LIVE_CLASS_SELECT)
         .eq("id", liveClassId)
         .single();
 
@@ -1725,13 +1774,14 @@ export class CmsService {
         thumbnail_url: liveClass.thumbnail_url || liveClass.educator_avatar_url,
         thumbnail_bg: "from-[#0F2042] via-[#162D59] to-[#0A162B]",
         category_tag: "Recorded Live",
-        video_stream_id: liveClass.provider_session_id || `rec_${liveClass.id}`,
-        video_playback_url: recordingUrl || liveClass.recording_url || liveClass.stream_room_url,
-        video_upload_status: "ready",
+        video_stream_id: recordingUrl ? `rec_${liveClass.id}` : null,
+        video_playback_url: recordingUrl || null,
+        video_upload_status: recordingUrl ? "ready" : "processing",
         status: "DRAFT" as ContentStatus,
         is_visible: true,
         is_home_featured: false,
-        is_free_preview: true,
+        is_free_preview: false,
+        is_curated_preview: false,
         created_by: liveClass.educator_id || liveClass.created_by,
         submitted_by: liveClass.educator_id || liveClass.created_by,
       };
@@ -1763,7 +1813,7 @@ export class CmsService {
       const [liveRes, teachersRes, lecturesRes] = await Promise.all([
         supabase
           .from("cms_live_classes")
-          .select("*, profiles:educator_id(email, full_name, avatar_url)")
+          .select(`${CmsService.SAFE_LIVE_CLASS_SELECT}, profiles:educator_id(email, full_name, avatar_url)`)
           .order("scheduled_start", { ascending: true }),
         supabase
           .from("profiles")
@@ -1778,11 +1828,12 @@ export class CmsService {
       const teachers = teachersRes.data || [];
       const lectures = lecturesRes.data || [];
 
-      const liveControlItems: LiveControlSessionItem[] = rawLive.map((lc) => {
+      const liveControlItems: LiveControlSessionItem[] = (rawLive as Array<CmsLiveClass & { profiles?: { email?: string; full_name?: string; avatar_url?: string } | Array<{ email?: string; full_name?: string; avatar_url?: string }> }>).map((lc) => {
         const startMs = new Date(lc.scheduled_start).getTime();
+        const profileObj = Array.isArray(lc.profiles) ? lc.profiles[0] : lc.profiles;
         return {
           ...lc,
-          teacherEmail: lc.profiles?.email,
+          teacherEmail: profileObj?.email,
           canStartEarly: now >= startMs - tenMinutesMs,
           canStudentJoin: lc.live_status === "LIVE" || now >= startMs,
         };

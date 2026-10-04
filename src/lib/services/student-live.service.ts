@@ -101,7 +101,6 @@ export class StudentLiveService {
           thumbnail_url,
           course_id,
           batch_id,
-          recording_url,
           educator_id,
           created_by,
           profiles:educator_id(avatar_url, full_name),
@@ -192,6 +191,30 @@ export class StudentLiveService {
         });
       });
 
+      // 5. For COMPLETED sessions, resolve recordings strictly from linked PUBLISHED cms_lectures
+      const completedClassIds = (authorizedClasses || [])
+        .filter((c) => c.live_status === "COMPLETED")
+        .map((c) => c.id);
+
+      const publishedRecordingMap = new Map<string, string>();
+      if (completedClassIds.length > 0) {
+        const { data: publishedLectures } = await supabase
+          .from("cms_lectures")
+          .select("original_live_class_id, video_playback_url, video_url")
+          .in("original_live_class_id", completedClassIds)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true);
+
+        (publishedLectures || []).forEach((lec) => {
+          if (lec.original_live_class_id) {
+            const resolvedUrl = lec.video_playback_url || lec.video_url || null;
+            if (resolvedUrl) {
+              publishedRecordingMap.set(lec.original_live_class_id, resolvedUrl);
+            }
+          }
+        });
+      }
+
       const now = new Date();
       const nowMs = now.getTime();
 
@@ -212,6 +235,13 @@ export class StudentLiveService {
         const educatorAvatar = this.resolveEducatorAvatar(profileData?.avatar_url, c.educator_avatar_url, c.thumbnail_url);
 
         const attendance = attendanceMap.get(c.id);
+        const recordingUrl = publishedRecordingMap.get(c.id) || null;
+
+        // Timing Rules:
+        // isLive and canJoin MUST be false if nowMs < scheduledStartMs, even if teacher is LIVE during preparation window.
+        const isPastScheduledStart = nowMs >= scheduledStartMs;
+        const isLive = isPastScheduledStart && (c.live_status === "LIVE" || c.is_live);
+        const canJoin = isPastScheduledStart && (c.live_status === "LIVE" || c.live_status === "SCHEDULED");
 
         const card: StudentLiveClassCard = {
           id: c.id,
@@ -223,13 +253,13 @@ export class StudentLiveService {
           scheduledStart: c.scheduled_start,
           scheduledEnd: c.scheduled_end,
           liveStatus: c.live_status,
-          isLive: (c.live_status === "LIVE" || (c.is_live && nowMs >= scheduledStartMs)),
+          isLive,
           isPreparationWindow: isPrepWindow,
-          canJoin: c.live_status === "LIVE" || (nowMs >= scheduledStartMs && c.live_status === "SCHEDULED"),
+          canJoin,
           secondsToStart,
           isAttended: attendance?.isAttended || false,
           attendedDurationSeconds: attendance?.durationSeconds || 0,
-          recordingUrl: c.recording_url,
+          recordingUrl,
           courseId: c.course_id,
         };
 
@@ -278,7 +308,6 @@ export class StudentLiveService {
           thumbnail_url,
           course_id,
           batch_id,
-          recording_url,
           terminated_by,
           termination_reason,
           educator_id,
@@ -311,8 +340,25 @@ export class StudentLiveService {
       const educatorName = profileData?.full_name || liveClass.educator_name || "Educator";
       const educatorAvatar = this.resolveEducatorAvatar(profileData?.avatar_url, liveClass.educator_avatar_url, liveClass.thumbnail_url);
 
-      const isLive = liveClass.live_status === "LIVE" || (liveClass.is_live && nowMs >= scheduledStartMs);
-      const canJoin = isLive || (nowMs >= scheduledStartMs && liveClass.live_status === "SCHEDULED");
+      // Student timing rules:
+      // isLive and canJoin MUST be false before scheduled_start
+      const isPastScheduledStart = nowMs >= scheduledStartMs;
+      const isLive = isPastScheduledStart && (liveClass.live_status === "LIVE" || liveClass.is_live);
+      const canJoin = isPastScheduledStart && (liveClass.live_status === "LIVE" || liveClass.live_status === "SCHEDULED");
+
+      // For completed sessions: resolve recording only from linked published cms_lectures
+      let recordingUrl: string | null = null;
+      if (liveClass.live_status === "COMPLETED") {
+        const { data: linkedLecture } = await supabase
+          .from("cms_lectures")
+          .select("video_playback_url, video_url")
+          .eq("original_live_class_id", liveClassId)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true)
+          .maybeSingle();
+
+        recordingUrl = linkedLecture?.video_playback_url || linkedLecture?.video_url || null;
+      }
 
       // Fetch student attendance state
       const { data: attendance } = await supabase
@@ -341,7 +387,7 @@ export class StudentLiveService {
           isTerminated: liveClass.live_status === "TERMINATED",
           isCompleted: liveClass.live_status === "COMPLETED",
           terminationReason: liveClass.termination_reason,
-          recordingUrl: liveClass.recording_url,
+          recordingUrl,
           access,
           attendance: {
             isAttended: Boolean(attendance?.is_attended),

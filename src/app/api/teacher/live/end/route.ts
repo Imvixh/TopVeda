@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StreamingService } from "@/lib/services/streaming.service";
 import { CmsService } from "@/lib/services/cms.service";
 
@@ -35,10 +36,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing liveClassId parameter." }, { status: 400 });
     }
 
-    // 2. Fetch Live Class & Check Ownership / Authorization
+    // 2. Fetch Live Class & Check Ownership / Authorization with safe projection
     const { data: liveClass, error: fetchErr } = await supabase
       .from("cms_live_classes")
-      .select("*")
+      .select(`
+        id,
+        topic,
+        subject,
+        description,
+        educator_name,
+        educator_avatar_url,
+        thumbnail_url,
+        scheduled_start,
+        scheduled_end,
+        time_display,
+        live_status,
+        is_live,
+        status_text,
+        cta_text,
+        educator_id,
+        created_by,
+        submitted_by,
+        batch_id,
+        subject_id,
+        stream_provider,
+        recording_status
+      `)
       .eq("id", liveClassId)
       .single();
 
@@ -53,22 +76,42 @@ export async function POST(request: NextRequest) {
       .single();
 
     const isSuperAdmin = profile?.role === "SUPER_ADMIN";
-    const isOwnerTeacher =
+    let isAuthorizedTeacher =
+      isSuperAdmin ||
       liveClass.educator_id === user.id ||
       liveClass.created_by === user.id ||
       liveClass.submitted_by === user.id;
 
-    if (!isSuperAdmin && !isOwnerTeacher) {
+    if (!isAuthorizedTeacher && profile?.role === "ADMIN" && liveClass.batch_id) {
+      const { data: isAssigned } = await supabase.rpc("is_batch_subject_teacher", {
+        p_batch_id: liveClass.batch_id,
+        p_subject_id: liveClass.subject_id || null,
+      });
+      if (isAssigned) {
+        isAuthorizedTeacher = true;
+      }
+    }
+
+    if (!isAuthorizedTeacher) {
       return NextResponse.json(
         { error: "Forbidden: You are not authorized to end this Live Class session." },
         { status: 403 }
       );
     }
 
-    // 3. Conclude session in provider
+    // 3. Fetch private provider credentials server-side via admin client
+    const adminClient = createAdminClient();
+    const { data: privRow } = await adminClient
+      .from("cms_live_classes")
+      .select("provider_session_id, stream_room_url")
+      .eq("id", liveClassId)
+      .single();
+
+    // 4. Conclude session in provider
     let recordingId = `rec_${liveClass.id}`;
-    if (liveClass.provider_session_id) {
-      const providerRes = await StreamingService.endLiveSession(liveClass.provider_session_id);
+    let actualRecordingPlaybackUrl: string | null = null;
+    if (privRow?.provider_session_id) {
+      const providerRes = await StreamingService.endLiveSession(privRow.provider_session_id);
       if (providerRes.recordingId) {
         recordingId = providerRes.recordingId;
       }
@@ -76,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     const nowIso = new Date().toISOString();
 
-    // 4. Update Database State to COMPLETED
+    // 5. Update Database State to COMPLETED with safe column projection
     const { data: updatedClass, error: updateErr } = await supabase
       .from("cms_live_classes")
       .update({
@@ -85,32 +128,52 @@ export async function POST(request: NextRequest) {
         status_text: "COMPLETED",
         cta_text: "View Recording",
         ended_at: nowIso,
-        recording_id: recordingId,
         recording_status: "PROCESSING",
-        recording_url: liveClass.stream_room_url,
         updated_at: nowIso,
       })
       .eq("id", liveClassId)
-      .select()
+      .select(`
+        id,
+        batch_id,
+        subject,
+        topic,
+        educator_name,
+        scheduled_start,
+        scheduled_end,
+        live_status,
+        is_live,
+        status_text,
+        cta_text,
+        ended_at,
+        recording_status,
+        updated_at
+      `)
       .single();
 
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message || "Failed to complete live class." }, { status: 500 });
     }
 
-    // 5. Automatic Recording Draft Inheritance: Create recorded lecture draft
+    // Record server-authoritative recording id via admin client
+    await adminClient
+      .from("cms_live_classes")
+      .update({
+        recording_id: recordingId,
+        recording_url: actualRecordingPlaybackUrl,
+      })
+      .eq("id", liveClassId);
+
+    // 6. Automatic Recording Draft Inheritance: Create recorded lecture draft
     const { data: inheritedLecture } = await CmsService.inheritLiveClassToLectureDraft(
       supabase,
       liveClassId,
-      liveClass.stream_room_url || undefined
+      actualRecordingPlaybackUrl || undefined
     );
-
-    const { stream_key: _k, ...sanitizedClass } = updatedClass;
 
     return NextResponse.json({
       success: true,
       message: "Live class ended normally. Recording draft has been generated for review.",
-      liveClass: sanitizedClass,
+      liveClass: updatedClass,
       inheritedLectureId: inheritedLecture?.id || null,
     });
   } catch (err: unknown) {

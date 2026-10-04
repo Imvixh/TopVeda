@@ -42,10 +42,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Fetch Live Class & Check Ownership / Authorization
+    // 2. Fetch Live Class & Check Ownership / Authorization with safe projection
     const { data: liveClass, error: fetchErr } = await supabase
       .from("cms_live_classes")
-      .select("*")
+      .select(`
+        id,
+        topic,
+        subject,
+        educator_name,
+        scheduled_start,
+        scheduled_end,
+        live_status,
+        is_live,
+        status_text,
+        educator_id,
+        created_by,
+        submitted_by,
+        batch_id,
+        subject_id
+      `)
       .eq("id", liveClassId)
       .single();
 
@@ -60,12 +75,23 @@ export async function POST(request: NextRequest) {
       .single();
 
     const isSuperAdmin = profile?.role === "SUPER_ADMIN";
-    const isOwnerTeacher =
+    let isAuthorizedTeacher =
+      isSuperAdmin ||
       liveClass.educator_id === user.id ||
       liveClass.created_by === user.id ||
       liveClass.submitted_by === user.id;
 
-    if (!isSuperAdmin && !isOwnerTeacher) {
+    if (!isAuthorizedTeacher && profile?.role === "ADMIN" && liveClass.batch_id) {
+      const { data: isAssigned } = await supabase.rpc("is_batch_subject_teacher", {
+        p_batch_id: liveClass.batch_id,
+        p_subject_id: liveClass.subject_id || null,
+      });
+      if (isAssigned) {
+        isAuthorizedTeacher = true;
+      }
+    }
+
+    if (!isAuthorizedTeacher) {
       return NextResponse.json(
         { error: "Forbidden: You are not authorized to reschedule this Live Class." },
         { status: 403 }
@@ -141,7 +167,7 @@ export async function POST(request: NextRequest) {
 
     const nowIso = new Date().toISOString();
 
-    // 7. Update Live Class Record
+    // 7. Update Live Class Record with safe column projection
     const { data: updatedClass, error: updateErr } = await supabase
       .from("cms_live_classes")
       .update({
@@ -151,7 +177,20 @@ export async function POST(request: NextRequest) {
         updated_at: nowIso,
       })
       .eq("id", liveClassId)
-      .select()
+      .select(`
+        id,
+        batch_id,
+        subject,
+        topic,
+        educator_name,
+        scheduled_start,
+        scheduled_end,
+        live_status,
+        is_live,
+        status_text,
+        time_display,
+        updated_at
+      `)
       .single();
 
     if (updateErr) {
@@ -167,12 +206,10 @@ export async function POST(request: NextRequest) {
       newStart: updatedClass.scheduled_start,
     });
 
-    const { stream_key: _k, ...sanitizedResponse } = updatedClass;
-
     return NextResponse.json({
       success: true,
       message: `Live class rescheduled to ${formattedTimeDisplay}.`,
-      liveClass: sanitizedResponse,
+      liveClass: updatedClass,
     });
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));
