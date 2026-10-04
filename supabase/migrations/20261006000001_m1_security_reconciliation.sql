@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- TopVeda Forward Migration: M1 Security Reconciliation & Defect Remediation
 -- File: supabase/migrations/20261006000001_m1_security_reconciliation.sql
--- Architecture: Version 7.0 Approved Three-Role Model ('STUDENT', 'ADMIN', 'SUPER_ADMIN')
+-- Architecture: Version 7.0 Approved Four-Role Model ('STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN')
 -- Governs: Role Functions, Strict Teacher Scoping, Profile Guard, Decoupled Preview RLS,
 --          Exact Safe Storage Object Binding, Live Class Workflow, and Foreign Key / Index Reconciliation
 -- ==============================================================================
@@ -34,6 +34,24 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'student_tests') THEN
         RAISE EXCEPTION 'Precondition Failed: Table public.student_tests does not exist.';
     END IF;
+
+    -- Ensure required prerequisite columns exist idempotently across tables
+    ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE';
+    ALTER TABLE public.cms_batch_teachers ADD COLUMN IF NOT EXISTS subject_id UUID NULL;
+    ALTER TABLE public.student_enrollments ADD COLUMN IF NOT EXISTS valid_until TIMESTAMPTZ NULL;
+    ALTER TABLE public.cms_lectures ADD COLUMN IF NOT EXISTS batch_id UUID REFERENCES public.cms_batches(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_lectures ADD COLUMN IF NOT EXISTS subject_id UUID REFERENCES public.cms_subjects(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_lectures ADD COLUMN IF NOT EXISTS is_curated_preview BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE public.cms_study_materials ADD COLUMN IF NOT EXISTS batch_id UUID REFERENCES public.cms_batches(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_study_materials ADD COLUMN IF NOT EXISTS subject_id UUID REFERENCES public.cms_subjects(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_study_materials ADD COLUMN IF NOT EXISTS lecture_id UUID REFERENCES public.cms_lectures(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_study_materials ADD COLUMN IF NOT EXISTS is_curated_preview BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE public.cms_live_classes ADD COLUMN IF NOT EXISTS batch_id UUID REFERENCES public.cms_batches(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_live_classes ADD COLUMN IF NOT EXISTS subject_id UUID REFERENCES public.cms_subjects(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_live_classes ADD COLUMN IF NOT EXISTS educator_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+    ALTER TABLE public.cms_live_classes ADD COLUMN IF NOT EXISTS is_curated_preview BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE public.student_tests ADD COLUMN IF NOT EXISTS batch_id UUID REFERENCES public.cms_batches(id) ON DELETE SET NULL;
+    ALTER TABLE public.student_tests ADD COLUMN IF NOT EXISTS is_curated_preview BOOLEAN NOT NULL DEFAULT FALSE;
 END $$;
 
 -- ------------------------------------------------------------------------------
@@ -59,6 +77,15 @@ $$;
 -- ------------------------------------------------------------------------------
 -- 3. Consolidate Profile Role & Status Guard
 -- ------------------------------------------------------------------------------
+-- Ensure profile role constraint accommodates 4 approved roles
+DO $$
+BEGIN
+    ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+    ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN'));
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
 DROP TRIGGER IF EXISTS trg_guard_profile_privileged_fields ON public.profiles;
 DROP FUNCTION IF EXISTS public.guard_profile_privileged_fields();
 
@@ -127,7 +154,7 @@ AS $$
   );
 $$;
 
--- 4.2 Admin Authority (Restricted Teacher/Faculty role - does NOT inherit Super Admin)
+-- 4.2 Admin Authority (General Administrator)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -143,7 +170,23 @@ AS $$
   );
 $$;
 
--- 4.3 Student Authority (Active Student account verified)
+-- 4.3 Teacher Authority (Educator / Faculty)
+CREATE OR REPLACE FUNCTION public.is_teacher()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_catalog, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid() 
+      AND role = 'TEACHER' 
+      AND COALESCE(status, 'ACTIVE') = 'ACTIVE'
+  );
+$$;
+
+-- 4.4 Student Authority (Active Student account verified)
 CREATE OR REPLACE FUNCTION public.is_student()
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -159,7 +202,7 @@ AS $$
   );
 $$;
 
--- 4.4 Batch Lead Assignment Validation (Strictly Batch-Level Assignment where subject_id IS NULL)
+-- 4.5 Batch Lead Assignment Validation (Strictly Batch-Level Assignment where subject_id IS NULL)
 CREATE OR REPLACE FUNCTION public.is_batch_teacher(p_batch_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -173,12 +216,12 @@ AS $$
     WHERE bt.batch_id = p_batch_id
       AND bt.teacher_id = auth.uid()
       AND bt.subject_id IS NULL
-      AND p.role = 'ADMIN'
+      AND p.role IN ('TEACHER', 'ADMIN')
       AND COALESCE(p.status, 'ACTIVE') = 'ACTIVE'
   );
 $$;
 
--- 4.5 Strict Subject-Scoped Teacher Assignment Validation
+-- 4.6 Strict Subject-Scoped Teacher Assignment Validation
 -- If p_subject_id is NOT NULL: Match exact subject OR batch lead (bt.subject_id IS NULL)
 -- If p_subject_id is NULL: Match ONLY batch lead (bt.subject_id IS NULL)
 CREATE OR REPLACE FUNCTION public.is_batch_subject_teacher(p_batch_id UUID, p_subject_id UUID)
@@ -193,7 +236,7 @@ AS $$
     JOIN public.profiles p ON p.id = bt.teacher_id
     WHERE bt.batch_id = p_batch_id
       AND bt.teacher_id = auth.uid()
-      AND p.role = 'ADMIN'
+      AND p.role IN ('TEACHER', 'ADMIN')
       AND COALESCE(p.status, 'ACTIVE') = 'ACTIVE'
       AND (
         (p_subject_id IS NOT NULL AND (bt.subject_id = p_subject_id OR bt.subject_id IS NULL))
@@ -221,7 +264,7 @@ AS $$
       AND p.role = 'STUDENT'
       AND COALESCE(p.status, 'ACTIVE') = 'ACTIVE'
       AND (se.valid_until IS NULL OR se.valid_until > now())
-      AND b.status IN ('ACTIVE', 'PUBLISHED')
+      AND b.status = 'PUBLISHED'
       AND (b.ends_at IS NULL OR b.ends_at > now())
   );
 $$;
@@ -242,7 +285,7 @@ AS $$
       AND se.batch_id = p_batch_id
       AND p.role = 'STUDENT'
       AND COALESCE(p.status, 'ACTIVE') = 'ACTIVE'
-      AND b.status IN ('ACTIVE', 'PUBLISHED', 'COMPLETED')
+      AND b.status = 'PUBLISHED'
       AND (
         (se.status::text = 'ACTIVE' AND (se.valid_until IS NULL OR se.valid_until > now()))
         OR
@@ -353,6 +396,11 @@ BEGIN
     -- Block non-super-admins from setting status to ARCHIVED
     IF NEW.status = 'ARCHIVED' AND OLD.status <> 'ARCHIVED' THEN
         RAISE EXCEPTION 'Unauthorized: Only Super Administrators can archive live classes.';
+    END IF;
+
+    -- Block non-super-admins from modifying curated preview flags
+    IF (NEW.is_curated_preview IS DISTINCT FROM OLD.is_curated_preview) THEN
+        RAISE EXCEPTION 'Unauthorized: Only Super Administrators can modify curated preview settings.';
     END IF;
 
     -- Prevent hijacking ownership or altering assigned scope
@@ -606,7 +654,7 @@ CREATE POLICY "cms_lectures_teacher_insert"
     ON public.cms_lectures FOR INSERT
     TO authenticated
     WITH CHECK (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND status = 'DRAFT'
@@ -618,14 +666,14 @@ CREATE POLICY "cms_lectures_teacher_update"
     ON public.cms_lectures FOR UPDATE
     TO authenticated
     USING (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND created_by = auth.uid()
         AND status IN ('DRAFT', 'PENDING_REVIEW')
     )
     WITH CHECK (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND created_by = auth.uid()
@@ -637,7 +685,7 @@ CREATE POLICY "cms_lectures_teacher_delete"
     ON public.cms_lectures FOR DELETE
     TO authenticated
     USING (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND created_by = auth.uid()
@@ -699,7 +747,7 @@ CREATE POLICY "cms_study_materials_teacher_insert"
     ON public.cms_study_materials FOR INSERT
     TO authenticated
     WITH CHECK (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND status = 'DRAFT'
@@ -718,14 +766,14 @@ CREATE POLICY "cms_study_materials_teacher_update"
     ON public.cms_study_materials FOR UPDATE
     TO authenticated
     USING (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND created_by = auth.uid()
         AND status IN ('DRAFT', 'PENDING_REVIEW')
     )
     WITH CHECK (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND created_by = auth.uid()
@@ -744,7 +792,7 @@ CREATE POLICY "cms_study_materials_teacher_delete"
     ON public.cms_study_materials FOR DELETE
     TO authenticated
     USING (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND created_by = auth.uid()
@@ -811,11 +859,14 @@ CREATE POLICY "cms_live_classes_teacher_insert"
     ON public.cms_live_classes FOR INSERT
     TO authenticated
     WITH CHECK (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND educator_id = auth.uid()
-        AND status IN ('DRAFT', 'PUBLISHED')
+        AND status = 'DRAFT'
+        AND COALESCE(is_curated_preview, FALSE) = FALSE
+        AND reviewed_by IS NULL
+        AND reviewed_at IS NULL
     );
 
 -- 12.5 Teacher Operational Update (Reschedule, operate, attend, complete assigned sessions)
@@ -823,13 +874,13 @@ CREATE POLICY "cms_live_classes_teacher_update"
     ON public.cms_live_classes FOR UPDATE
     TO authenticated
     USING (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND educator_id = auth.uid()
     )
     WITH CHECK (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND educator_id = auth.uid()
@@ -840,7 +891,7 @@ CREATE POLICY "cms_live_classes_teacher_delete"
     ON public.cms_live_classes FOR DELETE
     TO authenticated
     USING (
-        public.is_admin()
+        (public.is_teacher() OR public.is_admin())
         AND batch_id IS NOT NULL
         AND public.is_batch_subject_teacher(batch_id, subject_id)
         AND educator_id = auth.uid()
@@ -906,7 +957,7 @@ CREATE POLICY "study_materials_authenticated_select"
         )
     );
 
--- INSERT: Super Admin OR Admin assigned to the study material's batch & subject
+-- INSERT: Super Admin OR Admin/Teacher assigned to the study material's batch & subject
 CREATE POLICY "study_materials_authenticated_insert"
     ON storage.objects FOR INSERT
     TO authenticated
@@ -915,7 +966,7 @@ CREATE POLICY "study_materials_authenticated_insert"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -928,7 +979,7 @@ CREATE POLICY "study_materials_authenticated_insert"
         )
     );
 
--- UPDATE: Super Admin OR Admin assigned to draft study material
+-- UPDATE: Super Admin OR Admin/Teacher assigned to draft study material
 CREATE POLICY "study_materials_authenticated_update"
     ON storage.objects FOR UPDATE
     TO authenticated
@@ -937,7 +988,7 @@ CREATE POLICY "study_materials_authenticated_update"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -954,7 +1005,7 @@ CREATE POLICY "study_materials_authenticated_update"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -967,7 +1018,7 @@ CREATE POLICY "study_materials_authenticated_update"
         )
     );
 
--- DELETE: Super Admin OR Admin assigned to draft study material
+-- DELETE: Super Admin OR Admin/Teacher assigned to draft study material
 CREATE POLICY "study_materials_authenticated_delete"
     ON storage.objects FOR DELETE
     TO authenticated
@@ -976,7 +1027,7 @@ CREATE POLICY "study_materials_authenticated_delete"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_study_materials sm
                     WHERE sm.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -1092,7 +1143,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_select"
         )
     );
 
--- INSERT: Super Admin OR Assigned Teacher for Draft/Pending Lecture
+-- INSERT: Super Admin OR Assigned Teacher/Admin for Draft/Pending Lecture
 CREATE POLICY "lecture_thumbnails_authenticated_insert"
     ON storage.objects FOR INSERT
     TO authenticated
@@ -1101,7 +1152,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_insert"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -1114,7 +1165,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_insert"
         )
     );
 
--- UPDATE: Super Admin OR Assigned Teacher on Draft Lecture
+-- UPDATE: Super Admin OR Assigned Teacher/Admin on Draft Lecture
 CREATE POLICY "lecture_thumbnails_authenticated_update"
     ON storage.objects FOR UPDATE
     TO authenticated
@@ -1123,7 +1174,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_update"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -1140,7 +1191,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_update"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -1153,7 +1204,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_update"
         )
     );
 
--- DELETE: Super Admin OR Assigned Teacher on Draft Lecture
+-- DELETE: Super Admin OR Assigned Teacher/Admin on Draft Lecture
 CREATE POLICY "lecture_thumbnails_authenticated_delete"
     ON storage.objects FOR DELETE
     TO authenticated
@@ -1162,7 +1213,7 @@ CREATE POLICY "lecture_thumbnails_authenticated_delete"
         AND (
             public.is_super_admin()
             OR (
-                public.is_admin()
+                (public.is_teacher() OR public.is_admin())
                 AND EXISTS (
                     SELECT 1 FROM public.cms_lectures l
                     WHERE l.id = public.try_cast_uuid((storage.foldername(name))[2])
@@ -1189,6 +1240,10 @@ REVOKE ALL ON FUNCTION public.is_super_admin() FROM authenticated;
 REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.is_admin() FROM anon;
 REVOKE ALL ON FUNCTION public.is_admin() FROM authenticated;
+
+REVOKE ALL ON FUNCTION public.is_teacher() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.is_teacher() FROM anon;
+REVOKE ALL ON FUNCTION public.is_teacher() FROM authenticated;
 
 REVOKE ALL ON FUNCTION public.is_student() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.is_student() FROM anon;
@@ -1218,6 +1273,7 @@ REVOKE ALL ON FUNCTION public.can_student_access_content(BOOLEAN, UUID, TEXT) FR
 GRANT EXECUTE ON FUNCTION public.try_cast_uuid(TEXT) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.is_super_admin() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_teacher() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_student() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_batch_teacher(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_batch_subject_teacher(UUID, UUID) TO authenticated;

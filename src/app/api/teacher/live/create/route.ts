@@ -195,7 +195,10 @@ export async function POST(request: NextRequest) {
         stream_key: sessionConfig.internalStreamKey || null,
         recording_status: "NONE",
         is_visible: true,
-        status: "PUBLISHED",
+        status: "DRAFT",
+        is_curated_preview: false,
+        reviewed_by: null,
+        reviewed_at: null,
         created_by: user.id,
         submitted_by: user.id,
       })
