@@ -25,6 +25,7 @@ import {
   Power,
   AlertTriangle,
   RefreshCw,
+  Users,
 } from "lucide-react";
 import { AdminAuthView } from "@/components/auth/admin-auth-view";
 import { createClient } from "@/lib/supabase/client";
@@ -262,6 +263,39 @@ export default function AdminFoundationPage() {
                   <Link href="/admin/applications">
                     <Button variant="primary" size="sm" className="bg-sky-600 hover:bg-sky-700 text-white shadow-subtle w-full sm:w-auto">
                       Review Applications
+                      <ArrowRight className="h-4 w-4 ml-1.5" />
+                    </Button>
+                  </Link>
+                </div>
+              </Card>
+            )}
+
+            {/* SUPER ADMIN QUICK ACTION: User Management & Batch Directory */}
+            {isSuperAdmin && (
+              <Card className="p-5 sm:p-6 bg-gradient-to-br from-brand-surface via-indigo-50/40 to-violet-50/40 border-2 border-indigo-200/80 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-brand-text-primary">
+                          User Management & Batch Directory
+                        </h3>
+                        <Badge variant="peach" size="sm" className="text-[10px] uppercase font-bold">
+                          Directory
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-brand-text-muted">
+                        Inspect student enrollments, faculty batch assignments, toggle user access status, and send official emails.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href="/admin/cms/users">
+                    <Button variant="primary" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-subtle w-full sm:w-auto">
+                      Manage Users
                       <ArrowRight className="h-4 w-4 ml-1.5" />
                     </Button>
                   </Link>

@@ -19,6 +19,7 @@ import {
   Database,
   ClipboardCheck,
   User,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { YoutubeIcon } from "@/components/brand/youtube-icon";
@@ -199,6 +200,14 @@ export const CMS_NAV_SECTIONS: CmsNavSection[] = [
   {
     section: "ADMINISTRATION",
     items: [
+      {
+        title: "User Management",
+        href: "/admin/cms/users",
+        icon: Users,
+        description: "Manage students and teachers, batch enrollments, communication, and access control.",
+        badge: "Super Admin",
+        badgeVariant: "primary",
+      },
       {
         title: "Admin Applications",
         href: "/admin/applications",

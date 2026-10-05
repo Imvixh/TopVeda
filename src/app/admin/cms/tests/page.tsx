@@ -1153,42 +1153,6 @@ export default function AdminTestsPage() {
                       </select>
                     </div>
 
-                    {/* Academic Targeting: Board */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-brand-charcoal">
-                        Educational Board <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={formBoardId}
-                        onChange={(e) => setFormBoardId(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold bg-white border border-brand-border text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"
-                      >
-                        {taxonomy.boards.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name} ({b.code})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Academic Targeting: Class Level */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-brand-charcoal">
-                        Class Level <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={formClassId}
-                        onChange={(e) => setFormClassId(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold bg-white border border-brand-border text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"
-                      >
-                        {taxonomy.classes.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
                     {/* Academic Targeting: Chapter */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-brand-charcoal">

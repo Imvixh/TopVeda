@@ -41,6 +41,7 @@ import {
   ListOrdered,
   Globe2,
   FileEdit,
+  Trash2,
 } from "lucide-react";
 
 export default function CoursesCmsPage() {
@@ -68,6 +69,10 @@ export default function CoursesCmsPage() {
   // Archive Confirm Modal State
   const [archiveTarget, setArchiveTarget] = React.useState<CmsCourse | null>(null);
   const [isArchiving, setIsArchiving] = React.useState(false);
+
+  // Permanent Delete Modal State
+  const [deleteTarget, setDeleteTarget] = React.useState<CmsCourse | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   // Publishing & Governance Dialog State
   const [publishTarget, setPublishTarget] = React.useState<PublishDialogTarget | null>(null);
@@ -279,6 +284,26 @@ export default function CoursesCmsPage() {
     } else {
       setFeedback({ type: "success", message: `Course "${archiveTarget.title}" archived successfully.` });
       handleManualRefresh();
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from("cms_courses").delete().eq("id", deleteTarget.id);
+      if (error) {
+        setFeedback({ type: "error", message: `Failed to delete course: ${error.message}` });
+      } else {
+        setFeedback({ type: "success", message: `Course "${deleteTarget.title}" deleted permanently.` });
+        setDeleteTarget(null);
+        handleManualRefresh();
+      }
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setFeedback({ type: "error", message: error.message || "Failed to delete course." });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -683,12 +708,21 @@ export default function CoursesCmsPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setArchiveTarget(c)}
-                            className="h-7 w-7 text-brand-text-muted hover:text-red-600"
+                            className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
                             title="Archive Course"
                           >
                             <Archive className="h-3.5 w-3.5" />
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteTarget(c)}
+                          className="h-7 w-7 text-brand-text-muted hover:text-red-600 hover:bg-red-50"
+                          title="Delete Course Permanently"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -948,6 +982,45 @@ export default function CoursesCmsPage() {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               {isArchiving ? "Archiving..." : "Confirm Archive"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 5B. Permanent Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => !isDeleting && setDeleteTarget(null)}
+        title="Permanently Delete Course?"
+        description="Are you sure you want to permanently delete this course? This action cannot be undone and will remove all associated chapter associations."
+        maxWidth="sm"
+      >
+        <div className="space-y-4 pt-2">
+          {deleteTarget && (
+            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs space-y-1">
+              <p className="font-bold text-red-900">{deleteTarget.title}</p>
+              <p className="text-red-700 font-mono text-[11px]">{deleteTarget.slug}</p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+            >
+              {isDeleting ? "Deleting..." : "Delete Permanently"}
             </Button>
           </div>
         </div>

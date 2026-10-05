@@ -46,6 +46,7 @@ import {
   FileSpreadsheet,
   Globe2,
   FileEdit,
+  Trash2,
 } from "lucide-react";
 
 export default function StudyMaterialsCmsPage() {
@@ -231,6 +232,32 @@ function StudyMaterialsCmsContent() {
     setFormFileSizeBytes(null);
     setFormPageCount(null);
     setFormDisplayOrder(studyMaterials.length + 1);
+    setFormErrors({});
+    setIsModalOpen(true);
+  };
+
+  // Delete State
+  const [deleteTarget, setDeleteTarget] = React.useState<CmsStudyMaterial | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      const { error } = await supabase.from("cms_study_materials").delete().eq("id", deleteTarget.id);
+      if (error) {
+        setFeedback({ type: "error", message: `Failed to delete material: ${error.message}` });
+      } else {
+        setFeedback({ type: "success", message: `Study Material "${deleteTarget.title}" deleted permanently.` });
+        setDeleteTarget(null);
+        handleManualRefresh();
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setFeedback({ type: "error", message: `Error deleting material: ${errorMsg}` });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleOpenEditModal = async (sm: CmsStudyMaterial) => {
@@ -867,12 +894,21 @@ function StudyMaterialsCmsContent() {
                               variant="ghost"
                               size="icon"
                               onClick={() => setArchiveTarget(sm)}
-                              className="h-7 w-7 text-brand-text-muted hover:text-red-600"
+                              className="h-7 w-7 text-brand-text-muted hover:text-amber-600"
                               title="Archive Material"
                             >
                               <Archive className="h-3.5 w-3.5" />
                             </Button>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteTarget(sm)}
+                            className="h-7 w-7 text-brand-text-muted hover:text-red-600"
+                            title="Delete Material Permanently"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1187,9 +1223,49 @@ function StudyMaterialsCmsContent() {
               size="sm"
               onClick={handleArchiveConfirm}
               disabled={isArchiving}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
             >
               {isArchiving ? "Archiving..." : "Confirm Archive"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 5b. Permanent Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => !isDeleting && setDeleteTarget(null)}
+        title="Delete Study Material Permanently?"
+        description="Are you sure you want to permanently delete this document? This action cannot be undone."
+        maxWidth="sm"
+      >
+        <div className="space-y-4 pt-2">
+          {deleteTarget && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs space-y-1">
+              <p className="font-bold text-rose-900">{deleteTarget.title}</p>
+              <p className="text-rose-700">Type: {deleteTarget.material_type} • File: {deleteTarget.file_url}</p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? "Deleting..." : "Confirm Delete"}
             </Button>
           </div>
         </div>
