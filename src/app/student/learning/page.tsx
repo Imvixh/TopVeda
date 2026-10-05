@@ -121,13 +121,16 @@ export default function MyLearningPage() {
   }, [isAuthLoading, fetchMyLearning]);
 
   // Handle explicit enrollment action from Recommended section
-  const handleEnrollCourse = async (courseId: string) => {
+  const handleEnrollItem = async (params: { courseId?: string; batchId?: string }) => {
+    const targetKey = params.batchId || params.courseId;
+    if (!targetKey) return;
+
     try {
-      setIsEnrollingId(courseId);
+      setIsEnrollingId(targetKey);
       const res = await fetch("/api/student/learning/enroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId }),
+        body: JSON.stringify(params),
       });
 
       if (res.ok) {
@@ -584,9 +587,9 @@ export default function MyLearningPage() {
                       </div>
 
                       <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
-                        {rec.courseId ? (
+                        {rec.accessTier === "FREE" ? (
                           <button
-                            onClick={() => handleEnrollCourse(rec.courseId!)}
+                            onClick={() => handleEnrollItem({ courseId: rec.courseId, batchId: rec.batchId })}
                             disabled={isEnrolling}
                             className={cn(
                               "inline-flex items-center justify-center px-5 py-2 rounded-full border border-orange-200 hover:border-brand-orange bg-white hover:bg-orange-50 text-brand-orange text-xs font-bold shadow-2xs transition-all active:scale-[0.98] cursor-pointer",

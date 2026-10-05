@@ -46,6 +46,7 @@ export default function BatchesPage() {
     try {
       setIsLoading(true);
 
+      const nowIso = new Date().toISOString();
       const { data: batchesData, error } = await supabase
         .from("cms_batches")
         .select(`
@@ -58,10 +59,13 @@ export default function BatchesPage() {
           educator_name,
           bg_gradient,
           border_color,
-          display_order
+          display_order,
+          is_ongoing,
+          starts_at
         `)
         .eq("status", "PUBLISHED")
         .eq("is_visible", true)
+        .or(`is_ongoing.eq.true,starts_at.lte.${nowIso}`)
         .order("display_order", { ascending: true });
 
       if (error || !batchesData) {

@@ -350,7 +350,8 @@ export class StudentLearningService {
           };
         });
 
-      // Also append published featured/upcoming batches that are not yet enrolled
+      // 5B. Append ONLY published & visible ONGOING batches that are not yet enrolled
+      const nowIso = new Date().toISOString();
       const { data: rawRecommendedBatches } = await supabase
         .from("cms_batches")
         .select(`
@@ -363,31 +364,36 @@ export class StudentLearningService {
           educator_avatar_url,
           course_id,
           is_featured,
-          is_ongoing
+          is_ongoing,
+          pricing_type,
+          price_inr,
+          discount_percent
         `)
         .eq("status", "PUBLISHED")
         .eq("is_visible", true)
-        .limit(6);
+        .or(`is_ongoing.eq.true,starts_at.lte.${nowIso}`)
+        .limit(8);
 
       (rawRecommendedBatches || []).forEach((b: any) => {
         if (!enrolledBatchIds.includes(b.id) && (!b.course_id || !enrolledCourseIds.includes(b.course_id))) {
           if (!recommendedCourses.some((r) => r.id === b.id || (b.course_id && r.courseId === b.course_id))) {
+            const isFree = !b.pricing_type || b.pricing_type === "FREE" || !b.price_inr;
             recommendedCourses.push({
               id: b.id,
               batchId: b.id,
               courseId: b.course_id || undefined,
               title: b.title,
-              category: "Batch Offerings",
+              category: "Ongoing Batch",
               boardName: b.board_label ? `${b.board_label}` : "TopVeda",
               subjectName: "Batch",
-              topicsSubtitle: b.subtitle || b.description || "Structured batch with live classes & faculty guidance",
+              topicsSubtitle: b.subtitle || b.description || "Structured ongoing batch with live classes & faculty guidance",
               educatorName: b.educator_name,
               educatorAvatarUrl: b.educator_avatar_url,
               iconType: "users",
               iconBg: "bg-orange-50 border-orange-100",
               iconColor: "text-brand-orange",
               exploreUrl: `/student/batches/${b.id}`,
-              accessTier: "FREE",
+              accessTier: isFree ? "FREE" : "PRO",
             });
           }
         }
