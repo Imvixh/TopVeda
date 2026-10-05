@@ -642,13 +642,13 @@ export class CmsService {
         teacher_id,
         display_order,
         created_at,
-        teacher:profiles(id, full_name, avatar_url, qualification, role)
+        teacher:profiles!teacher_id(id, full_name, avatar_url, qualification, role)
       ),
       batch_subjects:cms_batch_subjects(
         id,
         batch_id,
         subject_id,
-        display_order,
+        primary_teacher_id,
         created_at,
         subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
       )
@@ -683,13 +683,13 @@ export class CmsService {
           teacher_id,
           display_order,
           created_at,
-          teacher:profiles(id, full_name, avatar_url, qualification, role)
+          teacher:profiles!teacher_id(id, full_name, avatar_url, qualification, role)
         ),
         batch_subjects:cms_batch_subjects(
           id,
           batch_id,
           subject_id,
-          display_order,
+          primary_teacher_id,
           created_at,
           subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
         )
@@ -731,13 +731,13 @@ export class CmsService {
           teacher_id,
           display_order,
           created_at,
-          teacher:profiles(id, full_name, avatar_url, qualification, role)
+          teacher:profiles!teacher_id(id, full_name, avatar_url, qualification, role)
         ),
         batch_subjects:cms_batch_subjects(
           id,
           batch_id,
           subject_id,
-          display_order,
+          primary_teacher_id,
           created_at,
           subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
         )
@@ -845,10 +845,9 @@ export class CmsService {
 
         const validSubjectIds = subjectIds.filter((sid) => Boolean(sid && typeof sid === "string" && sid.trim().length > 0));
         if (validSubjectIds.length > 0) {
-          const subjectRows = validSubjectIds.map((sid, idx) => ({
+          const subjectRows = validSubjectIds.map((sid) => ({
             batch_id: savedBatch.id,
             subject_id: sid,
-            display_order: idx + 1,
           }));
           const { error: sErr } = await supabase.from("cms_batch_subjects").insert(subjectRows);
           if (sErr) {
