@@ -1,0 +1,225 @@
+- generic [ref=f16e167]:
+  - complementary [ref=f16e168]:
+    - generic [ref=f16e169]:
+      - link "TopVeda CMS" [ref=f16e170] [cursor=pointer]:
+        - /url: /admin/cms
+        - generic [ref=f16e173]:
+          - generic "TopVeda" [ref=f16e174]:
+            - generic [ref=f16e175]: TOP
+            - generic [ref=f16e176]: VEDA
+          - generic [ref=f16e177]: CMS
+      - button "Collapse Sidebar" [ref=f16e179]
+    - generic [ref=f16e182]:
+      - generic [ref=f16e183]:
+        - paragraph [ref=f16e184]: CONTENT
+        - navigation [ref=f16e185]:
+          - link "Dashboard" [ref=f16e186] [cursor=pointer]:
+            - /url: /admin/cms
+          - link "Hero Banners" [ref=f16e194] [cursor=pointer]:
+            - /url: /admin/cms/hero
+          - link "New & Featured Batches" [ref=f16e198] [cursor=pointer]:
+            - /url: /admin/cms/batches/upcoming
+          - link "Ongoing Batches" [ref=f16e203] [cursor=pointer]:
+            - /url: /admin/cms/batches/ongoing
+          - link "Live Classes" [ref=f16e209] [cursor=pointer]:
+            - /url: /admin/cms/live-classes
+          - link "Latest Lectures" [ref=f16e217] [cursor=pointer]:
+            - /url: /admin/cms/lectures
+          - link "Explore Courses" [ref=f16e222] [cursor=pointer]:
+            - /url: /admin/cms/courses
+          - link "Study Materials" [ref=f16e227] [cursor=pointer]:
+            - /url: /admin/cms/study-materials
+          - link "Test & Practice" [ref=f16e232] [cursor=pointer]:
+            - /url: /admin/cms/tests
+      - generic [ref=f16e238]:
+        - paragraph [ref=f16e239]: ACADEMIC
+        - navigation [ref=f16e240]:
+          - link "Boards" [ref=f16e241] [cursor=pointer]:
+            - /url: /admin/cms/boards
+          - link "Classes" [ref=f16e245] [cursor=pointer]:
+            - /url: /admin/cms/classes
+          - link "Subjects" [ref=f16e252] [cursor=pointer]:
+            - /url: /admin/cms/subjects
+          - link "Chapters" [ref=f16e256] [cursor=pointer]:
+            - /url: /admin/cms/chapters
+      - generic [ref=f16e261]:
+        - paragraph [ref=f16e262]: ENGAGEMENT
+        - navigation [ref=f16e263]:
+          - link "Hub / Announcements" [ref=f16e264] [cursor=pointer]:
+            - /url: /admin/cms/hub
+          - link "Daily Motivation" [ref=f16e269] [cursor=pointer]:
+            - /url: /admin/cms/quotes
+      - generic [ref=f16e274]:
+        - paragraph [ref=f16e275]: REVIEW
+        - navigation [ref=f16e276]:
+          - link "Pending Reviews" [ref=f16e277] [cursor=pointer]:
+            - /url: /admin/cms/reviews
+      - generic [ref=f16e283]:
+        - paragraph [ref=f16e284]: AI CHATBOT
+        - navigation [ref=f16e285]:
+          - link "Overview & Settings" [ref=f16e286] [cursor=pointer]:
+            - /url: /admin/cms/chatbot
+          - link "Prompts" [ref=f16e291] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/prompts
+          - link "FAQs" [ref=f16e295] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/faqs
+          - link "Knowledge Sources" [ref=f16e300] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/knowledge
+      - generic [ref=f16e306]:
+        - paragraph [ref=f16e307]: INTEGRATIONS
+        - navigation [ref=f16e308]:
+          - link "YouTube Integration Phase 6A" [ref=f16e309] [cursor=pointer]:
+            - /url: /admin/cms/integrations/youtube
+            - generic [ref=f16e312]: YouTube Integration
+            - generic [ref=f16e313]: Phase 6A
+      - generic [ref=f16e314]:
+        - paragraph [ref=f16e315]: ADMINISTRATION
+        - navigation [ref=f16e316]:
+          - link "Admin Applications" [ref=f16e317] [cursor=pointer]:
+            - /url: /admin/applications
+          - link "Profile & Settings" [ref=f16e323] [cursor=pointer]:
+            - /url: /admin/cms/profile
+    - generic [ref=f16e328]:
+      - link "Admin Center" [ref=f16e329] [cursor=pointer]:
+        - /url: /admin
+      - generic [ref=f16e334]:
+        - link [ref=f16e335] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - generic [ref=f16e340]:
+            - paragraph [ref=f16e341]: Vishal Kumar
+            - paragraph [ref=f16e342]: SUPER_ADMIN
+        - button "Sign Out" [ref=f16e343]
+  - generic [ref=f16e347]:
+    - banner [ref=f16e348]:
+      - generic [ref=f16e350]:
+        - link "Admin" [ref=f16e351] [cursor=pointer]:
+          - /url: /admin
+        - link "CMS Suite" [ref=f16e354] [cursor=pointer]:
+          - /url: /admin/cms
+      - generic [ref=f16e355]:
+        - generic [ref=f16e356]: SUPER_ADMIN
+        - link [ref=f16e361] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - button "Profile" [ref=f16e362]
+        - link [ref=f16e367] [cursor=pointer]:
+          - /url: /student
+          - button "Preview Student Home" [ref=f16e368]
+        - button "Sign Out" [ref=f16e374]
+    - main [ref=f16e379]:
+      - generic [ref=f16e380]:
+        - generic [ref=f16e381]:
+          - generic [ref=f16e382]:
+            - generic [ref=f16e383]:
+              - generic [ref=f16e384]: Super Admin Suite
+              - generic [ref=f16e385]: Live DB Synced
+            - heading "Content Management System" [level=1] [ref=f16e386]
+            - paragraph [ref=f16e387]: Manage courses, curriculum taxonomy, live classes, media assets, teacher reviews, and AI Chatbot knowledge.
+          - generic [ref=f16e388]:
+            - button "Refresh" [disabled]
+            - link [ref=f16e389] [cursor=pointer]:
+              - /url: /admin/cms/reviews
+              - button "Review Queue" [ref=f16e390]
+        - generic [ref=f16e396]:
+          - generic [ref=f16e403]:
+            - generic [ref=f16e404]:
+              - heading "Teacher Submissions & Review Queue" [level=2] [ref=f16e405]
+              - generic [ref=f16e406]: All Caught Up
+            - paragraph [ref=f16e407]: Inspect educator lecture videos, batches, and study notes awaiting Super Admin verification and publishing.
+          - link [ref=f16e408] [cursor=pointer]:
+            - /url: /admin/cms/reviews
+            - button "Open Review Queue" [ref=f16e409]
+        - generic [ref=f16e412]:
+          - heading "Platform Content Overview" [level=2] [ref=f16e413]
+          - generic [ref=f16e414]:
+            - generic [ref=f16e415]:
+              - generic [ref=f16e416]: Total Courses
+              - paragraph [ref=f16e422]: "0"
+              - paragraph [ref=f16e423]: All active curriculum
+            - generic [ref=f16e424]:
+              - generic [ref=f16e425]: Total Batches
+              - paragraph [ref=f16e432]: "0"
+              - paragraph [ref=f16e433]: Featured & ongoing
+            - generic [ref=f16e434]:
+              - generic [ref=f16e435]: Total Lectures
+              - paragraph [ref=f16e441]: "0"
+              - paragraph [ref=f16e442]: Recorded video assets
+            - generic [ref=f16e443]:
+              - generic [ref=f16e444]: Study Materials
+              - paragraph [ref=f16e450]: "0"
+              - paragraph [ref=f16e451]: Notes, PYQs & solutions
+            - generic [ref=f16e452]:
+              - generic [ref=f16e453]: Live Classes
+              - paragraph [ref=f16e462]: "0"
+              - paragraph [ref=f16e463]: Published schedules
+            - generic [ref=f16e464]:
+              - generic [ref=f16e465]: Pending Reviews
+              - paragraph [ref=f16e472]: "0"
+              - paragraph [ref=f16e473]: Awaiting decision
+            - generic [ref=f16e474]:
+              - generic [ref=f16e475]: Published Items
+              - paragraph [ref=f16e481]: "0"
+              - paragraph [ref=f16e482]: Live on student portal
+            - generic [ref=f16e483]:
+              - generic [ref=f16e484]: Draft Items
+              - paragraph [ref=f16e491]: "0"
+              - paragraph [ref=f16e492]: Unpublished submissions
+        - generic [ref=f16e493]:
+          - heading "CMS Modules & Navigation" [level=2] [ref=f16e494]
+          - generic [ref=f16e495]:
+            - generic [ref=f16e496]:
+              - generic [ref=f16e497]: Content Catalog
+              - paragraph [ref=f16e503]: Hero banners, courses, batches, recorded video lectures, live classes, and study materials.
+              - generic [ref=f16e504]:
+                - link [ref=f16e505] [cursor=pointer]:
+                  - /url: /admin/cms/courses
+                  - button "Courses" [ref=f16e506]
+                - link [ref=f16e507] [cursor=pointer]:
+                  - /url: /admin/cms/batches
+                  - button "Batches" [ref=f16e508]
+                - link [ref=f16e509] [cursor=pointer]:
+                  - /url: /admin/cms/lectures
+                  - button "Lectures" [ref=f16e510]
+            - generic [ref=f16e511]:
+              - generic [ref=f16e512]: Academic Hierarchy
+              - paragraph [ref=f16e516]: "Taxonomy master records: educational boards, class levels, subject catalog, and syllabus chapters."
+              - generic [ref=f16e517]:
+                - link [ref=f16e518] [cursor=pointer]:
+                  - /url: /admin/cms/boards
+                  - button "Boards" [ref=f16e519]
+                - link [ref=f16e520] [cursor=pointer]:
+                  - /url: /admin/cms/classes
+                  - button "Classes" [ref=f16e521]
+                - link [ref=f16e522] [cursor=pointer]:
+                  - /url: /admin/cms/subjects
+                  - button "Subjects" [ref=f16e523]
+            - generic [ref=f16e524]:
+              - generic [ref=f16e525]: Student Engagement
+              - paragraph [ref=f16e530]: Portal hub announcements, exam alerts, news cards, and daily motivational quotes.
+              - generic [ref=f16e531]:
+                - link [ref=f16e532] [cursor=pointer]:
+                  - /url: /admin/cms/hub
+                  - button "Hub News" [ref=f16e533]
+                - link [ref=f16e534] [cursor=pointer]:
+                  - /url: /admin/cms/quotes
+                  - button "Quotes" [ref=f16e535]
+            - generic [ref=f16e536]:
+              - generic [ref=f16e537]: AI Chatbot Studio
+              - paragraph [ref=f16e542]: Bot identity, prompts starter bank, platform FAQs, and verified knowledge sources.
+              - generic [ref=f16e543]:
+                - link [ref=f16e544] [cursor=pointer]:
+                  - /url: /admin/cms/chatbot
+                  - button "Settings" [ref=f16e545]
+                - link [ref=f16e546] [cursor=pointer]:
+                  - /url: /admin/cms/chatbot/prompts
+                  - button "Prompts" [ref=f16e547]
+                - link [ref=f16e548] [cursor=pointer]:
+                  - /url: /admin/cms/chatbot/knowledge
+                  - button "Knowledge" [ref=f16e549]
+        - generic [ref=f16e550]:
+          - generic [ref=f16e551]:
+            - heading "Recent CMS Activity & Submissions" [level=2] [ref=f16e552]
+            - link "View All Reviews →" [ref=f16e553] [cursor=pointer]:
+              - /url: /admin/cms/reviews
+          - generic [ref=f16e555]:
+            - paragraph [ref=f16e559]: No recent activity recorded
+            - paragraph [ref=f16e560]: As educators and administrators create, submit, and publish content, real-time activity entries will appear here.

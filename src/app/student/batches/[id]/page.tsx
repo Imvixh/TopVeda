@@ -26,14 +26,36 @@ import {
   Radio,
   ClipboardCheck,
   ChevronRight,
+  Lock,
+  Calculator,
+  FlaskConical,
+  Atom,
+  Award,
 } from "lucide-react";
 import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
+
+function getSubjectIconComponent(name?: string) {
+  const n = (name || "").toLowerCase();
+  if (n.includes("math")) return Calculator;
+  if (n.includes("sci") || n.includes("phy") || n.includes("chem") || n.includes("bio")) return FlaskConical;
+  if (n.includes("eng") || n.includes("lang")) return BookOpen;
+  return Atom;
+}
 
 interface TeacherProfile {
   id: string;
   fullName: string;
   avatarUrl: string | null;
   qualification?: string | null;
+}
+
+interface SubjectDetail {
+  id: string;
+  name: string;
+  code?: string;
+  teacherName?: string;
+  teacherAvatar?: string | null;
+  teacherQualification?: string | null;
 }
 
 interface BatchDetailData {
@@ -49,6 +71,7 @@ interface BatchDetailData {
   course_id?: string;
   is_enrolled: boolean;
   teachers: TeacherProfile[];
+  subjects: SubjectDetail[];
   lectures: Array<{
     id: string;
     title: string;
@@ -66,6 +89,15 @@ interface BatchDetailData {
     title: string;
     material_type: string;
     file_format: string;
+  }>;
+  tests: Array<{
+    id: string;
+    title: string;
+    test_type: string;
+    total_marks: number;
+    duration_minutes: number;
+    total_questions: number;
+    subject_name?: string;
   }>;
 }
 
@@ -87,7 +119,7 @@ export default function BatchDetailPage() {
     try {
       setIsLoading(true);
 
-      // 1. Fetch Batch with relational board, subject, and batch_teachers
+      // 1. Fetch Batch with relational board, subjects, and batch_teachers
       const { data: batchData, error: batchError } = await supabase
         .from("cms_batches")
         .select(`
@@ -104,6 +136,12 @@ export default function BatchDetailPage() {
           course_id,
           batch_teachers:cms_batch_teachers(
             display_order,
+            teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
+          ),
+          batch_subjects:cms_batch_subjects(
+            display_order,
+            subject_id,
+            subject:cms_subjects(id, name, code),
             teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
           ),
           board:cms_boards(name, code),
@@ -163,6 +201,15 @@ export default function BatchDetailPage() {
         .eq("status", "PUBLISHED")
         .eq("is_visible", true);
 
+      // 6. Fetch Batch Tests
+      const { data: testsData } = await supabase
+        .from("student_tests")
+        .select("id, title, test_type, total_marks, duration_minutes, total_questions, subject_name")
+        .eq("batch_id", batchId)
+        .eq("status", "PUBLISHED")
+        .eq("is_visible", true)
+        .order("display_order", { ascending: true });
+
       // Map relational teachers
       const rawTeachers = (batchData.batch_teachers || []) as unknown as Array<{
         display_order?: number;
@@ -195,6 +242,42 @@ export default function BatchDetailPage() {
         });
       }
 
+      // Map relational subjects
+      const rawSubjects = (batchData.batch_subjects || []) as unknown as Array<{
+        display_order?: number;
+        subject_id?: string;
+        subject?: { id: string; name: string; code?: string } | Array<{ id: string; name: string; code?: string }>;
+        teacher?: { id: string; full_name: string; avatar_url: string | null; qualification?: string | null } | Array<{ id: string; full_name: string; avatar_url: string | null; qualification?: string | null }>;
+      }>;
+
+      const mappedSubjects: SubjectDetail[] = rawSubjects
+        .map((bs) => {
+          const sub = Array.isArray(bs.subject) ? bs.subject[0] : bs.subject;
+          const t = Array.isArray(bs.teacher) ? bs.teacher[0] : bs.teacher;
+          return {
+            id: sub?.id || bs.subject_id || "",
+            name: sub?.name || "Subject",
+            code: sub?.code,
+            teacherName: t?.full_name,
+            teacherAvatar: t?.avatar_url,
+            teacherQualification: t?.qualification,
+          };
+        })
+        .filter((s) => Boolean(s.id));
+
+      // Fallback to legacy single subject if no batch_subjects exist
+      if (mappedSubjects.length === 0) {
+        const singleSub = Array.isArray(batchData.subject) ? batchData.subject[0] : (batchData.subject as { name?: string; code?: string } | null);
+        if (singleSub?.name) {
+          mappedSubjects.push({
+            id: "default",
+            name: singleSub.name,
+            code: singleSub.code,
+            teacherName: batchData.educator_name || undefined,
+          });
+        }
+      }
+
       const boardObj = Array.isArray(batchData.board) ? batchData.board[0] : (batchData.board as { name?: string; code?: string } | null);
       const resolvedBoardLabel = boardObj?.name || batchData.board_label;
 
@@ -211,6 +294,7 @@ export default function BatchDetailPage() {
         course_id: batchData.course_id,
         is_enrolled: isEnrolled,
         teachers: mappedTeachers,
+        subjects: mappedSubjects,
         lectures: (lecturesData || []).map((l) => ({
           id: l.id,
           title: l.title,
@@ -228,6 +312,15 @@ export default function BatchDetailPage() {
           title: m.title,
           material_type: m.material_type || "Notes",
           file_format: m.file_format || "PDF",
+        })),
+        tests: (testsData || []).map((t) => ({
+          id: t.id,
+          title: t.title,
+          test_type: t.test_type,
+          total_marks: t.total_marks || 0,
+          duration_minutes: t.duration_minutes || 0,
+          total_questions: t.total_questions || 0,
+          subject_name: t.subject_name,
         })),
       });
     } catch (err) {
@@ -400,6 +493,50 @@ export default function BatchDetailPage() {
                   </p>
                 )}
 
+                {/* SUBJECTS COVERED IN THIS BATCH (Dynamic multi-subject architecture) */}
+                {batch.subjects.length > 0 && (
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-brand-orange" />
+                        Subjects Covered ({batch.subjects.length})
+                      </span>
+                      <span className="text-[11px] font-bold text-brand-orange uppercase">Full Curriculum Scope</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {batch.subjects.map((sub) => {
+                        const Icon = getSubjectIconComponent(sub.name);
+                        return (
+                          <div
+                            key={sub.id}
+                            className="p-4 rounded-2xl bg-orange-50/40 border border-orange-200/70 shadow-2xs flex items-center gap-3.5"
+                          >
+                            <div className="w-11 h-11 rounded-xl bg-orange-100/80 border border-orange-200 flex items-center justify-center text-brand-orange shrink-0">
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <h4 className="text-xs sm:text-sm font-black text-brand-charcoal truncate">
+                                  {sub.name}
+                                </h4>
+                                {sub.code && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-white border border-orange-200 text-[10px] font-bold text-brand-orange uppercase">
+                                    {sub.code}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-brand-text-muted truncate mt-0.5">
+                                {sub.teacherName ? `Faculty: ${sub.teacherName}` : "TopVeda Faculty"}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Faculty Profiles Grid (Rectangular cards with photo, name below photo, qualification) */}
                 <div className="pt-4 border-t border-gray-100 space-y-3">
                   <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center gap-2">
@@ -482,6 +619,54 @@ export default function BatchDetailPage() {
                 </div>
               </div>
 
+              {/* Real Database Batch Live Classes */}
+              {batch.liveClasses.length > 0 && (
+                <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center gap-2">
+                      <Radio className="h-4 w-4 text-brand-orange animate-pulse" />
+                      Live Interactive Classes ({batch.liveClasses.length})
+                    </h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {batch.liveClasses.map((lc) => (
+                      <div
+                        key={lc.id}
+                        className="p-3.5 rounded-2xl bg-brand-bg-warm/40 border border-brand-border/60 flex items-center justify-between gap-3 hover:bg-brand-bg-warm/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Radio className="h-4 w-4 text-brand-orange shrink-0" />
+                          <div>
+                            <h4 className="text-xs font-bold text-brand-charcoal truncate">{lc.topic}</h4>
+                            <p className="text-[11px] text-brand-text-muted">{lc.time_display}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          {batch.is_enrolled ? (
+                            <Link
+                              href={`/student/live/${lc.id}`}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-brand-orange text-white hover:bg-brand-orange-hover transition-colors shadow-2xs"
+                            >
+                              Join Live
+                            </Link>
+                          ) : (
+                            <button
+                              onClick={handleEnroll}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors"
+                            >
+                              <Lock className="h-3.5 w-3.5 text-amber-700" />
+                              <span>Enroll to Join</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Real Database Batch Lectures */}
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
@@ -511,12 +696,22 @@ export default function BatchDetailPage() {
                             <Clock className="h-3 w-3" />
                             {lec.duration_formatted}
                           </span>
-                          <Link
-                            href={`/student/lectures/${lec.id}`}
-                            className="px-3 py-1 rounded-xl text-xs font-bold bg-brand-orange text-white hover:bg-brand-orange-hover transition-colors shadow-2xs"
-                          >
-                            Watch
-                          </Link>
+                          {batch.is_enrolled ? (
+                            <Link
+                              href={`/student/lectures/${lec.id}`}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-brand-orange text-white hover:bg-brand-orange-hover transition-colors shadow-2xs"
+                            >
+                              Watch
+                            </Link>
+                          ) : (
+                            <button
+                              onClick={handleEnroll}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors"
+                            >
+                              <Lock className="h-3.5 w-3.5 text-amber-700" />
+                              <span>Enroll to Watch</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -530,6 +725,59 @@ export default function BatchDetailPage() {
                 )}
               </div>
 
+              {/* Real Database Batch Tests & Quizzes */}
+              {batch.tests.length > 0 && (
+                <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center gap-2">
+                      <ClipboardCheck className="h-4 w-4 text-purple-600" />
+                      Tests &amp; Practice Assessments ({batch.tests.length})
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {batch.tests.map((test) => (
+                      <div
+                        key={test.id}
+                        className="p-4 rounded-2xl bg-purple-50/40 border border-purple-100 flex items-center justify-between gap-3 hover:bg-purple-50 transition-colors"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <h4 className="text-xs font-bold text-brand-charcoal truncate">{test.title}</h4>
+                          <div className="flex items-center gap-2 text-[10px] text-purple-700 font-semibold">
+                            <span>{test.total_questions} Questions</span>
+                            <span>•</span>
+                            <span>{test.total_marks} Marks</span>
+                            {test.duration_minutes > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>{test.duration_minutes}m</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {batch.is_enrolled ? (
+                          <Link
+                            href="/student/tests"
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors shadow-2xs shrink-0"
+                          >
+                            Take Test
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={handleEnroll}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors shrink-0"
+                          >
+                            <Lock className="h-3 w-3 text-amber-700" />
+                            <span>Locked</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Real Database Batch Study Materials */}
               {batch.studyMaterials.length > 0 && (
                 <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
@@ -540,9 +788,8 @@ export default function BatchDetailPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {batch.studyMaterials.map((mat) => (
-                      <Link
+                      <div
                         key={mat.id}
-                        href="/student/study-material"
                         className="p-3.5 rounded-2xl bg-emerald-50/40 border border-emerald-100 flex items-center justify-between gap-2 hover:bg-emerald-50 transition-colors"
                       >
                         <div className="min-w-0">
@@ -551,8 +798,24 @@ export default function BatchDetailPage() {
                             {mat.material_type} · {mat.file_format}
                           </span>
                         </div>
-                        <span className="text-xs font-bold text-brand-orange shrink-0">View →</span>
-                      </Link>
+
+                        {batch.is_enrolled ? (
+                          <Link
+                            href="/student/study-material"
+                            className="text-xs font-bold text-brand-orange hover:underline shrink-0"
+                          >
+                            View →
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={handleEnroll}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors shrink-0"
+                          >
+                            <Lock className="h-3 w-3 text-amber-700" />
+                            <span>Locked</span>
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>

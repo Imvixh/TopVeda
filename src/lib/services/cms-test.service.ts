@@ -4,6 +4,12 @@ export interface AcademicTaxonomy {
   boards: { id: string; name: string; code: string }[];
   classes: { id: string; name: string; code: string }[];
   subjects: { id: string; name: string; code: string }[];
+  batches: {
+    id: string;
+    title: string;
+    board_label?: string;
+    batch_subjects?: Array<{ subject_id: string; subject?: { id: string; name: string; code?: string } }>;
+  }[];
   courses: {
     id: string;
     title: string;
@@ -34,6 +40,8 @@ export interface AdminTestListItem {
   createdAt: string;
   updatedAt: string;
   // Academic Targeting
+  batchId?: string;
+  batchTitle?: string;
   subjectId?: string;
   subjectName: string;
   courseId?: string;
@@ -94,6 +102,7 @@ export interface AdminTestUpsertPayload {
   accessTier?: string;
   displayOrder?: number;
   // Academic targeting
+  batchId?: string;
   subjectId?: string;
   subjectName?: string;
   courseId?: string;
@@ -111,7 +120,7 @@ export interface JsonImportValidationResult {
 
 export class CmsTestService {
   /**
-   * Fetches the complete academic taxonomy (Boards, Classes, Subjects, Courses, Chapters)
+   * Fetches the complete academic taxonomy (Boards, Classes, Subjects, Batches, Courses, Chapters)
    */
   public static async getAcademicTaxonomy(supabase: SupabaseClient): Promise<AcademicTaxonomy> {
     try {
@@ -119,12 +128,22 @@ export class CmsTestService {
         { data: boards },
         { data: classes },
         { data: subjects },
+        { data: batches },
         { data: courses },
         { data: chapters },
       ] = await Promise.all([
         supabase.from("cms_boards").select("id, name, code").order("display_order", { ascending: true }),
         supabase.from("cms_class_levels").select("id, name, code").order("display_order", { ascending: true }),
         supabase.from("cms_subjects").select("id, name, code").order("display_order", { ascending: true }),
+        supabase.from("cms_batches").select(`
+          id,
+          title,
+          board_label,
+          batch_subjects:cms_batch_subjects(
+            subject_id,
+            subject:cms_subjects(id, name, code)
+          )
+        `).eq("status", "PUBLISHED").order("created_at", { ascending: false }),
         supabase.from("cms_courses").select(`
           id,
           title,
@@ -167,6 +186,7 @@ export class CmsTestService {
         boards: boards || [],
         classes: classes || [],
         subjects: subjects || [],
+        batches: (batches || []) as unknown as AcademicTaxonomy["batches"],
         courses: formattedCourses,
         chapters: chapters || [],
       };
@@ -176,6 +196,7 @@ export class CmsTestService {
         boards: [],
         classes: [],
         subjects: [],
+        batches: [],
         courses: [],
         chapters: [],
       };
@@ -194,10 +215,11 @@ export class CmsTestService {
       boardId?: string;
       classId?: string;
       subjectId?: string;
+      batchId?: string;
     }
   ): Promise<{ tests: AdminTestListItem[]; stats: AdminTestStats }> {
     try {
-      // 1. Query tests with course and chapter joins
+      // 1. Query tests with batch, course and chapter joins
       let query = supabase
         .from("student_tests")
         .select(`
@@ -205,6 +227,7 @@ export class CmsTestService {
           title,
           slug,
           description,
+          batch_id,
           subject_id,
           subject_name,
           course_id,
@@ -220,6 +243,7 @@ export class CmsTestService {
           display_order,
           created_at,
           updated_at,
+          batch:cms_batches ( id, title, board_label ),
           cms_courses (
             id,
             board_id,
@@ -238,6 +262,10 @@ export class CmsTestService {
 
       if (filters?.status && filters.status !== "ALL") {
         query = query.eq("status", filters.status);
+      }
+
+      if (filters?.batchId && filters.batchId !== "ALL") {
+        query = query.eq("batch_id", filters.batchId);
       }
 
       if (filters?.testType && filters.testType !== "ALL") {
@@ -319,6 +347,8 @@ export class CmsTestService {
         display_order: number;
         created_at: string;
         updated_at: string;
+        batch_id?: string | null;
+        batch?: { id: string; title: string; board_label?: string } | null;
         subject_id?: string | null;
         subject_name?: string | null;
         course_id?: string | null;
@@ -367,6 +397,8 @@ export class CmsTestService {
           displayOrder: t.display_order,
           createdAt: t.created_at,
           updatedAt: t.updated_at,
+          batchId: t.batch_id || undefined,
+          batchTitle: t.batch?.title || undefined,
           subjectId: t.subject_id || undefined,
           subjectName: t.subject_name || course?.cms_subjects?.name || "General",
           courseId: t.course_id || undefined,
@@ -462,6 +494,7 @@ export class CmsTestService {
           title,
           slug,
           description,
+          batch_id,
           subject_id,
           subject_name,
           course_id,
@@ -578,6 +611,7 @@ export class CmsTestService {
         passingMarks: testRow.passing_marks,
         accessTier: testRow.access_tier,
         displayOrder: testRow.display_order,
+        batchId: testRow.batch_id || undefined,
         subjectId: testRow.subject_id || undefined,
         subjectName: testRow.subject_name,
         courseId: testRow.course_id || undefined,
@@ -651,6 +685,7 @@ export class CmsTestService {
         title: payload.title.trim(),
         slug,
         description: payload.description || null,
+        batch_id: payload.batchId || null,
         subject_id: payload.subjectId || null,
         subject_name: payload.subjectName || "General",
         course_id: payload.courseId || null,

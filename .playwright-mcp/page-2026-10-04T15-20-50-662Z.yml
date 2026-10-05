@@ -1,0 +1,11 @@
+- generic [active] [ref=f4e1]:
+  - paragraph [ref=f4e6]: Verifying Admin Authorization...
+  - generic [ref=f4e11] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=f4e12]
+    - generic [ref=f4e16]:
+      - button "Open issues overlay" [ref=f4e17]:
+        - generic [ref=f4e18]:
+          - generic [aria-hidden] [ref=f4e19]: "-1"
+          - generic [ref=f4e20]: "0"
+      - button "Collapse issues badge" [ref=f4e21]
+  - alert [ref=f4e24]

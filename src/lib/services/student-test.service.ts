@@ -68,6 +68,7 @@ export class StudentTestService {
           title,
           slug,
           description,
+          batch_id,
           subject_id,
           subject_name,
           course_id,
@@ -131,6 +132,10 @@ export class StudentTestService {
               }
               // Previously attempted test by this student is always included
               if (attemptedTestIds.has(t.id)) {
+                return true;
+              }
+              // Directly linked batch match
+              if (t.batch_id && scope.enrolledBatchIds.has(t.batch_id)) {
                 return true;
               }
               // Directly linked course match

@@ -589,7 +589,7 @@ export default function MyLearningPage() {
                       <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
                         {rec.accessTier === "FREE" ? (
                           <button
-                            onClick={() => handleEnrollItem({ courseId: rec.courseId, batchId: rec.batchId })}
+                            onClick={() => handleEnrollItem({ courseId: rec.courseId || undefined, batchId: rec.batchId || undefined })}
                             disabled={isEnrolling}
                             className={cn(
                               "inline-flex items-center justify-center px-5 py-2 rounded-full border border-orange-200 hover:border-brand-orange bg-white hover:bg-orange-50 text-brand-orange text-xs font-bold shadow-2xs transition-all active:scale-[0.98] cursor-pointer",

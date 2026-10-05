@@ -1066,13 +1066,19 @@ export class CmsService {
 
   static async getStudyMaterials(
     supabase: SupabaseClient,
-    filters?: { courseId?: string; chapterId?: string; status?: string }
+    filters?: { batchId?: string; subjectId?: string; courseId?: string; chapterId?: string; status?: string }
   ): Promise<CmsStudyMaterial[]> {
-    let query = supabase.from("cms_study_materials").select("*");
+    let query = supabase.from("cms_study_materials").select(`
+      *,
+      batch:cms_batches(id, title, board_label),
+      subject:cms_subjects(id, name, code)
+    `);
 
-    if (filters?.courseId) query = query.eq("course_id", filters.courseId);
-    if (filters?.chapterId) query = query.eq("chapter_id", filters.chapterId);
-    if (filters?.status) query = query.eq("status", filters.status);
+    if (filters?.batchId && filters.batchId !== "ALL") query = query.eq("batch_id", filters.batchId);
+    if (filters?.subjectId && filters.subjectId !== "ALL") query = query.eq("subject_id", filters.subjectId);
+    if (filters?.courseId && filters.courseId !== "ALL") query = query.eq("course_id", filters.courseId);
+    if (filters?.chapterId && filters.chapterId !== "ALL") query = query.eq("chapter_id", filters.chapterId);
+    if (filters?.status && filters.status !== "ALL") query = query.eq("status", filters.status);
 
     const { data } = await query.order("display_order", { ascending: true });
     return (data as CmsStudyMaterial[]) || [];

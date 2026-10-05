@@ -1,0 +1,385 @@
+- generic [active] [ref=f14e1]:
+  - generic [ref=f14e2]:
+    - banner [ref=f14e3]:
+      - generic [ref=f14e5]:
+        - link "TopVeda Homepage" [ref=f14e6] [cursor=pointer]:
+          - /url: /
+          - img "TopVeda" [ref=f14e8]
+        - button "Toggle navigation menu" [ref=f14e10]
+    - main [ref=f14e12]:
+      - generic [ref=f14e15]:
+        - generic [ref=f14e16]:
+          - generic [ref=f14e17]: Next-Gen Education Platform
+          - heading "Learn Smarter. Prepare Better. Achieve More." [level=1] [ref=f14e22]
+          - paragraph [ref=f14e23]: A modern, student-first learning ecosystem combining live interactive classes, comprehensive test series, curated notes, and 24×7 doubt resolution.
+          - generic [ref=f14e24]:
+            - button "Start Learning" [ref=f14e25]
+            - link [ref=f14e28] [cursor=pointer]:
+              - /url: "#courses"
+              - button "Explore Courses" [ref=f14e29]
+          - generic [ref=f14e30]:
+            - generic [ref=f14e31]: Structured Curriculum
+            - generic [ref=f14e36]: Interactive Doubt Support
+            - generic [ref=f14e41]: Adaptive Practice Tests
+        - generic [ref=f14e47]:
+          - generic [ref=f14e48]:
+            - img "TopVeda Student Learning Journey — Happy student holding books with science and math concepts" [ref=f14e51]
+            - button "Previous slide" [ref=f14e52]
+            - button "Next slide" [ref=f14e55]
+            - generic [ref=f14e58]:
+              - button "Go to slide 1" [ref=f14e59]
+              - button "Go to slide 2" [ref=f14e60]
+              - button "Go to slide 3" [ref=f14e61]
+              - button "Go to slide 4" [ref=f14e62]
+          - generic [ref=f14e63]: Interactive Cohorts Active
+      - generic [ref=f14e68]:
+        - generic [ref=f14e70] [cursor=pointer]:
+          - heading "Daily Live Interactive Classes" [level=3] [ref=f14e75]
+          - paragraph [ref=f14e76]: Engage directly with experienced educators through structured, real-time interactive lectures designed for concept clarity.
+        - generic [ref=f14e78] [cursor=pointer]:
+          - heading "100+ Tests, Sample Papers & Notes" [level=3] [ref=f14e83]
+          - paragraph [ref=f14e84]: Access chapter-wise tests, full-length sample papers, formula sheets, and downloadable study material aligned with your syllabus.
+        - generic [ref=f14e86] [cursor=pointer]:
+          - heading "24×7 Doubt Solving Sessions" [level=3] [ref=f14e91]
+          - paragraph [ref=f14e92]: Never get stuck on difficult questions with round-the-clock doubt assistance and detailed step-by-step solutions.
+      - generic [ref=f14e94]:
+        - generic [ref=f14e95]:
+          - generic [ref=f14e96]: Customized Pathways
+          - heading "What Are You Looking For?" [level=2] [ref=f14e97]
+          - paragraph [ref=f14e98]: Choose your learning or teaching journey with TopVeda.
+        - generic [ref=f14e99]:
+          - generic [ref=f14e100] [cursor=pointer]:
+            - generic [ref=f14e101]:
+              - generic [ref=f14e102]: For Students
+              - heading "Want to Learn?" [level=3] [ref=f14e108]
+              - paragraph [ref=f14e109]: Access structured board courses, daily live sessions, comprehensive practice tests, and downloadable notes curated for top performance.
+            - paragraph [ref=f14e111]: • Live interactive classes • NCERT syllabus • Test series • Doubt resolution
+            - button "Start Learning" [ref=f14e113]
+          - generic [ref=f14e116] [cursor=pointer]:
+            - generic [ref=f14e117]:
+              - generic [ref=f14e118]: For Educators
+              - heading "Want to Teach?" [level=3] [ref=f14e124]
+              - paragraph [ref=f14e125]: Join the upcoming TopVeda educator network. Share your pedagogical expertise with thousands of eager learners across the nation.
+            - paragraph [ref=f14e127]: • Educator onboarding • Curriculum collaboration • Digital teaching tools
+            - button "Teach with TopVeda" [ref=f14e129]
+      - generic [ref=f14e133]:
+        - generic [ref=f14e134]:
+          - generic [ref=f14e135]: Targeted Academic Preparation
+          - heading "Curriculum & Exam Categories" [level=2] [ref=f14e136]
+          - paragraph [ref=f14e137]: Specialized learning tracks designed around official board patterns and exam guidelines.
+        - generic [ref=f14e138]:
+          - generic [ref=f14e139]:
+            - generic [ref=f14e140]:
+              - generic [ref=f14e141]:
+                - generic [ref=f14e142]:
+                  - generic [ref=f14e143]: CBSE
+                  - generic [ref=f14e144]:
+                    - heading "Central Board of Secondary Education" [level=3] [ref=f14e145]
+                    - paragraph [ref=f14e146]: National Curriculum Standard
+                - generic [ref=f14e147]: CBSE
+              - paragraph [ref=f14e148]: Comprehensive coverage of NCERT curriculum with concept drills, exemplar questions, sample papers, and board exam strategies.
+            - generic [ref=f14e149]:
+              - paragraph [ref=f14e150]: Key Program Highlights
+              - list [ref=f14e155]:
+                - listitem [ref=f14e156]:
+                  - generic [ref=f14e160]: Complete NCERT In-Depth Coverage
+                - listitem [ref=f14e161]:
+                  - generic [ref=f14e165]: Competency-Based Questions Practice
+                - listitem [ref=f14e166]:
+                  - generic [ref=f14e170]: Chapter-wise Sample Papers & Solutions
+          - generic [ref=f14e171]:
+            - generic [ref=f14e172]:
+              - generic [ref=f14e173]:
+                - generic [ref=f14e174]:
+                  - generic [ref=f14e175]: BSEB
+                  - generic [ref=f14e176]:
+                    - heading "Bihar School Examination Board" [level=3] [ref=f14e177]
+                    - paragraph [ref=f14e178]: State Board Excellence
+                - generic [ref=f14e179]: BSEB
+              - paragraph [ref=f14e180]: Targeted preparation tailored for BSEB students with bilingual Hindi & English explanations, objective question mastery, and model papers.
+            - generic [ref=f14e181]:
+              - paragraph [ref=f14e182]: Key Program Highlights
+              - list [ref=f14e187]:
+                - listitem [ref=f14e188]:
+                  - generic [ref=f14e192]: Bilingual Hindi & English Explanations
+                - listitem [ref=f14e193]:
+                  - generic [ref=f14e197]: 50% Objective Pattern Special Drills
+                - listitem [ref=f14e198]:
+                  - generic [ref=f14e202]: Official BSEB Model Paper Walkthroughs
+      - generic [ref=f14e204]:
+        - generic [ref=f14e205]:
+          - generic [ref=f14e206]: Core Advantages
+          - heading "Why Choose TopVeda?" [level=2] [ref=f14e207]
+          - paragraph [ref=f14e208]: Engineered from the ground up to give every learner structured guidance, consistent practice, and instant doubt clarity.
+        - generic [ref=f14e209]:
+          - article "Daily Live Interactive Classes" [ref=f14e210] [cursor=pointer]:
+            - generic [ref=f14e211]:
+              - generic [ref=f14e212]: Feature Preview ↑
+              - heading "Daily Live Interactive Classes" [level=3] [ref=f14e218]
+              - paragraph [ref=f14e219]: Experience classroom-like engagement with structured daily live lectures and instant teacher interaction.
+          - article "Tests & Adaptive Practice" [ref=f14e220] [cursor=pointer]:
+            - generic [ref=f14e221]:
+              - generic [ref=f14e222]: Feature Preview ↑
+              - heading "Tests & Adaptive Practice" [level=3] [ref=f14e228]
+              - paragraph [ref=f14e229]: Evaluate preparation with timed quizzes, chapter-end evaluations, and full-length exam simulations.
+          - article "Notes & Learning Resources" [ref=f14e230] [cursor=pointer]:
+            - generic [ref=f14e231]:
+              - generic [ref=f14e232]: Feature Preview ↑
+              - heading "Notes & Learning Resources" [level=3] [ref=f14e237]
+              - paragraph [ref=f14e238]: Download concise chapter notes, formula sheets, NCERT solutions, and curated question banks anytime.
+          - article "24×7 Doubt Solving" [ref=f14e239] [cursor=pointer]:
+            - generic [ref=f14e240]:
+              - generic [ref=f14e241]: Feature Preview ↑
+              - heading "24×7 Doubt Solving" [level=3] [ref=f14e246]
+              - paragraph [ref=f14e247]: Submit questions anytime and receive clear, step-by-step guidance from subject matter mentors.
+          - article "Detailed Progress Tracking" [ref=f14e248] [cursor=pointer]:
+            - generic [ref=f14e249]:
+              - generic [ref=f14e250]: Feature Preview ↑
+              - heading "Detailed Progress Tracking" [level=3] [ref=f14e256]
+              - paragraph [ref=f14e257]: Monitor your learning trajectory, syllabus completion percentage, test strengths, and focus areas.
+          - article "Online + Offline Synergy" [ref=f14e258] [cursor=pointer]:
+            - generic [ref=f14e259]:
+              - generic [ref=f14e260]: Feature Preview ↑
+              - heading "Online + Offline Synergy" [level=3] [ref=f14e267]
+              - paragraph [ref=f14e268]: Flexible digital learning designed to seamlessly complement school schedules and self-study routines.
+      - generic [ref=f14e270]:
+        - generic [ref=f14e271]:
+          - generic [ref=f14e272]: Progressive Pathway
+          - heading "How TopVeda Works" [level=2] [ref=f14e273]
+          - paragraph [ref=f14e274]: A structured, 4-step organic pathway turning regular study into measurable academic confidence.
+        - generic [ref=f14e276]:
+          - generic [ref=f14e278] [cursor=pointer]:
+            - generic [ref=f14e279]: "01"
+            - heading "Choose Your Path" [level=3] [ref=f14e289]
+            - paragraph [ref=f14e290]: Select your board, class, and target subjects to get a personalized study syllabus tailored to your exams.
+          - generic [ref=f14e295] [cursor=pointer]:
+            - generic [ref=f14e296]: "02"
+            - heading "Learn with Daily Live Classes" [level=3] [ref=f14e305]
+            - paragraph [ref=f14e306]: Attend interactive daily lectures, follow structured lesson schedules, and review recorded sessions whenever needed.
+          - generic [ref=f14e311] [cursor=pointer]:
+            - generic [ref=f14e312]: "03"
+            - heading "Practice with Tests & Notes" [level=3] [ref=f14e321]
+            - paragraph [ref=f14e322]: Reinforce understanding through chapter quizzes, downloadable study sheets, and curated question banks.
+          - generic [ref=f14e327] [cursor=pointer]:
+            - generic [ref=f14e328]: "04"
+            - heading "Improve & Excel" [level=3] [ref=f14e338]
+            - paragraph [ref=f14e339]: Identify weak areas through insightful analytics, resolve doubts 24×7, and build exam confidence.
+      - generic [ref=f14e341]:
+        - generic [ref=f14e342]:
+          - generic [ref=f14e343]: Student Dashboard Preview
+          - heading "An Intuitive, Focus-Driven Learning Space" [level=2] [ref=f14e344]
+          - paragraph [ref=f14e345]: Everything a student needs in one place — live interactive sessions, personalized analytics, and instant mentor assistance.
+        - generic [ref=f14e347]:
+          - generic [ref=f14e348]:
+            - generic [ref=f14e349]:
+              - generic [ref=f14e350]:
+                - generic [ref=f14e351]: UPCOMING LIVE CLASS
+                - generic [ref=f14e356]: Today, 5:00 PM
+              - generic [ref=f14e357]:
+                - 'heading "Class 10 Science: Chemical Reactions & Equations" [level=3] [ref=f14e358]'
+                - paragraph [ref=f14e359]: Live discussion on balancing equations, precipitation, and redox mechanisms.
+              - generic [ref=f14e360]:
+                - generic [ref=f14e361]: "Educator: Dr. R. Sharma"
+                - generic [ref=f14e362] [cursor=pointer]: Join Session
+            - generic [ref=f14e366]:
+              - generic [ref=f14e367]:
+                - generic [ref=f14e368]: Mathematics Course Progress
+                - generic [ref=f14e372]: 16 / 20 Chapters Done
+              - generic [ref=f14e376]:
+                - generic [ref=f14e377]: "Target: Board Exam Mastery"
+                - generic [ref=f14e378]: 80% Completed
+              - generic [ref=f14e379]:
+                - generic [ref=f14e380]: Real Numbers & Proofs
+                - generic [ref=f14e385]: Polynomials & Factorization
+          - generic [ref=f14e390]:
+            - generic [ref=f14e391]:
+              - generic [ref=f14e392]:
+                - generic [ref=f14e393]: 24×7 Doubt Ticket
+                - generic [ref=f14e398]: Answered
+              - generic [ref=f14e399]:
+                - paragraph [ref=f14e400]: "Q: How do we apply the tangent secant theorem in circle proofs?"
+                - paragraph [ref=f14e401]: "Mentor Answer: Apply the ratio of chord segments. Step-by-step diagram attached in the notes panel."
+            - generic [ref=f14e402]:
+              - generic [ref=f14e403]: Quick Revision Notes
+              - generic [ref=f14e408]:
+                - generic [ref=f14e409]:
+                  - generic [ref=f14e410]: "Class 10 Physics: Optics Formula Sheet"
+                  - generic [ref=f14e415]: PDF (1.2 MB)
+                - generic [ref=f14e416]:
+                  - generic [ref=f14e417]: Official BSEB / CBSE Sample Papers 2026
+                  - generic [ref=f14e422]: PDF (2.4 MB)
+      - generic [ref=f14e424]:
+        - generic [ref=f14e425]:
+          - generic [ref=f14e426]: Community & Trust
+          - heading "Student Success & Learning Community" [level=2] [ref=f14e427]
+          - paragraph [ref=f14e428]: Designed to empower students across CBSE and Bihar Board with transparent learning and dedicated academic mentorship.
+        - generic [ref=f14e430]:
+          - generic [ref=f14e436]:
+            - heading "Dedicated to Genuine Academic Excellence" [level=3] [ref=f14e437]
+            - paragraph [ref=f14e438]: TopVeda does not publish unverified or simulated reviews. As our enrolled cohorts complete their board assessments, verified student stories and outcomes will be shared here.
+          - generic [ref=f14e439]: Empowering Learners Nationwide
+      - generic [ref=f14e445]:
+        - generic [ref=f14e446]:
+          - generic [ref=f14e447]: Got Questions?
+          - heading "Frequently Asked Questions" [level=2] [ref=f14e448]
+          - paragraph [ref=f14e449]: Find answers to common questions regarding TopVeda courses, live classes, study materials, and doubt support.
+        - generic [ref=f14e450]:
+          - generic [ref=f14e451]:
+            - button "What is TopVeda?" [expanded] [ref=f14e452]
+            - generic [ref=f14e457]: TopVeda is a modern e-learning platform delivering structured educational courses, daily live interactive classes, comprehensive test series, downloadable study notes, and 24×7 doubt support designed to help students learn effectively and build confidence.
+          - button "Which educational boards and classes are currently supported?" [ref=f14e459]
+          - button "How do I start learning on TopVeda?" [ref=f14e465]
+          - button "Can I access downloadable notes and practice tests?" [ref=f14e471]
+          - button "How does the 24×7 doubt solving feature work?" [ref=f14e477]
+          - button "Will more classes and subjects be added in the future?" [ref=f14e483]
+      - generic [ref=f14e491]:
+        - generic [ref=f14e492]: Start Your Journey
+        - heading "Ready to Start Learning?" [level=2] [ref=f14e497]
+        - paragraph [ref=f14e498]: Join TopVeda today to access structured live classes, adaptive tests, and expert doubt support.
+        - generic [ref=f14e499]:
+          - button "Start Learning" [ref=f14e500]
+          - link [ref=f14e503] [cursor=pointer]:
+            - /url: "#courses"
+            - button "Explore Courses" [ref=f14e504]
+    - contentinfo [ref=f14e505]:
+      - generic [ref=f14e506]:
+        - generic [ref=f14e507]:
+          - generic [ref=f14e508]:
+            - img "TopVeda" [ref=f14e511]
+            - paragraph [ref=f14e512]: A modern, extensible education platform delivering live interactive classes, tests, and comprehensive learning resources for students.
+            - generic [ref=f14e513]:
+              - paragraph [ref=f14e514]: Connect With Us
+              - generic [ref=f14e515]:
+                - link "TopVeda on X" [disabled] [ref=f14e516] [cursor=pointer]:
+                  - /url: "#"
+                - link "TopVeda on YouTube" [disabled] [ref=f14e519] [cursor=pointer]:
+                  - /url: "#"
+                - link "TopVeda on Instagram" [disabled] [ref=f14e522] [cursor=pointer]:
+                  - /url: "#"
+                - link "TopVeda on Facebook" [disabled] [ref=f14e525] [cursor=pointer]:
+                  - /url: "#"
+          - generic [ref=f14e528]:
+            - heading "Platform" [level=3] [ref=f14e529]
+            - list [ref=f14e530]:
+              - listitem [ref=f14e531]:
+                - link "Courses" [ref=f14e532] [cursor=pointer]:
+                  - /url: "#courses"
+              - listitem [ref=f14e533]:
+                - link "Exam Categories" [ref=f14e534] [cursor=pointer]:
+                  - /url: "#exams"
+              - listitem [ref=f14e535]:
+                - link "Features" [ref=f14e536] [cursor=pointer]:
+                  - /url: "#features"
+              - listitem [ref=f14e537]:
+                - link "How It Works" [ref=f14e538] [cursor=pointer]:
+                  - /url: "#how-it-works"
+          - generic [ref=f14e539]:
+            - heading "Resources" [level=3] [ref=f14e540]
+            - list [ref=f14e541]:
+              - listitem [ref=f14e542]:
+                - link "Practice Tests" [ref=f14e543] [cursor=pointer]:
+                  - /url: "#features"
+              - listitem [ref=f14e544]:
+                - link "Chapter Notes" [ref=f14e545] [cursor=pointer]:
+                  - /url: "#features"
+              - listitem [ref=f14e546]:
+                - link "Doubt Support" [ref=f14e547] [cursor=pointer]:
+                  - /url: "#features"
+              - listitem [ref=f14e548]:
+                - link "FAQs" [ref=f14e549] [cursor=pointer]:
+                  - /url: "#faq"
+          - generic [ref=f14e550]:
+            - heading "Company" [level=3] [ref=f14e551]
+            - list [ref=f14e552]:
+              - listitem [ref=f14e553]:
+                - link "About TopVeda" [ref=f14e554] [cursor=pointer]:
+                  - /url: "#about"
+              - listitem [ref=f14e555]:
+                - link "Contact Us" [ref=f14e556] [cursor=pointer]:
+                  - /url: "#contact"
+              - listitem [ref=f14e557]:
+                - link "Teach with Us" [ref=f14e558] [cursor=pointer]:
+                  - /url: "#looking-for"
+        - generic [ref=f14e559]:
+          - generic [ref=f14e560]:
+            - heading "About TopVeda" [level=4] [ref=f14e561]
+            - paragraph [ref=f14e562]: TopVeda is an academic learning ecosystem created to deliver equal access to high-quality interactive education, concept drills, and rigorous exam preparation across diverse educational boards.
+          - generic [ref=f14e563]:
+            - heading "Contact & Support" [level=4] [ref=f14e564]
+            - paragraph [ref=f14e565]: Have inquiries regarding our upcoming batches or educator collaborations? Reach our support team.
+            - generic [ref=f14e566]:
+              - generic [ref=f14e567]: support@topveda.in
+              - generic [ref=f14e571]: +91 (Support Helpline)
+        - generic [ref=f14e574]:
+          - paragraph [ref=f14e575]: © 2026 TopVeda. All rights reserved.
+          - generic [ref=f14e576]:
+            - button "Terms & Conditions" [ref=f14e577]
+            - button "Privacy Policy" [ref=f14e578]
+            - button "Scroll to top" [ref=f14e579]
+    - dialog [ref=f14e591]:
+      - generic [ref=f14e593]:
+        - button "Close dialog" [ref=f14e594]
+        - generic [ref=f14e599]:
+          - generic [ref=f14e600]:
+            - img "TopVeda" [ref=f14e602]
+            - heading "Student Registration" [level=2] [ref=f14e701]
+            - paragraph [ref=f14e604]: Join thousands of students learning smarter
+          - generic [ref=f14e683]:
+            - button "Student Registration" [disabled] [ref=f14e684]
+            - button "Admin Registration" [disabled] [ref=f14e689]
+          - generic [ref=f14e615]:
+            - generic [ref=f14e702]:
+              - generic [ref=f14e703]:
+                - generic [ref=f14e704]: Full Name
+                - textbox "Full Name" [disabled] [ref=f14e706]:
+                  - /placeholder: e.g. Aarav Sharma
+                  - text: Test Student
+              - generic [ref=f14e707]:
+                - generic [ref=f14e708]: Gmail Address
+                - textbox "Gmail Address" [disabled] [ref=f14e710]:
+                  - /placeholder: yourname@gmail.com
+                  - text: validtopvedatest@gmail.com
+                - paragraph [ref=f14e711]: Must be @gmail.com
+            - generic [ref=f14e712]:
+              - generic [ref=f14e713]: Mobile Number (India) *
+              - generic [ref=f14e714]:
+                - generic [ref=f14e715]: "+91"
+                - textbox "9876543210 (10 digits)" [disabled] [ref=f14e716]: "9876543210"
+            - generic [ref=f14e717]:
+              - generic [ref=f14e718]:
+                - generic [ref=f14e719]:
+                  - generic [ref=f14e720]: Create Password
+                  - textbox "Create Password" [disabled] [ref=f14e722]:
+                    - /placeholder: Min 8 chars (Aa1@)
+                    - text: TestPass123!
+                - button "Hide password" [ref=f14e757]
+              - generic [ref=f14e727]:
+                - generic [ref=f14e728]:
+                  - generic [ref=f14e729]: Confirm Password
+                  - textbox "Confirm Password" [disabled] [ref=f14e731]:
+                    - /placeholder: Re-enter password
+                    - text: TestPass123!
+                - button "Show password" [ref=f14e732]
+            - generic [ref=f14e736]:
+              - paragraph [ref=f14e737]: "Password Requirements:"
+              - paragraph [ref=f14e738]: • At least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special symbol.
+            - generic [ref=f14e739] [cursor=pointer]:
+              - checkbox "I agree to the Terms & Conditions and Privacy Policy." [checked] [disabled] [ref=f14e740]
+              - generic [ref=f14e741]:
+                - text: I agree to the
+                - button "Terms & Conditions" [ref=f14e742]
+                - text: and Privacy Policy.
+            - button "Processing..." [disabled]
+          - paragraph [ref=f14e694]:
+            - text: Already have an account?
+            - button "Sign in" [disabled] [ref=f14e695]
+  - generic [ref=f14e586] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=f14e587]
+    - generic [ref=f14e623]:
+      - button "Open issues overlay" [ref=f14e624]:
+        - generic [ref=f14e625]:
+          - generic [aria-hidden] [ref=f14e626]: "0"
+          - generic [ref=f14e627]: "1"
+        - generic [ref=f14e628]: Issue
+      - button "Collapse issues badge" [ref=f14e629]
+  - alert [ref=f14e632]

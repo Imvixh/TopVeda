@@ -1,0 +1,134 @@
+- generic [ref=f16e167]:
+  - complementary [ref=f16e168]:
+    - generic [ref=f16e169]:
+      - link "TopVeda CMS" [ref=f16e170] [cursor=pointer]:
+        - /url: /admin/cms
+        - generic [ref=f16e173]:
+          - generic "TopVeda" [ref=f16e174]:
+            - generic [ref=f16e175]: TOP
+            - generic [ref=f16e176]: VEDA
+          - generic [ref=f16e177]: CMS
+      - button "Collapse Sidebar" [ref=f16e179]
+    - generic [ref=f16e182]:
+      - generic [ref=f16e183]:
+        - paragraph [ref=f16e184]: CONTENT
+        - navigation [ref=f16e185]:
+          - link "Dashboard" [ref=f16e186] [cursor=pointer]:
+            - /url: /admin/cms
+          - link "Hero Banners" [ref=f16e194] [cursor=pointer]:
+            - /url: /admin/cms/hero
+          - link "New & Featured Batches" [ref=f16e198] [cursor=pointer]:
+            - /url: /admin/cms/batches/upcoming
+          - link "Ongoing Batches" [ref=f16e203] [cursor=pointer]:
+            - /url: /admin/cms/batches/ongoing
+          - link "Live Classes" [ref=f16e209] [cursor=pointer]:
+            - /url: /admin/cms/live-classes
+          - link "Latest Lectures" [ref=f16e217] [cursor=pointer]:
+            - /url: /admin/cms/lectures
+          - link "Explore Courses" [ref=f16e222] [cursor=pointer]:
+            - /url: /admin/cms/courses
+          - link "Study Materials" [ref=f16e227] [cursor=pointer]:
+            - /url: /admin/cms/study-materials
+          - link "Test & Practice" [ref=f16e232] [cursor=pointer]:
+            - /url: /admin/cms/tests
+      - generic [ref=f16e238]:
+        - paragraph [ref=f16e239]: ACADEMIC
+        - navigation [ref=f16e240]:
+          - link "Boards" [ref=f16e241] [cursor=pointer]:
+            - /url: /admin/cms/boards
+          - link "Classes" [ref=f16e245] [cursor=pointer]:
+            - /url: /admin/cms/classes
+          - link "Subjects" [ref=f16e252] [cursor=pointer]:
+            - /url: /admin/cms/subjects
+          - link "Chapters" [ref=f16e256] [cursor=pointer]:
+            - /url: /admin/cms/chapters
+      - generic [ref=f16e261]:
+        - paragraph [ref=f16e262]: ENGAGEMENT
+        - navigation [ref=f16e263]:
+          - link "Hub / Announcements" [ref=f16e264] [cursor=pointer]:
+            - /url: /admin/cms/hub
+          - link "Daily Motivation" [ref=f16e269] [cursor=pointer]:
+            - /url: /admin/cms/quotes
+      - generic [ref=f16e274]:
+        - paragraph [ref=f16e275]: REVIEW
+        - navigation [ref=f16e276]:
+          - link "Pending Reviews" [ref=f16e277] [cursor=pointer]:
+            - /url: /admin/cms/reviews
+      - generic [ref=f16e283]:
+        - paragraph [ref=f16e284]: AI CHATBOT
+        - navigation [ref=f16e285]:
+          - link "Overview & Settings" [ref=f16e286] [cursor=pointer]:
+            - /url: /admin/cms/chatbot
+          - link "Prompts" [ref=f16e291] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/prompts
+          - link "FAQs" [ref=f16e295] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/faqs
+          - link "Knowledge Sources" [ref=f16e300] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/knowledge
+      - generic [ref=f16e306]:
+        - paragraph [ref=f16e307]: INTEGRATIONS
+        - navigation [ref=f16e308]:
+          - link "YouTube Integration Phase 6A" [ref=f16e309] [cursor=pointer]:
+            - /url: /admin/cms/integrations/youtube
+            - generic [ref=f16e312]: YouTube Integration
+            - generic [ref=f16e313]: Phase 6A
+      - generic [ref=f16e314]:
+        - paragraph [ref=f16e315]: ADMINISTRATION
+        - navigation [ref=f16e316]:
+          - link "Admin Applications" [ref=f16e317] [cursor=pointer]:
+            - /url: /admin/applications
+          - link "Profile & Settings" [ref=f16e323] [cursor=pointer]:
+            - /url: /admin/cms/profile
+    - generic [ref=f16e328]:
+      - link "Admin Center" [ref=f16e329] [cursor=pointer]:
+        - /url: /admin
+      - generic [ref=f16e334]:
+        - link [ref=f16e335] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - generic [ref=f16e340]:
+            - paragraph [ref=f16e341]: Vishal Kumar
+            - paragraph [ref=f16e342]: SUPER_ADMIN
+        - button "Sign Out" [ref=f16e343]
+  - generic [ref=f16e347]:
+    - banner [ref=f16e348]:
+      - generic [ref=f16e350]:
+        - link "Admin" [ref=f16e351] [cursor=pointer]:
+          - /url: /admin
+        - link "CMS Suite" [ref=f16e354] [cursor=pointer]:
+          - /url: /admin/cms
+        - generic [ref=f16e564]: Ongoing Batches
+      - generic [ref=f16e355]:
+        - generic [ref=f16e356]: SUPER_ADMIN
+        - link [ref=f16e361] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - button "Profile" [ref=f16e362]
+        - link [ref=f16e367] [cursor=pointer]:
+          - /url: /student
+          - button "Preview Student Home" [ref=f16e368]
+        - button "Sign Out" [ref=f16e374]
+    - main [ref=f16e379]:
+      - generic [ref=f16e565]:
+        - generic [ref=f16e566]:
+          - generic [ref=f16e567]:
+            - generic [ref=f16e568]:
+              - generic [ref=f16e569]: STUDENT HOME · SECTION 2
+              - generic [ref=f16e570]: 0 Batches
+            - heading "Ongoing Batches" [level=1] [ref=f16e571]
+            - paragraph [ref=f16e577]: Active batches and daily live syllabus
+          - generic [ref=f16e578]:
+            - button "Customize Title" [ref=f16e579]
+            - button "Refresh" [ref=f16e583]
+            - button "Create Ongoing Batch" [ref=f16e589]
+        - generic [ref=f16e591]:
+          - link "New & Featured Batches" [ref=f16e592] [cursor=pointer]:
+            - /url: /admin/cms/batches/upcoming
+          - link "Ongoing Batches (0)" [ref=f16e597] [cursor=pointer]:
+            - /url: /admin/cms/batches/ongoing
+        - generic [ref=f16e776]:
+          - generic [ref=f16e777]: Ongoing batch "Mathematics" created successfully.
+          - button "Dismiss" [ref=f16e782] [cursor=pointer]
+        - textbox "Search ongoing batches by title, board, or subject..." [ref=f16e609]
+        - generic [ref=f16e783]:
+          - paragraph [ref=f16e788]: No Ongoing Batches Found
+          - paragraph [ref=f16e789]: Active ongoing batches will appear here.
+          - button "Create Ongoing Batch" [ref=f16e790]

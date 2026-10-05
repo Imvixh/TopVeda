@@ -334,6 +334,8 @@ export interface CmsHubItem extends CmsAuditMetadata {
 // 12. Study Materials
 export interface CmsStudyMaterial extends CmsAuditMetadata {
   id: string;
+  batch_id?: string | null;
+  subject_id?: string | null;
   course_id?: string | null;
   chapter_id?: string | null;
   title: string;
@@ -342,6 +344,9 @@ export interface CmsStudyMaterial extends CmsAuditMetadata {
   file_size_bytes?: number | null;
   page_count?: number | null;
   download_count: number;
+  // Joined relation fields
+  batch?: CmsBatch;
+  subject?: CmsSubject;
 }
 
 // 13. Chatbot Settings

@@ -1,0 +1,65 @@
+- generic [ref=f4e1]:
+  - generic [ref=f4e11] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=f4e12]
+    - generic [ref=f4e16]:
+      - button "Open issues overlay" [ref=f4e17]:
+        - generic [ref=f4e25]:
+          - generic [aria-hidden] [ref=f4e26]: "0"
+          - generic [ref=f4e27]: "1"
+        - generic [ref=f4e28]: Issue
+      - button "Collapse issues badge" [ref=f4e21]
+  - alert [ref=f4e24]
+  - generic [ref=f4e30]:
+    - generic [ref=f4e31]:
+      - img "TopVeda" [ref=f4e33]
+      - generic [ref=f4e34]: Administrator & Faculty Portal
+      - heading "Administrator Application" [level=1] [ref=f4e79]
+      - paragraph [ref=f4e38]: Apply for administrator and educator privileges with institutional qualification and ID verification.
+    - generic [ref=f4e39]:
+      - button "Admin Sign In" [ref=f4e40]
+      - button "Admin Registration" [active] [ref=f4e45]
+    - generic [ref=f4e80]:
+      - generic [ref=f4e81]:
+        - generic [ref=f4e82]: 1 Account
+        - generic [ref=f4e83]: 2 Email
+        - generic [ref=f4e84]: 3 Gov ID
+        - generic [ref=f4e85]: 4 Review
+      - generic [ref=f4e86]:
+        - generic [ref=f4e87]:
+          - generic [ref=f4e88]:
+            - generic [ref=f4e89]: Full Name / Admin Name
+            - textbox "Full Name / Admin Name" [ref=f4e91]:
+              - /placeholder: e.g. Rahul Sharma
+          - generic [ref=f4e92]:
+            - generic [ref=f4e93]: Gmail Address
+            - textbox "Gmail Address" [ref=f4e95]:
+              - /placeholder: name@gmail.com
+            - paragraph [ref=f4e96]: Must be @gmail.com
+        - generic [ref=f4e97]:
+          - generic [ref=f4e98]: Mobile Number (India) *
+          - generic [ref=f4e99]:
+            - generic [ref=f4e100]: "+91"
+            - textbox "9876543210 (10 digits)" [ref=f4e101]
+        - generic [ref=f4e102]:
+          - generic [ref=f4e103]:
+            - generic [ref=f4e104]:
+              - generic [ref=f4e105]: Create Password
+              - textbox "Create Password" [ref=f4e107]:
+                - /placeholder: Min 8 chars (Aa1@)
+            - button "Show password" [ref=f4e108]
+          - generic [ref=f4e112]:
+            - generic [ref=f4e113]:
+              - generic [ref=f4e114]: Confirm Password
+              - textbox "Confirm Password" [ref=f4e116]:
+                - /placeholder: Re-enter password
+            - button "Show password" [ref=f4e117]
+        - generic [ref=f4e121]:
+          - paragraph [ref=f4e122]: "Admin Registration Requirements:"
+          - paragraph [ref=f4e123]: • Creates an Administrator Applicant account pending email & government document review.
+        - generic [ref=f4e124] [cursor=pointer]:
+          - checkbox "I agree to the Terms & Conditions and understand administrator applications require identity verification." [ref=f4e125]
+          - generic [ref=f4e126]:
+            - text: I agree to the
+            - button "Terms & Conditions" [ref=f4e127]
+            - text: and understand administrator applications require identity verification.
+        - button "Register as Admin" [ref=f4e129]

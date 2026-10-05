@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     const boardId = searchParams.get("boardId") || undefined;
     const classId = searchParams.get("classId") || undefined;
     const subjectId = searchParams.get("subjectId") || undefined;
+    const batchId = searchParams.get("batchId") || undefined;
 
     // Resolve db client: use service-role if configured or authenticated super admin client
     const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
         boardId,
         classId,
         subjectId,
+        batchId,
       }),
       CmsTestService.getAcademicTaxonomy(dbClient),
     ]);

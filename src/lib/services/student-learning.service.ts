@@ -393,7 +393,7 @@ export class StudentLearningService {
               iconBg: "bg-orange-50 border-orange-100",
               iconColor: "text-brand-orange",
               exploreUrl: `/student/batches/${b.id}`,
-              accessTier: isFree ? "FREE" : "PRO",
+              accessTier: isFree ? "FREE" : "PAID_ONLY",
             });
           }
         }

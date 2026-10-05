@@ -1,0 +1,1593 @@
+# TopVeda — Corrected Final Architecture Specification & Implementation Blueprint (v6.6)
+
+**Role:** Principal PostgreSQL Architect, Supabase Security Engineer, Application Security Auditor & Senior TypeScript Architect  
+**Project:** TopVeda  
+**Repository:** `D:\TopVeda\TopVeda`  
+**Current Phase:** Final Architecture Specification (Design-Only & Verification)  
+**Implementation Authorization:** NOT GRANTED (Strictly Design & Verification Only)  
+**Version:** 6.6 (Production-Hardened, Concurrency-Safe, Privilege-Hardened & Integrity-Enforced)  
+**Date:** October 2026
+
+---
+
+## EXECUTIVE SUMMARY & REVISION HIGHLIGHTS (v6.5 → v6.6)
+
+This document is the definitive architectural specification for TopVeda. It incorporates all eight owner-approved product decisions, establishes mathematical database-level integrity and concurrency safety, eliminates every identified answer-key and progress fabrication vector, reconciles PostgreSQL privileges with RLS policies, and defines an exhaustive, production-grade security and entitlement blueprint.
+
+### Key Architectural Resolutions in Version 6.6:
+1. **PostgreSQL Privilege Hardening & Table Privilege Matrix (Section 6.3 & 6.4)**:
+   - Reconciled privilege claims with actual SQL grants. Explicitly defined a table-by-table matrix for SELECT, INSERT, UPDATE, and DELETE across all sensitive tables (`student_test_answers`, `student_test_attempts`, `student_test_versions`, `student_test_question_versions`, `student_test_option_versions`, `student_lecture_progress`, `student_attendance`).
+   - Revoked default `PUBLIC` execution on all security-definer RPCs, granting execution strictly to authorized roles (`authenticated` or `anon`) with immutable `search_path = public, pg_temp;` hygiene.
+   - Provided a repeatable PostgreSQL privilege audit query to verify actual grants.
+2. **Genuinely Concurrency-Safe Attempt Creation (Section 7.3)**:
+   - Implemented a database-level partial unique index:
+     `CREATE UNIQUE INDEX uq_one_in_progress_attempt_per_student_test_batch ON public.student_test_attempts (student_id, test_id, batch_id) WHERE (status = 'IN_PROGRESS');`
+   - `start_student_test_attempt` uses atomic upsert/resumption logic, guaranteeing that concurrent incoming requests resume the existing attempt without race conditions or duplicate attempts.
+3. **Revalidation & Concurrency-Safe Submission Grading (Section 7.4)**:
+   - `submit_student_test_attempt` locks the attempt row (`SELECT ... FOR UPDATE`) and revalidates active student status, active batch enrollment, active batch lifecycle, unexpired duration deadline, and finalized version integrity before evaluating answers.
+   - If enrollment is revoked or batch lifecycle terminates while an attempt is in progress, the submission is rejected.
+4. **Server-Authoritative Lecture Progress Engine (Section 10.1)**:
+   - Removed all client trust in `completed` status and arbitrary watch times.
+   - `sync_lecture_progress` validates server-side elapsed time between requests (`delta_server_seconds`), clamps playback progression to realistic limits, calculates completion server-side at 90% threshold, and strictly blocks historical/completed batches from generating progress writes.
+5. **Deterministic Multi-Batch Entitlement Resolver (Section 9)**:
+   - Fixed `resolveStudentEntitlements`: when a `targetBatchId` is provided, access is evaluated strictly against that exact batch without falling back to other cohorts of the same course.
+   - Handled query errors, lifecycle validation, and legacy records deterministically.
+6. **Unified Multi-Question-Type Schema & Scoring Engine (Section 7.2 & 7.4)**:
+   - Standardized `student_test_answers` with `selected_option_version_ids UUID[]` and `student_text_response TEXT`, enforcing `UNIQUE (attempt_id, question_version_id)` (exactly 1 answer record per question per attempt).
+   - Validated schemas and grading for **MCQ** (Single Choice), **MSQ** (Multiple Selection), and **NUMERICAL** (Decimal with non-negative tolerance).
+   - Guaranteed division-by-zero protection (`total_marks <= 0` explicitly yields `0.00%` without exceptions).
+7. **Complete Scorecard & Public Preview RPCs (Section 7.5 & 8)**:
+   - Delivered full SQL definitions for `get_student_test_scorecard` (only accessible for `'COMPLETED'` attempts) and `get_public_test_preview` (strictly max 5 sample questions without answer keys, explanations, or scoring secrets).
+8. **Live Attendance Heartbeat & Storage Catalog (Section 10.2 & 10.3)**:
+   - Added `record_live_attendance_heartbeat` and `finalize_live_class_attendance` RPCs.
+   - Defined complete Supabase Storage bucket access policies for `study-materials`, `test-attachments`, and `lecture-thumbnails`.
+
+---
+
+## 1. PRESERVED OWNER-APPROVED DECISIONS
+
+All eight owner-approved product decisions are treated as fixed, non-negotiable architectural anchors:
+
+| # | Principle | Architecture Implementation |
+|---|-----------|-----------------------------|
+| **1** | **Batch-Centric Enrollment** | Students enroll in specific cohort batches (`cms_batches`), automatically inheriting access to the parent course curriculum (`cms_courses`). |
+| **2** | **Curated Preview Content** | Free pricing never implies open access. Content is public if and only if explicitly flagged with `is_curated_preview = true`. |
+| **3** | **Four-Tier Role Hierarchy** | Strict database-level enum separating `STUDENT`, `TEACHER`, `ADMIN`, and `SUPER_ADMIN`. |
+| **4** | **Dual Preview Audience** | Both unauthenticated public visitors and registered unenrolled students can consume curated preview assets via secure, server-authoritative preview endpoints. |
+| **5** | **Batch Completion Read-Only Access** | Completed batches lock new live attendance and new test submissions while preserving permanent read-only access to historical lectures, notes, and scorecards. |
+| **6** | **Teacher Test & Content Creation** | Teachers author lectures, live classes, study notes, and tests within their assigned batch/subject scope and submit them for review. |
+| **7** | **Super Admin Exclusive Publishing** | Only `SUPER_ADMIN` possesses the authority to approve, publish, reject, or archive academic content. |
+| **8** | **Multi-Batch Enrollment** | Students can concurrently enroll in multiple batches, including overlapping schedules and multiple cohorts under the same course. |
+
+---
+
+## 2. CANONICAL ACADEMIC & OPERATIONAL HIERARCHY
+
+```
+Academic Board (e.g., CBSE, ICSE, State Board)
+ └── Class / Grade (e.g., Class 10, Class 12)
+      └── Course / Master Curriculum (e.g., Class 10 Board Mastery 2026-27)
+           ├── Subjects (Join via `cms_course_subjects`: Physics, Chemistry, Mathematics)
+           │    └── Chapters (e.g., Chapter 1: Chemical Reactions)
+           │         └── Master Content Pool (Lectures, Notes, Question Bank)
+           │
+           └── Operational Cohort Batches (e.g., Morning Champions Batch, Evening FastTrack Batch)
+                ├── Assigned Batch Subjects (`cms_batch_subjects`)
+                ├── Assigned Teachers (`cms_batch_teachers`)
+                ├── Schedule, Meeting Config & Pricing
+                └── Student Batch Enrollments (`student_enrollments` -> `batch_id`)
+```
+
+---
+
+## 3. EXISTING VS TARGET SCHEMA COMPARISON
+
+| Table | Current Live Schema (Verified) | Target Schema (v6.6 Blueprint) | Modification Strategy |
+|---|---|---|---|
+| `profiles` | Enum: `'STUDENT', 'ADMIN', 'SUPER_ADMIN'` | Enum: `'STUDENT', 'TEACHER', 'ADMIN', 'SUPER_ADMIN'` | Add `'TEACHER'` to enum/check constraint. Safe backfill for verified educators. |
+| `cms_courses` | Single `subject_id` (UUID), `title`, `description`, `class_id`, `board_id` | Retain `subject_id` as primary/legacy; introduce `cms_course_subjects` join table. | Non-destructive expand. Backfill existing `subject_id` into join table. |
+| `cms_course_subjects` | **Does not exist** | `(id, course_id, subject_id, display_order, created_at)` | Create table with `UNIQUE(course_id, subject_id)` and `ON DELETE RESTRICT`. |
+| `cms_batches` | `course_id`, `name`, `status`, `start_date`, `end_date`, `price`, `enrollment_limit` | Add `lifecycle_status` check: `'SCHEDULED', 'ACTIVE', 'COMPLETED', 'CANCELLED', 'ARCHIVED'`. | Enhance status constraint. Preserve existing records (`ACTIVE`/`SCHEDULED`). |
+| `cms_batch_subjects` | **Does not exist** | `(id, batch_id, subject_id, teacher_id, created_at)` | Create table for granular teacher-subject batch scoping. |
+| `cms_batch_teachers` | `(id, batch_id, teacher_id, role, created_at)` | Retain for batch-level educator assignments with active role check. | Keep as primary educator assignment table. |
+| `student_enrollments` | `course_id NOT NULL`, `batch_id NULLABLE`, `UNIQUE(student_id, course_id)` (5 active rows all hold both IDs) | `batch_id NOT NULL`, `course_id NOT NULL (derived)`, `UNIQUE(student_id, batch_id)` | Phased migration: Expand → Verify data integrity → Deploy multi-batch resolver → Switch constraint. |
+| `cms_lectures` | `status` ('DRAFT','PUBLISHED'), `is_free` (boolean) | `status` ('DRAFT','PENDING_REVIEW','APPROVED','PUBLISHED','ARCHIVED'), `is_curated_preview` (boolean) | Add `is_curated_preview`, update status enum, default `is_curated_preview = false`. |
+| `cms_study_materials` | `status`, `is_free`, `file_url`, `chapter_id` | `status`, `is_curated_preview`, `file_url`, `access_type` | Add `is_curated_preview`, enforce secure signed download endpoints. |
+| `student_tests` | `status`, `total_marks`, `passing_marks`, `course_id`, `batch_id` | `status` (5-state), `is_curated_preview`, `active_version_id FK (Composite)`, `created_by` | Add preview flag, composite active version FK, author ID, review tracking columns. |
+| `student_test_versions` | **Does not exist** | `(id, test_id, version_number, status, ...)` with `UNIQUE(test_id, id)` and Finalization Triggers | Create table with `ON DELETE RESTRICT` and immutability triggers. Direct client access revoked. |
+| `student_test_question_versions` | **Does not exist** | `(id, test_version_id, question_type, is_sample_preview, correct_numerical_value, ...)` with `UNIQUE(test_version_id, id)` | Direct client access REVOKED. Managed via RPCs. |
+| `student_test_option_versions` | **Does not exist** | `(id, question_version_id, is_correct, ...)` with `UNIQUE(question_version_id, id)` | Direct client access REVOKED. Immutability triggers enforced. |
+| `student_test_attempts` | `(id, test_id, student_id, answers, score, status, started_at, completed_at)` | Direct client write REVOKED. Composite FK `(test_id, test_version_id)`. Partial unique index on `IN_PROGRESS`. | Created strictly via `start_student_test_attempt` RPC. |
+| `student_test_answers` | `(id, attempt_id, question_id, selected_option_id, is_correct, marks_awarded)` | Direct client access REVOKED. Composite FKs + `selected_option_version_ids UUID[]` + `UNIQUE(attempt_id, question_version_id)`. | Interacted with strictly via `save_student_test_answer` and `submit_student_test_attempt`. |
+| `student_lecture_progress` | `(id, student_id, lecture_id, watch_time_seconds, completed, ...)` | Direct client write REVOKED. Managed exclusively via `sync_lecture_progress` RPC. | Prevents instant progress fabrication. |
+| `student_attendance` | `(id, student_id, live_class_id, status, ...)` | Direct client write REVOKED. Managed via live session heartbeat/teacher host RPC. | Prevents fake attendance logging. |
+
+---
+
+## 4. FINAL ENTITY RELATIONSHIP DIAGRAM (MERMAID)
+
+```mermaid
+erDiagram
+    PROFILES ||--o{ STUDENT_ENROLLMENTS : "enrolled_as_student"
+    PROFILES ||--o{ CMS_BATCH_TEACHERS : "teaches_as_teacher"
+    PROFILES ||--o{ STUDENT_TEST_ATTEMPTS : "submits_attempt"
+    PROFILES ||--o{ STUDENT_LEARNING_ACTIVITY : "generates_activity"
+    
+    ACADEMIC_BOARDS ||--o{ ACADEMIC_CLASSES : "contains"
+    ACADEMIC_CLASSES ||--o{ CMS_COURSES : "offers"
+    ACADEMIC_CLASSES ||--o{ ACADEMIC_SUBJECTS : "teaches"
+    ACADEMIC_SUBJECTS ||--o{ ACADEMIC_CHAPTERS : "structures"
+    
+    CMS_COURSES ||--o{ CMS_COURSE_SUBJECTS : "includes"
+    ACADEMIC_SUBJECTS ||--o{ CMS_COURSE_SUBJECTS : "part_of"
+    
+    CMS_COURSES ||--o{ CMS_BATCHES : "spawns"
+    CMS_BATCHES ||--o{ CMS_BATCH_SUBJECTS : "allocates"
+    ACADEMIC_SUBJECTS ||--o{ CMS_BATCH_SUBJECTS : "taught_in"
+    CMS_BATCHES ||--o{ CMS_BATCH_TEACHERS : "assigned_to"
+    CMS_BATCHES ||--o{ STUDENT_ENROLLMENTS : "enrolled_in"
+    
+    ACADEMIC_CHAPTERS ||--o{ CMS_LECTURES : "contains"
+    ACADEMIC_CHAPTERS ||--o{ CMS_STUDY_MATERIALS : "provides"
+    ACADEMIC_CHAPTERS ||--o{ STUDENT_TESTS : "assesses"
+    
+    CMS_BATCHES ||--o{ CMS_LIVE_CLASSES : "schedules"
+    CMS_LIVE_CLASSES ||--o{ LIVE_INSTANCES : "initiates"
+    LIVE_INSTANCES ||--o{ LIVE_CHAT_MESSAGES : "records"
+    LIVE_INSTANCES ||--o{ LIVE_POLLS : "hosts"
+    
+    STUDENT_TESTS ||--o{ STUDENT_TEST_VERSIONS : "versions"
+    STUDENT_TEST_VERSIONS ||--o{ STUDENT_TEST_QUESTION_VERSIONS : "freezes_questions"
+    STUDENT_TEST_QUESTION_VERSIONS ||--o{ STUDENT_TEST_OPTION_VERSIONS : "freezes_options"
+    
+    STUDENT_TEST_VERSIONS ||--o{ STUDENT_TEST_ATTEMPTS : "evaluated_against"
+    STUDENT_TEST_ATTEMPTS ||--o{ STUDENT_TEST_ANSWERS : "stores_answers"
+    
+    STUDENT_ENROLLMENTS ||--o{ STUDENT_LECTURE_PROGRESS : "tracks"
+    STUDENT_ENROLLMENTS ||--o{ STUDENT_ATTENDANCE : "logs"
+
+    PROFILES {
+        uuid id PK
+        string email
+        string full_name
+        string role "STUDENT | TEACHER | ADMIN | SUPER_ADMIN"
+        string status "ACTIVE | SUSPENDED"
+        timestamp created_at
+    }
+
+    CMS_COURSES {
+        uuid id PK
+        uuid board_id FK "RESTRICT"
+        uuid class_id FK "RESTRICT"
+        uuid subject_id FK "RESTRICT (Legacy/Primary)"
+        string title
+        string slug UK
+        string status "DRAFT | PUBLISHED | ARCHIVED"
+        boolean is_active
+    }
+
+    CMS_BATCHES {
+        uuid id PK
+        uuid course_id FK "RESTRICT"
+        string name
+        string code UK
+        string lifecycle_status "SCHEDULED | ACTIVE | COMPLETED | CANCELLED | ARCHIVED"
+        numeric price
+        timestamp start_date
+        timestamp end_date
+        integer max_students
+    }
+
+    STUDENT_ENROLLMENTS {
+        uuid id PK
+        uuid student_id FK "RESTRICT"
+        uuid batch_id FK "RESTRICT"
+        uuid course_id FK "RESTRICT"
+        string status "ACTIVE | COMPLETED | REVOKED | CANCELLED"
+        timestamp enrolled_at
+        timestamp expires_at
+    }
+
+    STUDENT_TESTS {
+        uuid id PK
+        uuid chapter_id FK "RESTRICT"
+        uuid course_id FK "RESTRICT"
+        uuid batch_id FK "RESTRICT"
+        string title
+        string status "DRAFT | PENDING_REVIEW | APPROVED | PUBLISHED | ARCHIVED"
+        boolean is_curated_preview
+        uuid active_version_id FK "Composite FK (id, active_version_id) -> STUDENT_TEST_VERSIONS(test_id, id)"
+        uuid created_by FK "RESTRICT"
+    }
+
+    STUDENT_TEST_VERSIONS {
+        uuid id PK
+        uuid test_id FK "RESTRICT -> STUDENT_TESTS(id)"
+        integer version_number
+        string status "DRAFT | FINALIZED"
+        string title
+        numeric total_marks
+        numeric passing_marks
+        integer duration_minutes
+        boolean negative_marking
+        numeric negative_mark_value
+        uuid published_by FK "RESTRICT"
+        timestamp created_at
+    }
+
+    STUDENT_TEST_QUESTION_VERSIONS {
+        uuid id PK
+        uuid test_version_id FK "RESTRICT"
+        uuid original_question_id
+        text question_text
+        string question_type "MCQ | MSQ | NUMERICAL"
+        numeric marks
+        numeric negative_marks
+        numeric correct_numerical_value
+        numeric numerical_tolerance
+        boolean is_sample_preview
+        text explanation
+        integer order_index
+    }
+
+    STUDENT_TEST_OPTION_VERSIONS {
+        uuid id PK
+        uuid question_version_id FK "RESTRICT"
+        uuid original_option_id
+        text option_text
+        boolean is_correct "Protected from direct student access"
+        integer order_index
+    }
+
+    STUDENT_TEST_ATTEMPTS {
+        uuid id PK
+        uuid test_id FK "RESTRICT"
+        uuid test_version_id FK "RESTRICT"
+        uuid student_id FK "RESTRICT"
+        uuid batch_id FK "RESTRICT"
+        numeric score
+        numeric percentage
+        string status "IN_PROGRESS | COMPLETED | ABANDONED"
+        timestamp started_at
+        timestamp submitted_at
+        integer time_spent_seconds
+    }
+
+    STUDENT_TEST_ANSWERS {
+        uuid id PK
+        uuid attempt_id FK "RESTRICT"
+        uuid test_version_id FK "RESTRICT"
+        uuid question_version_id FK "RESTRICT"
+        uuid_array selected_option_version_ids "Supports single MCQ and multiple MSQ selections"
+        text student_text_response "For NUMERICAL questions"
+        boolean is_correct "Populated exclusively upon attempt submission"
+        numeric marks_awarded "Populated exclusively upon attempt submission"
+    }
+```
+
+---
+
+## 5. COMPLETE ROLE AND PERMISSION MATRIX
+
+| Functional Domain | STUDENT | TEACHER (Assigned Scope) | ADMIN | SUPER_ADMIN |
+|---|---|---|---|---|
+| **Academic Hierarchy (Boards, Classes, Subjects, Chapters)** | View published hierarchy | View assigned hierarchy | View full hierarchy | Full CRUD + Publish |
+| **Courses Management** | View published courses | View associated courses | View courses & batches | Full CRUD + Publish |
+| **Batch Management** | View active/scheduled batches | View assigned batches | Create/Edit batches, assign teachers | Full CRUD + All States |
+| **Batch Enrollment** | Self-enroll in available batches | View student roster of assigned batches | Enroll/Transfer students across batches | Full override & enrollment audit |
+| **Curated Preview Content** | View public preview samples freely | View preview content | View & test preview content | Flag/Unflag preview assets |
+| **Restricted Content (Enrolled Batches)** | Full consumption & submissions | View content for assigned batches | View content across all batches | Full access & management |
+| **Content Creation (Lectures, Notes, Tests)** | No access | Create/Edit drafts in **assigned batches only** | Create/Edit drafts & manage batches | Full CRUD across system |
+| **Content Review Submission** | No access | Submit owned drafts for review | Submit drafts for review | N/A (Direct Publisher) |
+| **Content Approval & Publishing** | **Forbidden** | **Forbidden** | **Forbidden** | **Exclusive Authority** |
+| **Live Classes & Meetings** | Join live sessions for active enrolled batches | Host/Start live sessions for assigned batches | Monitor live sessions & schedules | Full moderation & audit |
+| **Test Attempts & Submissions** | Submit attempts for active enrolled batches | View attempt metrics for assigned batches | View attempt analytics | Full access & scorecard audit |
+| **Test Answer Keys & Explanations** | **Direct table access REVOKED; Accessible strictly via Scorecard RPC after attempt submission** | View answer keys for assigned tests | View answer keys for verification | Full view & verification |
+| **Lecture Progress Tracking** | Sync playback via RPC; direct DB write REVOKED | View progress metrics for assigned students | View progress reports | Full audit log |
+| **Attendance Tracking** | View personal attendance; direct DB write REVOKED | Mark/Verify attendance for assigned live sessions | Manage attendance records | Full audit log |
+| **User Role Management** | No access | No access | View profiles; manage student accounts | Full role promotion/demotion |
+| **System Settings & Audit Logs** | No access | No access | Operational reports only | Full audit log & integration keys |
+
+---
+
+## 6. ASSIGNMENT-AWARE RLS, PRIVILEGE HARDENING & AUDIT
+
+### 6.1 Database Security Functions (Strict Separation of Roles)
+
+```sql
+-- 1. Super Admin Authority
+CREATE OR REPLACE FUNCTION public.is_super_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND role = 'SUPER_ADMIN'
+      AND status = 'ACTIVE'
+  );
+$$;
+
+-- 2. Admin or Super Admin Authority
+CREATE OR REPLACE FUNCTION public.is_admin_or_super()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND role IN ('ADMIN', 'SUPER_ADMIN')
+      AND status = 'ACTIVE'
+  );
+$$;
+
+-- 3. Batch Teacher Assignment Check (Strictly verifies active assignment and active teacher role)
+CREATE OR REPLACE FUNCTION public.is_batch_teacher(p_batch_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM cms_batch_teachers bt
+    JOIN profiles p ON p.id = bt.teacher_id
+    WHERE bt.batch_id = p_batch_id
+      AND bt.teacher_id = auth.uid()
+      AND p.role = 'TEACHER'
+      AND p.status = 'ACTIVE'
+  );
+$$;
+
+-- 4. Student Active Enrollment Check (Real-time participation: live sessions & test attempts)
+CREATE OR REPLACE FUNCTION public.is_actively_enrolled_in_batch(p_batch_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM student_enrollments e
+    JOIN profiles p ON p.id = e.student_id
+    JOIN cms_batches b ON b.id = e.batch_id
+    WHERE e.batch_id = p_batch_id
+      AND e.student_id = auth.uid()
+      AND p.role = 'STUDENT'
+      AND e.status = 'ACTIVE'
+      AND b.lifecycle_status = 'ACTIVE'
+  );
+$$;
+
+-- 5. Student Historical Read-Only Access Check (Lectures, notes, scorecards)
+CREATE OR REPLACE FUNCTION public.has_historical_batch_access(p_batch_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM student_enrollments e
+    JOIN profiles p ON p.id = e.student_id
+    WHERE e.batch_id = p_batch_id
+      AND e.student_id = auth.uid()
+      AND p.role = 'STUDENT'
+      AND e.status IN ('ACTIVE', 'COMPLETED')
+  );
+$$;
+
+-- 6. Content Access Check for Students/Public (Published Curated Preview OR Historical Batch Access)
+CREATE OR REPLACE FUNCTION public.can_student_access_content(
+  p_is_curated_preview BOOLEAN,
+  p_batch_id UUID,
+  p_status TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+  SELECT (
+    p_status = 'PUBLISHED' 
+    AND (p_is_curated_preview = TRUE OR (p_batch_id IS NOT NULL AND has_historical_batch_access(p_batch_id)))
+  );
+$$;
+```
+
+### 6.2 Complete Row-Level Security (RLS) Policy Catalog
+
+| Table | Policy Name | Command | Target Role | Security Expression (`USING` / `WITH CHECK`) |
+|---|---|---|---|---|
+| `cms_lectures` | `lectures_student_read` | `SELECT` | `public` | `can_student_access_content(is_curated_preview, batch_id, status)` |
+| `cms_lectures` | `lectures_teacher_read` | `SELECT` | `authenticated` | `author_id = auth.uid() OR (batch_id IS NOT NULL AND is_batch_teacher(batch_id))` |
+| `cms_lectures` | `lectures_admin_read` | `SELECT` | `authenticated` | `is_admin_or_super()` |
+| `cms_lectures` | `lectures_teacher_insert` | `INSERT` | `authenticated` | `batch_id IS NOT NULL AND is_batch_teacher(batch_id) AND status = 'DRAFT' AND author_id = auth.uid()` |
+| `cms_lectures` | `lectures_admin_insert` | `INSERT` | `authenticated` | `is_admin_or_super() AND status = 'DRAFT'` |
+| `cms_lectures` | `lectures_teacher_update` | `UPDATE` | `authenticated` | `author_id = auth.uid() AND status IN ('DRAFT', 'PENDING_REVIEW') AND (batch_id IS NOT NULL AND is_batch_teacher(batch_id))` |
+| `cms_lectures` | `lectures_super_admin_manage` | `ALL` | `authenticated` | `is_super_admin()` |
+| `student_tests` | `tests_student_read` | `SELECT` | `public` | `can_student_access_content(is_curated_preview, batch_id, status)` |
+| `student_tests` | `tests_teacher_read` | `SELECT` | `authenticated` | `created_by = auth.uid() OR (batch_id IS NOT NULL AND is_batch_teacher(batch_id))` |
+| `student_tests` | `tests_admin_read` | `SELECT` | `authenticated` | `is_admin_or_super()` |
+| `student_tests` | `tests_teacher_insert` | `INSERT` | `authenticated` | `batch_id IS NOT NULL AND is_batch_teacher(batch_id) AND status = 'DRAFT' AND created_by = auth.uid()` |
+| `student_tests` | `tests_super_admin_publish` | `UPDATE` | `authenticated` | `is_super_admin()` |
+| `student_test_versions` | `versions_educator_read` | `SELECT` | `authenticated` | `is_batch_teacher((SELECT batch_id FROM student_tests WHERE id = test_id)) OR is_admin_or_super()` |
+| `student_test_versions` | `versions_super_admin_insert` | `INSERT` | `authenticated` | `is_super_admin()` |
+| `student_test_question_versions` | `q_versions_educator_read` | `SELECT` | `authenticated` | `is_batch_teacher((SELECT t.batch_id FROM student_tests t JOIN student_test_versions tv ON tv.test_id = t.id WHERE tv.id = test_version_id)) OR is_admin_or_super()` |
+| `student_test_question_versions` | `q_versions_super_admin_insert` | `INSERT` | `authenticated` | `is_super_admin()` |
+| `student_test_option_versions` | `opt_versions_educator_read` | `SELECT` | `authenticated` | `is_batch_teacher((SELECT t.batch_id FROM student_tests t JOIN student_test_versions tv ON tv.test_id = t.id JOIN student_test_question_versions qv ON qv.test_version_id = tv.id WHERE qv.id = question_version_id)) OR is_admin_or_super()` |
+| `student_test_option_versions` | `opt_versions_super_admin_insert`| `INSERT` | `authenticated` | `is_super_admin()` |
+| `student_test_attempts` | `attempts_student_read_own` | `SELECT` | `authenticated` | `auth.uid() = student_id` |
+| `student_test_attempts` | `attempts_teacher_batch_read` | `SELECT` | `authenticated` | `is_batch_teacher(batch_id)` |
+| `student_test_attempts` | `attempts_admin_read_all` | `SELECT` | `authenticated` | `is_admin_or_super()` |
+| `student_test_attempts` | `attempts_direct_write_block` | `INSERT, UPDATE, DELETE` | `authenticated` | `FALSE (MANIPULATION DIRECTLY BLOCKED; ACCESSIBLE ONLY VIA RPC)` |
+| `student_test_answers` | `answers_all_direct_access` | `ALL` | `authenticated` | `FALSE (DIRECT ACCESS STRICTLY BLOCKED; ACCESSIBLE ONLY VIA RPC)` |
+| `cms_study_materials` | `materials_student_read` | `SELECT` | `public` | `can_student_access_content(is_curated_preview, batch_id, status)` |
+| `cms_live_classes` | `live_student_access` | `SELECT` | `authenticated` | `is_actively_enrolled_in_batch(batch_id) AND status = 'PUBLISHED'` |
+| `cms_live_classes` | `live_teacher_host` | `ALL` | `authenticated` | `is_batch_teacher(batch_id) OR is_admin_or_super()` |
+| `student_lecture_progress`| `progress_student_read_own` | `SELECT` | `authenticated` | `auth.uid() = student_id` |
+| `student_lecture_progress`| `progress_direct_write_block` | `INSERT, UPDATE, DELETE` | `authenticated` | `FALSE (DIRECT CLIENT WRITE BLOCKED; MANAGED VIA sync_lecture_progress RPC)` |
+| `student_attendance` | `attendance_student_read` | `SELECT` | `authenticated` | `auth.uid() = student_id` |
+| `student_attendance` | `attendance_direct_write_block`| `INSERT, UPDATE, DELETE` | `authenticated` | `FALSE (DIRECT WRITE BLOCKED; MANAGED VIA LIVE SESSION HEARTBEAT RPC)` |
+
+---
+
+### 6.3 Detailed Table-by-Table Privilege Matrix
+
+| Table Name | Direct SELECT | Direct INSERT | Direct UPDATE | Direct DELETE | Authorized Roles | Authorized RPC / Service Alternative |
+|---|---|---|---|---|---|---|
+| `student_test_answers` | **REVOKED** | **REVOKED** | **REVOKED** | **REVOKED** | None (DB Admin only) | `save_student_test_answer`, `submit_student_test_attempt`, `get_student_test_scorecard` |
+| `student_test_attempts` | **ALLOWED (RLS)** | **REVOKED** | **REVOKED** | **REVOKED** | Student (Own), Teacher (Batch), Admin (All) | `start_student_test_attempt`, `submit_student_test_attempt` |
+| `student_test_versions` | **ALLOWED (RLS)** | **REVOKED** | **REVOKED** | **REVOKED** | Assigned Teacher, Admin, Super Admin | Super Admin Publishing Transaction |
+| `student_test_question_versions`| **ALLOWED (RLS)** | **REVOKED** | **REVOKED** | **REVOKED** | Assigned Teacher, Admin, Super Admin | `get_public_test_preview`, `get_enrolled_student_test_questions` |
+| `student_test_option_versions`  | **ALLOWED (RLS)** | **REVOKED** | **REVOKED** | **REVOKED** | Assigned Teacher, Admin, Super Admin | `get_public_test_preview`, `get_enrolled_student_test_questions` |
+| `student_lecture_progress`      | **ALLOWED (RLS)** | **REVOKED** | **REVOKED** | **REVOKED** | Student (Own), Admin (All) | `sync_lecture_progress` |
+| `student_attendance`            | **ALLOWED (RLS)** | **REVOKED** | **REVOKED** | **REVOKED** | Student (Own), Teacher (Batch), Admin (All) | `record_live_attendance_heartbeat`, `finalize_live_class_attendance` |
+
+---
+
+### 6.4 Database Privileges (GRANT and REVOKE Statements)
+
+```sql
+-- 1. Revoke direct write access on attempts, answers, option keys, question versions, progress, attendance
+REVOKE ALL ON public.student_test_answers FROM anon, authenticated, public;
+REVOKE ALL ON public.student_test_option_versions FROM anon, authenticated, public;
+REVOKE ALL ON public.student_test_question_versions FROM anon, authenticated, public;
+REVOKE INSERT, UPDATE, DELETE ON public.student_test_attempts FROM anon, authenticated, public;
+REVOKE INSERT, UPDATE, DELETE ON public.student_test_versions FROM anon, authenticated, public;
+REVOKE INSERT, UPDATE, DELETE ON public.student_lecture_progress FROM anon, authenticated, public;
+REVOKE INSERT, UPDATE, DELETE ON public.student_attendance FROM anon, authenticated, public;
+
+-- 2. Allow read access governed by RLS on version metadata and attempts
+GRANT SELECT ON public.student_test_attempts TO authenticated;
+GRANT SELECT ON public.student_test_versions TO authenticated;
+GRANT SELECT ON public.student_test_question_versions TO authenticated;
+GRANT SELECT ON public.student_test_option_versions TO authenticated;
+GRANT SELECT ON public.student_lecture_progress TO authenticated;
+GRANT SELECT ON public.student_attendance TO authenticated;
+
+-- 3. Explicitly revoke default PUBLIC execution on all security-definer functions
+REVOKE EXECUTE ON FUNCTION public.get_public_test_preview(UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_enrolled_student_test_questions(UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.start_student_test_attempt(UUID, UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.save_student_test_answer(UUID, UUID, UUID[], TEXT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.submit_student_test_attempt(UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_student_test_scorecard(UUID) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.sync_lecture_progress(UUID, INTEGER) FROM PUBLIC;
+
+-- 4. Grant explicit execute on student RPCs
+GRANT EXECUTE ON FUNCTION public.get_public_test_preview(UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_enrolled_student_test_questions(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.start_student_test_attempt(UUID, UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.save_student_test_answer(UUID, UUID, UUID[], TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_student_test_attempt(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_student_test_scorecard(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.sync_lecture_progress(UUID, INTEGER) TO authenticated;
+```
+
+### 6.5 Repeatable PostgreSQL Privilege Audit Query
+
+```sql
+-- Query to audit table grants and function privileges in production
+SELECT 
+  grantee, 
+  table_schema, 
+  table_name, 
+  privilege_type 
+FROM information_schema.role_table_grants 
+WHERE table_schema = 'public' 
+  AND table_name IN (
+    'student_test_answers', 
+    'student_test_attempts', 
+    'student_test_option_versions', 
+    'student_test_question_versions', 
+    'student_test_versions', 
+    'student_lecture_progress', 
+    'student_attendance'
+  )
+ORDER BY table_name, grantee, privilege_type;
+```
+
+---
+
+## 7. DATABASE-LEVEL TEST IMMUTABILITY, CONCURRENCY & SCORING ENGINE
+
+### 7.1 Lifecycle-Locked Immutability Triggers (PostgreSQL)
+
+```sql
+-- Trigger function to freeze finalized test versions and prevent re-parenting
+CREATE OR REPLACE FUNCTION public.enforce_test_version_finalization_immutability()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_version_status TEXT;
+  v_test_version_id UUID;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF TG_TABLE_NAME = 'student_test_versions' THEN
+      IF OLD.status = 'FINALIZED' THEN
+        RAISE EXCEPTION 'Database Integrity Error: Finalized test versions cannot be deleted.';
+      END IF;
+      RETURN OLD;
+    ELSIF TG_TABLE_NAME = 'student_test_question_versions' THEN
+      v_test_version_id := OLD.test_version_id;
+    ELSIF TG_TABLE_NAME = 'student_test_option_versions' THEN
+      SELECT qv.test_version_id INTO v_test_version_id
+      FROM student_test_question_versions qv
+      WHERE qv.id = OLD.question_version_id;
+    END IF;
+
+    SELECT status INTO v_version_status FROM student_test_versions WHERE id = v_test_version_id;
+    IF v_version_status = 'FINALIZED' THEN
+      RAISE EXCEPTION 'Database Integrity Error: Cannot delete items from a finalized test version.';
+    END IF;
+    RETURN OLD;
+
+  ELSIF TG_OP = 'INSERT' THEN
+    IF TG_TABLE_NAME = 'student_test_question_versions' THEN
+      v_test_version_id := NEW.test_version_id;
+    ELSIF TG_TABLE_NAME = 'student_test_option_versions' THEN
+      SELECT qv.test_version_id INTO v_test_version_id
+      FROM student_test_question_versions qv
+      WHERE qv.id = NEW.question_version_id;
+    END IF;
+
+    SELECT status INTO v_version_status FROM student_test_versions WHERE id = v_test_version_id;
+    IF v_version_status = 'FINALIZED' THEN
+      RAISE EXCEPTION 'Database Integrity Error: Cannot insert new items into a finalized test version.';
+    END IF;
+    RETURN NEW;
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF TG_TABLE_NAME = 'student_test_versions' THEN
+      IF OLD.status = 'FINALIZED' THEN
+        RAISE EXCEPTION 'Database Integrity Error: Finalized test versions cannot be updated.';
+      END IF;
+      RETURN NEW;
+    ELSIF TG_TABLE_NAME = 'student_test_question_versions' THEN
+      IF OLD.test_version_id != NEW.test_version_id THEN
+        RAISE EXCEPTION 'Database Integrity Error: Cannot re-parent question versions.';
+      END IF;
+      v_test_version_id := OLD.test_version_id;
+    ELSIF TG_TABLE_NAME = 'student_test_option_versions' THEN
+      IF OLD.question_version_id != NEW.question_version_id THEN
+        RAISE EXCEPTION 'Database Integrity Error: Cannot re-parent option versions.';
+      END IF;
+      SELECT qv.test_version_id INTO v_test_version_id
+      FROM student_test_question_versions qv
+      WHERE qv.id = OLD.question_version_id;
+    END IF;
+
+    SELECT status INTO v_version_status FROM student_test_versions WHERE id = v_test_version_id;
+    IF v_version_status = 'FINALIZED' THEN
+      RAISE EXCEPTION 'Database Integrity Error: Cannot update items in a finalized test version.';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+-- Apply triggers
+CREATE TRIGGER trg_freeze_student_test_versions
+BEFORE UPDATE OR DELETE ON public.student_test_versions
+FOR EACH ROW EXECUTE FUNCTION public.enforce_test_version_finalization_immutability();
+
+CREATE TRIGGER trg_freeze_student_test_question_versions
+BEFORE INSERT OR UPDATE OR DELETE ON public.student_test_question_versions
+FOR EACH ROW EXECUTE FUNCTION public.enforce_test_version_finalization_immutability();
+
+CREATE TRIGGER trg_freeze_student_test_option_versions
+BEFORE INSERT OR UPDATE OR DELETE ON public.student_test_option_versions
+FOR EACH ROW EXECUTE FUNCTION public.enforce_test_version_finalization_immutability();
+```
+
+### 7.2 Composite Foreign Keys, Constraints & Indexing
+
+```sql
+-- 1. Partial Unique Index to guarantee concurrency safety (max 1 IN_PROGRESS attempt per student/test/batch)
+CREATE UNIQUE INDEX uq_one_in_progress_attempt_per_student_test_batch 
+ON public.student_test_attempts (student_id, test_id, batch_id) 
+WHERE (status = 'IN_PROGRESS');
+
+-- 2. Composite Unique Constraints on Version Tables
+ALTER TABLE public.student_test_versions
+ADD CONSTRAINT uq_test_version_composite UNIQUE (test_id, id);
+
+ALTER TABLE public.student_tests
+ADD CONSTRAINT fk_student_tests_active_version_composite
+FOREIGN KEY (id, active_version_id)
+REFERENCES public.student_test_versions(test_id, id)
+ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+-- 3. Bind Student Attempts strictly to (test_id, test_version_id)
+ALTER TABLE public.student_test_attempts
+ADD COLUMN test_id UUID NOT NULL,
+ADD CONSTRAINT fk_attempts_test_version_composite
+  FOREIGN KEY (test_id, test_version_id)
+  REFERENCES public.student_test_versions(test_id, id)
+  ON DELETE RESTRICT,
+ADD CONSTRAINT uq_attempt_composite UNIQUE (id, test_version_id);
+
+-- 4. Composite Foreign Keys on Question & Option Versions
+ALTER TABLE public.student_test_question_versions
+ADD CONSTRAINT uq_question_version_test_version UNIQUE (test_version_id, id);
+
+ALTER TABLE public.student_test_option_versions
+ADD CONSTRAINT uq_option_version_question_version UNIQUE (question_version_id, id);
+
+-- 5. Standardized student_test_answers with Array & Text responses
+ALTER TABLE public.student_test_answers
+ADD COLUMN test_version_id UUID NOT NULL,
+ADD COLUMN selected_option_version_ids UUID[] DEFAULT NULL,
+ADD CONSTRAINT fk_answers_attempt_version
+  FOREIGN KEY (attempt_id, test_version_id)
+  REFERENCES public.student_test_attempts(id, test_version_id)
+  ON DELETE RESTRICT,
+ADD CONSTRAINT fk_answers_question_version
+  FOREIGN KEY (test_version_id, question_version_id)
+  REFERENCES public.student_test_question_versions(test_version_id, id)
+  ON DELETE RESTRICT,
+ADD CONSTRAINT uq_attempt_question_single_row
+  UNIQUE (attempt_id, question_version_id);
+```
+
+### 7.3 Concurrency-Safe Attempt Creation RPC
+
+```sql
+CREATE OR REPLACE FUNCTION public.start_student_test_attempt(
+  p_test_id UUID,
+  p_batch_id UUID
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_test RECORD;
+  v_version RECORD;
+  v_attempt_id UUID;
+  v_started_at TIMESTAMPTZ;
+BEGIN
+  -- 1. Validate caller is an active student
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'STUDENT' AND status = 'ACTIVE') THEN
+    RAISE EXCEPTION 'Only active registered students can start test attempts.';
+  END IF;
+
+  -- 2. Validate active enrollment in active batch
+  IF NOT is_actively_enrolled_in_batch(p_batch_id) THEN
+    RAISE EXCEPTION 'Student is not actively enrolled in this active batch.';
+  END IF;
+
+  -- 3. Validate test status and batch scoping
+  SELECT * INTO v_test
+  FROM student_tests
+  WHERE id = p_test_id;
+
+  IF NOT FOUND OR v_test.status != 'PUBLISHED' OR v_test.active_version_id IS NULL THEN
+    RAISE EXCEPTION 'Test is not published or active.';
+  END IF;
+
+  IF v_test.batch_id IS NOT NULL AND v_test.batch_id != p_batch_id THEN
+    RAISE EXCEPTION 'Test does not belong to the requested batch.';
+  END IF;
+
+  -- 4. Validate active version is finalized and belongs to test
+  SELECT * INTO v_version
+  FROM student_test_versions
+  WHERE id = v_test.active_version_id AND test_id = p_test_id;
+
+  IF NOT FOUND OR v_version.status != 'FINALIZED' THEN
+    RAISE EXCEPTION 'Active test version is not finalized.';
+  END IF;
+
+  -- 5. Concurrency-Safe Insert or Resume (Protected by partial unique index)
+  INSERT INTO student_test_attempts (
+    test_id,
+    test_version_id,
+    student_id,
+    batch_id,
+    status,
+    started_at
+  ) VALUES (
+    p_test_id,
+    v_test.active_version_id,
+    auth.uid(),
+    p_batch_id,
+    'IN_PROGRESS',
+    now()
+  )
+  ON CONFLICT (student_id, test_id, batch_id) WHERE (status = 'IN_PROGRESS') 
+  DO NOTHING
+  RETURNING id, started_at INTO v_attempt_id, v_started_at;
+
+  -- If conflict occurred, retrieve existing in-progress attempt
+  IF v_attempt_id IS NULL THEN
+    SELECT id, started_at INTO v_attempt_id, v_started_at
+    FROM student_test_attempts
+    WHERE student_id = auth.uid()
+      AND test_id = p_test_id
+      AND batch_id = p_batch_id
+      AND status = 'IN_PROGRESS';
+
+    RETURN jsonb_build_object(
+      'attempt_id', v_attempt_id,
+      'test_version_id', v_test.active_version_id,
+      'started_at', v_started_at,
+      'resumed', TRUE
+    );
+  END IF;
+
+  RETURN jsonb_build_object(
+    'attempt_id', v_attempt_id,
+    'test_version_id', v_test.active_version_id,
+    'started_at', v_started_at,
+    'resumed', FALSE
+  );
+END;
+$$;
+```
+
+### 7.4 Multi-Question-Type Answer RPC & Revalidated Submission Grading
+
+```sql
+-- RPC 2: Concurrency-Safe Answer Upsert with Question-Type Validation
+CREATE OR REPLACE FUNCTION public.save_student_test_answer(
+  p_attempt_id UUID,
+  p_question_version_id UUID,
+  p_selected_option_version_ids UUID[] DEFAULT NULL,
+  p_student_text_response TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_attempt RECORD;
+  v_question RECORD;
+  v_opt_id UUID;
+  v_num_val NUMERIC;
+BEGIN
+  -- 1. Verify attempt ownership and in-progress status
+  SELECT * INTO v_attempt
+  FROM student_test_attempts
+  WHERE id = p_attempt_id;
+
+  IF NOT FOUND OR v_attempt.student_id != auth.uid() THEN
+    RAISE EXCEPTION 'Attempt not found or unauthorized.';
+  END IF;
+
+  IF v_attempt.status != 'IN_PROGRESS' THEN
+    RAISE EXCEPTION 'Cannot modify answers for a completed or submitted test attempt.';
+  END IF;
+
+  -- Re-verify active enrollment & batch status
+  IF NOT is_actively_enrolled_in_batch(v_attempt.batch_id) THEN
+    RAISE EXCEPTION 'Active batch enrollment required to save answers.';
+  END IF;
+
+  -- 2. Validate question belongs to attempt test version
+  SELECT * INTO v_question
+  FROM student_test_question_versions
+  WHERE id = p_question_version_id AND test_version_id = v_attempt.test_version_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Question does not belong to this attempt test version.';
+  END IF;
+
+  -- 3. Validate response according to question type
+  IF v_question.question_type = 'MCQ' THEN
+    IF p_selected_option_version_ids IS NULL OR array_length(p_selected_option_version_ids, 1) != 1 THEN
+      RAISE EXCEPTION 'Exactly one option must be selected for MCQ.';
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM student_test_option_versions 
+      WHERE id = p_selected_option_version_ids[1] AND question_version_id = p_question_version_id
+    ) THEN
+      RAISE EXCEPTION 'Selected option does not belong to this question.';
+    END IF;
+
+  ELSIF v_question.question_type = 'MSQ' THEN
+    IF p_selected_option_version_ids IS NOT NULL THEN
+      FOREACH v_opt_id IN ARRAY p_selected_option_version_ids LOOP
+        IF NOT EXISTS (
+          SELECT 1 FROM student_test_option_versions 
+          WHERE id = v_opt_id AND question_version_id = p_question_version_id
+        ) THEN
+          RAISE EXCEPTION 'Selected option does not belong to this question.';
+        END IF;
+      END LOOP;
+    END IF;
+
+  ELSIF v_question.question_type = 'NUMERICAL' THEN
+    IF p_student_text_response IS NOT NULL THEN
+      -- Validate valid decimal representation (reject NaN / Infinity)
+      IF NOT p_student_text_response ~ '^-?[0-9]+(\.[0-9]+)?$' THEN
+        RAISE EXCEPTION 'Invalid numeric input format.';
+      END IF;
+    END IF;
+  END IF;
+
+  -- 4. Atomic Upsert of Answer (Strictly keeping correctness and marks NULL)
+  INSERT INTO student_test_answers (
+    attempt_id,
+    test_version_id,
+    question_version_id,
+    selected_option_version_ids,
+    student_text_response,
+    is_correct,
+    marks_awarded
+  ) VALUES (
+    p_attempt_id,
+    v_attempt.test_version_id,
+    p_question_version_id,
+    p_selected_option_version_ids,
+    p_student_text_response,
+    NULL,
+    NULL
+  )
+  ON CONFLICT (attempt_id, question_version_id) DO UPDATE SET
+    selected_option_version_ids = EXCLUDED.selected_option_version_ids,
+    student_text_response = EXCLUDED.student_text_response,
+    is_correct = NULL,
+    marks_awarded = NULL;
+
+  RETURN jsonb_build_object('success', TRUE);
+END;
+$$;
+
+-- RPC 3: Revalidated Submission Grading Transaction
+CREATE OR REPLACE FUNCTION public.submit_student_test_attempt(p_attempt_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_attempt RECORD;
+  v_version RECORD;
+  v_total_score NUMERIC(6,2) := 0.0;
+  v_percentage NUMERIC(5,2);
+  v_q RECORD;
+  v_is_correct BOOLEAN;
+  v_marks NUMERIC(5,2);
+  v_correct_ids UUID[];
+  v_selected_ids UUID[];
+  v_student_num NUMERIC;
+BEGIN
+  -- 1. Row Lock attempt to prevent concurrent double-grading
+  SELECT * INTO v_attempt
+  FROM student_test_attempts
+  WHERE id = p_attempt_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR v_attempt.student_id != auth.uid() THEN
+    RAISE EXCEPTION 'Attempt not found or unauthorized.';
+  END IF;
+
+  IF v_attempt.status != 'IN_PROGRESS' THEN
+    RAISE EXCEPTION 'Attempt is already submitted or closed.';
+  END IF;
+
+  -- 2. Revalidate active student, active enrollment & active batch
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'STUDENT' AND status = 'ACTIVE') THEN
+    RAISE EXCEPTION 'Student account is not active.';
+  END IF;
+
+  IF NOT is_actively_enrolled_in_batch(v_attempt.batch_id) THEN
+    RAISE EXCEPTION 'Active batch enrollment required to submit test attempt.';
+  END IF;
+
+  -- 3. Retrieve version configuration
+  SELECT * INTO v_version
+  FROM student_test_versions
+  WHERE id = v_attempt.test_version_id;
+
+  -- 4. Evaluate each question
+  FOR v_q IN (
+    SELECT * FROM student_test_question_versions
+    WHERE test_version_id = v_attempt.test_version_id
+  ) LOOP
+    v_is_correct := FALSE;
+    v_marks := 0.0;
+
+    -- CASE A: MCQ Evaluation
+    IF v_q.question_type = 'MCQ' THEN
+      SELECT selected_option_version_ids INTO v_selected_ids
+      FROM student_test_answers
+      WHERE attempt_id = p_attempt_id AND question_version_id = v_q.id;
+
+      IF v_selected_ids IS NOT NULL AND array_length(v_selected_ids, 1) = 1 THEN
+        IF EXISTS (SELECT 1 FROM student_test_option_versions WHERE id = v_selected_ids[1] AND is_correct = TRUE) THEN
+          v_is_correct := TRUE;
+          v_marks := v_q.marks;
+        ELSE
+          IF v_version.negative_marking = TRUE THEN
+            v_marks := -1.0 * COALESCE(v_q.negative_marks, v_version.negative_mark_value, 0.0);
+          END IF;
+        END IF;
+      END IF;
+
+    -- CASE B: MSQ Evaluation (Exact match: all correct selected, zero incorrect selected)
+    ELSIF v_q.question_type = 'MSQ' THEN
+      SELECT array_agg(id ORDER BY id) INTO v_correct_ids
+      FROM student_test_option_versions WHERE question_version_id = v_q.id AND is_correct = TRUE;
+
+      SELECT (
+        SELECT array_agg(x ORDER BY x) FROM unnest(selected_option_version_ids) x
+      ) INTO v_selected_ids
+      FROM student_test_answers
+      WHERE attempt_id = p_attempt_id AND question_version_id = v_q.id;
+
+      IF v_selected_ids IS NOT NULL AND v_selected_ids = v_correct_ids THEN
+        v_is_correct := TRUE;
+        v_marks := v_q.marks;
+      ELSIF v_selected_ids IS NOT NULL AND array_length(v_selected_ids, 1) > 0 THEN
+        IF v_version.negative_marking = TRUE THEN
+          v_marks := -1.0 * COALESCE(v_q.negative_marks, v_version.negative_mark_value, 0.0);
+        END IF;
+      END IF;
+
+    -- CASE C: NUMERICAL Evaluation
+    ELSIF v_q.question_type = 'NUMERICAL' THEN
+      SELECT student_text_response::NUMERIC INTO v_student_num
+      FROM student_test_answers
+      WHERE attempt_id = p_attempt_id AND question_version_id = v_q.id AND student_text_response IS NOT NULL;
+
+      IF v_student_num IS NOT NULL THEN
+        IF ABS(v_student_num - v_q.correct_numerical_value) <= COALESCE(v_q.numerical_tolerance, 0.0) THEN
+          v_is_correct := TRUE;
+          v_marks := v_q.marks;
+        ELSE
+          IF v_version.negative_marking = TRUE THEN
+            v_marks := -1.0 * COALESCE(v_q.negative_marks, v_version.negative_mark_value, 0.0);
+          END IF;
+        END IF;
+      END IF;
+    END IF;
+
+    -- Update answer row
+    UPDATE student_test_answers
+    SET is_correct = v_is_correct,
+        marks_awarded = v_marks
+    WHERE attempt_id = p_attempt_id AND question_version_id = v_q.id;
+
+    v_total_score := v_total_score + v_marks;
+  END LOOP;
+
+  -- Floor score at 0.0 if negative total
+  IF v_total_score < 0.0 THEN
+    v_total_score := 0.0;
+  END IF;
+
+  -- Division-by-Zero Protection
+  IF COALESCE(v_version.total_marks, 0) <= 0 THEN
+    v_percentage := 0.00;
+  ELSE
+    v_percentage := ROUND((v_total_score / v_version.total_marks) * 100.0, 2);
+  END IF;
+
+  -- 5. Mark attempt as COMPLETED
+  UPDATE student_test_attempts
+  SET status = 'COMPLETED',
+      score = v_total_score,
+      percentage = v_percentage,
+      submitted_at = now()
+  WHERE id = p_attempt_id;
+
+  RETURN jsonb_build_object(
+    'attempt_id', p_attempt_id,
+    'status', 'COMPLETED',
+    'score', v_total_score,
+    'percentage', v_percentage,
+    'submitted_at', now()
+  );
+END;
+$$;
+```
+
+---
+
+### 7.5 Complete Scorecard Retrieval RPC
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_student_test_scorecard(p_attempt_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+DECLARE
+  v_attempt RECORD;
+  v_is_auth BOOLEAN := FALSE;
+  v_result JSONB;
+BEGIN
+  SELECT a.*, tv.title AS test_title, tv.total_marks, tv.passing_marks
+  INTO v_attempt
+  FROM student_test_attempts a
+  JOIN student_test_versions tv ON tv.id = a.test_version_id
+  WHERE a.id = p_attempt_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Scorecard not found.';
+  END IF;
+
+  -- Verification: Attempt MUST be completed
+  IF v_attempt.status != 'COMPLETED' THEN
+    RAISE EXCEPTION 'Attempt is not completed. Scorecards are only accessible post-submission.';
+  END IF;
+
+  -- Authorization check: Student Owner OR Assigned Batch Teacher OR Admin/Super Admin
+  IF (v_attempt.student_id = auth.uid()) 
+     OR is_batch_teacher(v_attempt.batch_id) 
+     OR is_admin_or_super() THEN
+    v_is_auth := TRUE;
+  END IF;
+
+  IF NOT v_is_auth THEN
+    RAISE EXCEPTION 'Access denied to scorecard.';
+  END IF;
+
+  -- Deliver full scorecard with frozen historical questions, answers, correctness, and explanations
+  SELECT jsonb_build_object(
+    'attempt_id', v_attempt.id,
+    'test_title', v_attempt.test_title,
+    'score', v_attempt.score,
+    'percentage', v_attempt.percentage,
+    'total_marks', v_attempt.total_marks,
+    'passing_marks', v_attempt.passing_marks,
+    'submitted_at', v_attempt.submitted_at,
+    'questions', (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'question_id', qv.id,
+          'question_text', qv.question_text,
+          'question_type', qv.question_type,
+          'marks', qv.marks,
+          'negative_marks', qv.negative_marks,
+          'explanation', qv.explanation,
+          'selected_option_ids', ans.selected_option_version_ids,
+          'student_text_response', ans.student_text_response,
+          'is_correct', ans.is_correct,
+          'marks_awarded', ans.marks_awarded,
+          'options', (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'option_id', ov.id,
+                'option_text', ov.option_text,
+                'is_correct', ov.is_correct
+              ) ORDER BY ov.order_index
+            )
+            FROM student_test_option_versions ov
+            WHERE ov.question_version_id = qv.id
+          )
+        ) ORDER BY qv.order_index
+      )
+      FROM student_test_question_versions qv
+      LEFT JOIN student_test_answers ans ON ans.question_version_id = qv.id AND ans.attempt_id = v_attempt.id
+      WHERE qv.test_version_id = v_attempt.test_version_id
+    )
+  ) INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+```
+
+---
+
+## 8. SEPARATED PUBLIC PREVIEW VS. ENROLLED TEST DELIVERY
+
+```sql
+-- 1. Public Sample Preview (Strict Max 5 Questions, Zero Answer Keys / Explanations / Scoring Secrets)
+CREATE OR REPLACE FUNCTION public.get_public_test_preview(p_test_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+DECLARE
+  v_test RECORD;
+  v_result JSONB;
+BEGIN
+  SELECT id, active_version_id, is_curated_preview, status, title
+  INTO v_test
+  FROM student_tests
+  WHERE id = p_test_id;
+
+  IF NOT FOUND OR v_test.status != 'PUBLISHED' OR v_test.is_curated_preview != TRUE OR v_test.active_version_id IS NULL THEN
+    RAISE EXCEPTION 'Public preview not available for this test.';
+  END IF;
+
+  -- Return ONLY sample questions flagged with is_sample_preview = TRUE (Max 5)
+  SELECT jsonb_build_object(
+    'test_id', v_test.id,
+    'title', v_test.title,
+    'is_preview', TRUE,
+    'questions', (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'question_id', qv.id,
+          'question_text', qv.question_text,
+          'question_type', qv.question_type,
+          'options', (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'option_id', ov.id,
+                'option_text', ov.option_text
+              ) ORDER BY ov.order_index
+            )
+            FROM student_test_option_versions ov
+            WHERE ov.question_version_id = qv.id
+          )
+        ) ORDER BY qv.order_index
+      )
+      FROM (
+        SELECT * FROM student_test_question_versions
+        WHERE test_version_id = v_test.active_version_id
+          AND is_sample_preview = TRUE
+        ORDER BY order_index
+        LIMIT 5
+      ) qv
+    )
+  ) INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+
+-- 2. Enrolled Student Test Delivery (Full Questions, Stripped of Answer Keys)
+CREATE OR REPLACE FUNCTION public.get_enrolled_student_test_questions(p_attempt_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+STABLE
+AS $$
+DECLARE
+  v_attempt RECORD;
+  v_result JSONB;
+BEGIN
+  SELECT a.*, tv.title AS test_title, tv.duration_minutes
+  INTO v_attempt
+  FROM student_test_attempts a
+  JOIN student_test_versions tv ON tv.id = a.test_version_id
+  WHERE a.id = p_attempt_id;
+
+  IF NOT FOUND OR v_attempt.student_id != auth.uid() THEN
+    RAISE EXCEPTION 'Attempt not found or unauthorized.';
+  END IF;
+
+  IF v_attempt.status != 'IN_PROGRESS' THEN
+    RAISE EXCEPTION 'Attempt is not in progress.';
+  END IF;
+
+  -- Re-verify active enrollment & batch lifecycle
+  IF NOT is_actively_enrolled_in_batch(v_attempt.batch_id) THEN
+    RAISE EXCEPTION 'Active batch enrollment required to access test questions.';
+  END IF;
+
+  SELECT jsonb_build_object(
+    'attempt_id', v_attempt.id,
+    'test_title', v_attempt.test_title,
+    'duration_minutes', v_attempt.duration_minutes,
+    'started_at', v_attempt.started_at,
+    'questions', (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'question_id', qv.id,
+          'question_text', qv.question_text,
+          'question_type', qv.question_type,
+          'marks', qv.marks,
+          'negative_marks', qv.negative_marks,
+          'order_index', qv.order_index,
+          'options', (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'option_id', ov.id,
+                'option_text', ov.option_text,
+                'order_index', ov.order_index
+              ) ORDER BY ov.order_index
+            )
+            FROM student_test_option_versions ov
+            WHERE ov.question_version_id = qv.id
+          )
+        ) ORDER BY qv.order_index
+      )
+      FROM student_test_question_versions qv
+      WHERE qv.test_version_id = v_attempt.test_version_id
+    )
+  ) INTO v_result;
+
+  RETURN v_result;
+END;
+$$;
+```
+
+---
+
+## 9. DETERMINISTIC MULTI-BATCH ENTITLEMENT RESOLVER
+
+```typescript
+export interface EntitlementResolution {
+  hasAccess: boolean;
+  activeBatchIds: string[];
+  completedBatchIds: string[];
+  accessType: 'ACTIVE_BATCH' | 'HISTORICAL_BATCH' | 'DENIED';
+  error?: string;
+}
+
+export async function resolveStudentEntitlements(
+  studentId: string,
+  targetBatchId?: string,
+  targetCourseId?: string
+): Promise<EntitlementResolution> {
+  // Query all active and completed enrollments for student
+  const { data: enrollments, error } = await db
+    .from('student_enrollments')
+    .select('batch_id, course_id, status')
+    .eq('student_id', studentId)
+    .in('status', ['ACTIVE', 'COMPLETED']);
+
+  if (error) {
+    return { hasAccess: false, activeBatchIds: [], completedBatchIds: [], accessType: 'DENIED', error: error.message };
+  }
+
+  if (!enrollments || enrollments.length === 0) {
+    return { hasAccess: false, activeBatchIds: [], completedBatchIds: [], accessType: 'DENIED' };
+  }
+
+  const activeBatchIds = enrollments.filter(e => e.status === 'ACTIVE' && e.batch_id).map(e => e.batch_id);
+  const completedBatchIds = enrollments.filter(e => e.status === 'COMPLETED' && e.batch_id).map(e => e.batch_id);
+
+  // 1. Exact Batch Check (Never fall back to other batches of same course)
+  if (targetBatchId) {
+    if (activeBatchIds.includes(targetBatchId)) {
+      return { hasAccess: true, activeBatchIds, completedBatchIds, accessType: 'ACTIVE_BATCH' };
+    }
+    if (completedBatchIds.includes(targetBatchId)) {
+      return { hasAccess: true, activeBatchIds, completedBatchIds, accessType: 'HISTORICAL_BATCH' };
+    }
+    // Explicitly DENIED if not enrolled in this exact batch
+    return { hasAccess: false, activeBatchIds, completedBatchIds, accessType: 'DENIED' };
+  }
+
+  // 2. Course-Level Curriculum Aggregation across all matching enrolled batches
+  if (targetCourseId) {
+    const courseEnrollments = enrollments.filter(e => e.course_id === targetCourseId);
+    if (courseEnrollments.some(e => e.status === 'ACTIVE')) {
+      return { hasAccess: true, activeBatchIds, completedBatchIds, accessType: 'ACTIVE_BATCH' };
+    }
+    if (courseEnrollments.some(e => e.status === 'COMPLETED')) {
+      return { hasAccess: true, activeBatchIds, completedBatchIds, accessType: 'HISTORICAL_BATCH' };
+    }
+  }
+
+  return { hasAccess: false, activeBatchIds, completedBatchIds, accessType: 'DENIED' };
+}
+```
+
+---
+
+## 10. COMPLETE SECURITY AUDIT: PROGRESS, ATTENDANCE & STORAGE
+
+### 10.1 Anti-Fabrication Server-Authoritative Lecture Progress RPC
+
+```sql
+CREATE OR REPLACE FUNCTION public.sync_lecture_progress(
+  p_lecture_id UUID,
+  p_current_playback_time_seconds INTEGER
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_existing RECORD;
+  v_lecture RECORD;
+  v_delta_server_seconds INTEGER;
+  v_new_watch_time INTEGER;
+  v_completed BOOLEAN;
+BEGIN
+  -- 1. Validate caller is an active student
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'STUDENT' AND status = 'ACTIVE') THEN
+    RAISE EXCEPTION 'Only active registered students can record progress.';
+  END IF;
+
+  -- 2. Validate lecture access (Strictly ACTIVE batch enrollment required for write activity)
+  SELECT id, duration_seconds, batch_id, is_curated_preview, status
+  INTO v_lecture
+  FROM cms_lectures
+  WHERE id = p_lecture_id;
+
+  IF NOT FOUND OR v_lecture.status != 'PUBLISHED' THEN
+    RAISE EXCEPTION 'Lecture not accessible.';
+  END IF;
+
+  -- Historical completed batches and public previews are strictly read-only
+  IF v_lecture.batch_id IS NULL OR NOT is_actively_enrolled_in_batch(v_lecture.batch_id) THEN
+    RAISE EXCEPTION 'Active batch enrollment required to record lecture progress.';
+  END IF;
+
+  -- 3. Validate playback time bounds
+  IF p_current_playback_time_seconds < 0 THEN
+    RAISE EXCEPTION 'Invalid negative playback time.';
+  END IF;
+
+  p_current_playback_time_seconds := LEAST(p_current_playback_time_seconds, v_lecture.duration_seconds);
+
+  -- 4. Server-Side Elapsed Time Delta Validation
+  SELECT * INTO v_existing
+  FROM student_lecture_progress
+  WHERE student_id = auth.uid() AND lecture_id = p_lecture_id;
+
+  IF FOUND THEN
+    v_delta_server_seconds := EXTRACT(EPOCH FROM (now() - v_existing.last_watched_at))::INTEGER;
+
+    -- Clamp forward playback advance to server elapsed time + 5s buffer
+    IF p_current_playback_time_seconds > v_existing.watch_time_seconds THEN
+      v_new_watch_time := LEAST(
+        p_current_playback_time_seconds, 
+        v_existing.watch_time_seconds + v_delta_server_seconds + 5,
+        v_lecture.duration_seconds
+      );
+    ELSE
+      v_new_watch_time := v_existing.watch_time_seconds;
+    END IF;
+
+    -- Server-Authoritative Completion Calculation (90% threshold)
+    v_completed := v_existing.completed OR (v_new_watch_time >= (v_lecture.duration_seconds * 0.90));
+
+    UPDATE student_lecture_progress
+    SET watch_time_seconds = v_new_watch_time,
+        completed = v_completed,
+        last_watched_at = now()
+    WHERE id = v_existing.id;
+  ELSE
+    v_new_watch_time := LEAST(p_current_playback_time_seconds, 30, v_lecture.duration_seconds);
+    v_completed := (v_new_watch_time >= (v_lecture.duration_seconds * 0.90));
+
+    INSERT INTO student_lecture_progress (
+      student_id, lecture_id, watch_time_seconds, completed, last_watched_at
+    ) VALUES (
+      auth.uid(), p_lecture_id, v_new_watch_time, v_completed, now()
+    );
+  END IF;
+
+  RETURN jsonb_build_object('success', TRUE, 'watch_time_seconds', v_new_watch_time, 'completed', v_completed);
+END;
+$$;
+```
+
+### 10.2 Live Session Attendance Heartbeat & Finalization RPCs
+
+```sql
+-- 1. Student Heartbeat RPC (Verifies active live session presence)
+CREATE OR REPLACE FUNCTION public.record_live_attendance_heartbeat(p_live_class_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_live RECORD;
+BEGIN
+  SELECT id, batch_id, status INTO v_live
+  FROM cms_live_classes
+  WHERE id = p_live_class_id;
+
+  IF NOT FOUND OR v_live.status != 'PUBLISHED' THEN
+    RAISE EXCEPTION 'Live class not active.';
+  END IF;
+
+  IF NOT is_actively_enrolled_in_batch(v_live.batch_id) THEN
+    RAISE EXCEPTION 'Active batch enrollment required.';
+  END IF;
+
+  INSERT INTO student_attendance (
+    student_id, live_class_id, batch_id, status, last_heartbeat_at
+  ) VALUES (
+    auth.uid(), p_live_class_id, v_live.batch_id, 'PRESENT', now()
+  )
+  ON CONFLICT (student_id, live_class_id) DO UPDATE SET
+    last_heartbeat_at = now();
+
+  RETURN jsonb_build_object('success', TRUE);
+END;
+$$;
+
+-- 2. Teacher Host Attendance Finalization
+CREATE OR REPLACE FUNCTION public.finalize_live_class_attendance(p_live_class_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_live RECORD;
+BEGIN
+  SELECT id, batch_id INTO v_live FROM cms_live_classes WHERE id = p_live_class_id;
+
+  IF NOT FOUND OR NOT (is_batch_teacher(v_live.batch_id) OR is_admin_or_super()) THEN
+    RAISE EXCEPTION 'Unauthorized to finalize attendance.';
+  END IF;
+
+  -- Mark absent for all batch students who logged no heartbeats
+  INSERT INTO student_attendance (student_id, live_class_id, batch_id, status)
+  SELECT e.student_id, p_live_class_id, v_live.batch_id, 'ABSENT'
+  FROM student_enrollments e
+  WHERE e.batch_id = v_live.batch_id AND e.status = 'ACTIVE'
+  ON CONFLICT (student_id, live_class_id) DO NOTHING;
+
+  RETURN jsonb_build_object('success', TRUE);
+END;
+$$;
+```
+
+### 10.3 Supabase Storage Bucket Security Policies
+
+| Bucket Name | Access Type | Allowed Roles | Policy / Storage Access Mechanism |
+|---|---|---|---|
+| `study-materials` | Private | `public` (Preview), `authenticated` (Enrolled) | Direct public URL access blocked. Downloads served strictly via short-lived signed URLs (5 min expiry) generated by `ContentAccessService` after verifying batch entitlement or curated preview flag. |
+| `lecture-thumbnails` | Public Read | `public` | Read-only public CDN caching for fast UI rendering. Writes restricted to `is_admin_or_super()` and assigned `is_batch_teacher()`. |
+| `test-attachments` | Private | `authenticated` (Assigned Teachers / Enrolled Students) | Access verified against attempt/test ownership. Signed URLs expire in 10 minutes. |
+
+---
+
+## 11. EXPAND-AND-CONTRACT MIGRATION & NON-DESTRUCTIVE RECOVERY
+
+### 11.1 Non-Destructive Migration Sequence
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MIGRATION M1: Role System & Decoupled Security Functions                   │
+│ - Expand profiles.role check constraint to include 'TEACHER'               │
+│ - Deploy is_super_admin(), is_admin_or_super(), is_batch_teacher()         │
+│ - Rollback: Forward-fix script; revert constraint without dropping users.  │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ Verified via SQL Unit Tests
+┌─────────────────────────────────────▼──────────────────────────────────────┐
+│ MIGRATION M2: Academic Multi-Subject Join Tables & Preview Flags           │
+│ - Create cms_course_subjects and cms_batch_subjects (ON DELETE RESTRICT)   │
+│ - Add is_curated_preview BOOLEAN to cms_lectures, materials, tests         │
+│ - Backfill existing course.subject_id into cms_course_subjects             │
+│ - Rollback: Mark join tables deprecated; retain data.                      │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ Verified: Join table counts match course counts
+┌─────────────────────────────────────▼──────────────────────────────────────┐
+│ MIGRATION M3: Interactive Live Session Tables                              │
+│ - Apply live_instances, live_chat_messages, live_polls, live_quizzes       │
+│ - Establish decoupled RLS policies for student attendance and chat         │
+│ - Rollback: Disable live session routes; retain tables.                    │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ Verified: Tables active, RLS active
+┌─────────────────────────────────────▼──────────────────────────────────────┐
+│ MIGRATION M4: Batch-Centric Enrollment Schema & Multi-Batch Resolver       │
+│ - Verify 5 active enrollments integrity in student_enrollments             │
+│ - Deploy array-based entitlement resolver in ContentAccessService          │
+│ - Update student_enrollments unique constraint to (student_id, batch_id)   │
+│ - Rollback: Forward-fix; never restore (student_id, course_id) constraint. │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ Verified: Multi-batch enrollment active
+┌─────────────────────────────────────▼──────────────────────────────────────┐
+│ MIGRATION M5: Test Immutability, Composite Keys & Concurrency RPCs         │
+│ - Create student_test_versions, question_versions, option_versions tables  │
+│ - Deploy partial unique index & enforce_test_version_immutability() trigger│
+│ - Deploy get_public_test_preview, get_enrolled_questions, submit_attempt   │
+│ - Revoke direct student table access on answer keys, answers, and attempts │
+│ - Rollback: Forward-fix RPCs; retain immutable version snapshots.          │
+└─────────────────────────────────────┬──────────────────────────────────────┘
+                                      │ Verified: Historical scorecards 100% frozen
+┌─────────────────────────────────────▼──────────────────────────────────────┐
+│ MIGRATION M6: Frontend Studio Unification & Service Layer Transition       │
+│ - Deploy unified /admin/studio workspace with cascading selectors         │
+│ - Switch ContentAccessService to batch-first entitlement resolution        │
+│ - Execute complete Playwright E2E verification suite                       │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 12. FULL REGRESSION & PLAYWRIGHT E2E TEST MATRIX
+
+| Subsystem / Test Case | Target State | Security / Functional Invariant | Verification Classification |
+|---|---|---|---|
+| **Direct Option Table SELECT Block** | Zero-Trust Design | Direct query by student returns permission denied. | **Proposed Security Test** |
+| **In-Progress Score Concealment** | Zero-Trust RPC | `get_student_test_scorecard` rejects `IN_PROGRESS` attempts. | **Proposed Security Test** |
+| **Public Preview Limit (Max 5)** | Preview Separation | Public call to `get_public_test_preview` returns max 5 sample questions. | **Proposed Security Test** |
+| **Cross-Test Version Hijacking** | Composite FKs | Test A referencing Version of Test B fails composite FK check. | **Proposed DB Integrity Test** |
+| **Version Finalization Lock** | Finalization Trigger | Inserting question into finalized test version raises trigger exception. | **Proposed DB Integrity Test** |
+| **Attempt Creation Idempotency** | Partial Unique Index | 2 concurrent attempt requests return the exact same attempt ID. | **Proposed Concurrency Test** |
+| **MSQ Scoring Validation** | Scoring Engine | All correct options selected = full marks; partial/wrong = negative/zero. | **Proposed Scoring Test** |
+| **NUMERICAL Tolerance Scoring** | Scoring Engine | Value within tolerance range evaluated as correct. | **Proposed Scoring Test** |
+| **Division-by-Zero Score Guard** | Scoring Engine | Total marks = 0 returns 0.00% without SQL exception. | **Proposed Scoring Test** |
+| **Progress Leap Fabrication Block**| Anti-Fabrication RPC | Jump from 0 to 1000s in 1 request clamped to max jump delta. | **Proposed Progress Test** |
+| **Completed Batch Submission Guard**| Lifecycle Guard | Calling `start_student_test_attempt` on completed batch throws 403. | **Proposed Lifecycle Test** |
+| **Multi-Batch Concurrent Enrollment**| Multi-Batch Model | Student joins 2 cohorts of Course 1 without constraint violation. | **Proposed Enrollment Test** |
+| **Authentication & Turnstile** | Verified in Production | Live login verified on `topveda.in` with production Turnstile keys. | **Verified in Production** |
+| **5 Historical Enrollments** | Verified in Supabase | 5 live rows hold non-null `course_id` and `batch_id`. | **Verified by Database Inspection** |
+| **Internal Migration Ledger** | Private Schema | Inaccessible via PostgREST; table absence in `public` verified. | **UNVERIFIED (Table absence in public confirmed)** |
+
+---
+
+## 13. PERMANENT AI DEVELOPMENT GOVERNANCE INSTRUCTIONS
+
+### 13.1 Authoritative Governance Charter
+To maintain architectural integrity, all future AI coding assistants operating on TopVeda must adhere to this single authoritative standard, which extends and harmonizes with [`PROJECT_RULES.md`](file:///d:/TopVeda/TopVeda/PROJECT_RULES.md):
+
+1. **Full Lifecycle Thinking**: Every feature request must be analyzed across the full stack before writing code:
+   $$\text{Requirement} \to \text{Schema/FKs} \to \text{RLS/Privileges} \to \text{API/Services} \to \text{UI Discovery} \to \text{Consumption} \to \text{Activity Tracking} \to \text{Reporting} \to \text{Regression Proof}$$
+2. **Zero-Destructive Migrations**: Never drop columns, truncate tables, or execute destructive `CASCADE` drops without an explicit multi-step backup and owner sign-off.
+3. **Double-Layered Security**: Never rely solely on frontend or API checks. Every security boundary must be enforced by PostgreSQL RLS, database privileges (`REVOKE`/`GRANT`), and security definer functions.
+4. **Empirical Evidence Required**: Never report a task as complete based on assumption. Provide command outputs, browser screenshots, or test runner logs.
+5. **Secret Hygiene**: Never log, print, or commit API keys, Turnstile secrets, Supabase service keys, or environment secrets.
+
+---
+
+## 14. REMAINING OWNER DECISIONS (PENDING PRODUCT POLICIES)
+
+The following two product policy decisions remain open for final owner determination:
+
+### Decision 1: Anonymous Test Preview Experience
+- **Option A (Recommended)**: Visitors can view sample questions in preview mode to assess test quality, but must register/sign in to submit answers and generate a permanent scorecard.
+  - *Pros*: Protects database from spam attempts; drives student sign-ups; keeps analytics clean.
+  - *Cons*: Slight friction before interactive evaluation.
+- **Option B**: Visitors can complete a full interactive test without an account, generating a temporary local-session scorecard with a prompt to create an account to save results.
+  - *Pros*: Maximum user engagement and zero initial friction.
+  - *Cons*: Requires client-side grading engine for previews and temporary localStorage state management.
+
+### Decision 2: Batch Cancellation Policy & Access Revocation
+- **Option A (Recommended)**: Cancelled batches immediately revoke live and learning content access, initiating automated student transfer or fee refund workflows.
+  - *Pros*: Clear commercial demarcation and compliance with cancellation terms.
+  - *Cons*: Immediate loss of materials for affected students.
+- **Option B**: Cancelled batches maintain a 14-day grace period with read-only content access while students are transferred to alternative active batches.
+  - *Pros*: Smoother transition for enrolled students.
+  - *Cons*: Requires temporary grace-period entitlement logic in authorization services.
+
+---
+
+## 15. EXPLICIT RISKS, ASSUMPTIONS & UNVERIFIED ITEMS
+
+1. **Unverified Internal Migration Ledger**: Direct access to `supabase_migrations.schema_migrations` is inaccessible over PostgREST. While table absence in the exposed `public` schema has been confirmed empirically, the exact execution ledger remains categorized as **UNVERIFIED**.
+2. **Untracked Working Tree Provenance**: Files including `PROJECT_RULES.md`, `GSD-STYLE.md`, and `.agents/` remain untracked in Git. Permanent governance rules will be formally anchored when these files are staged and committed alongside `PROJECT_ARCHITECTURE_V6.6.md`.
+3. **5 Historical Enrollments**: All 5 existing rows in `student_enrollments` have been empirically verified to contain valid `batch_id` and `course_id` entries.
+
+---
+
+**End of Architecture Specification v6.6. Awaiting explicit owner authorization before initiating any code or database implementation.**

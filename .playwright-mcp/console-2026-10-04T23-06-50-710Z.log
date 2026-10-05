@@ -1,0 +1,5 @@
+[     760ms] [ERROR] Loading the script 'https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495' violates the following Content Security Policy directive: "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.youtube.com https://s.ytimg.com". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked. @ https://topveda.in/admin/cms/tests:0
+[24382861ms] [ERROR] Failed to load resource: net::ERR_INTERNET_DISCONNECTED @ https://uxkvwuavidufnqliauuj.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[24393332ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_CLOSED @ https://uxkvwuavidufnqliauuj.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[24397750ms] [ERROR] Failed to load resource: net::ERR_QUIC_PROTOCOL_ERROR @ https://uxkvwuavidufnqliauuj.supabase.co/auth/v1/token?grant_type=refresh_token:0
+[24402570ms] [ERROR] Failed to load resource: net::ERR_QUIC_PROTOCOL_ERROR @ https://uxkvwuavidufnqliauuj.supabase.co/auth/v1/token?grant_type=refresh_token:0

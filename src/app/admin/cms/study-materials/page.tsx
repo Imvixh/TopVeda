@@ -14,6 +14,8 @@ import {
   CmsStudyMaterial,
   CmsCourse,
   CmsChapter,
+  CmsBatch,
+  CmsSubject,
   ContentStatus,
 } from "@/types/cms.types";
 import { ContentStatusBadge } from "@/components/admin/cms/content-status-badge";
@@ -70,10 +72,14 @@ function StudyMaterialsCmsContent() {
   const [studyMaterials, setStudyMaterials] = React.useState<CmsStudyMaterial[]>([]);
   const [courses, setCourses] = React.useState<CmsCourse[]>([]);
   const [chapters, setChapters] = React.useState<CmsChapter[]>([]);
+  const [batches, setBatches] = React.useState<CmsBatch[]>([]);
+  const [subjects, setSubjects] = React.useState<CmsSubject[]>([]);
 
   const [isLoading, setIsLoading] = React.useState(true);
   const [refreshTrigger, setRefreshTrigger] = React.useState(0);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedBatchFilter, setSelectedBatchFilter] = React.useState<string>("ALL");
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = React.useState<string>("ALL");
   const [selectedCourseFilter, setSelectedCourseFilter] = React.useState<string>(initialCourseId);
   const [selectedChapterFilter, setSelectedChapterFilter] = React.useState<string>(initialChapterId);
   const [materialTypeFilter, setMaterialTypeFilter] = React.useState<string>("ALL");
@@ -97,6 +103,8 @@ function StudyMaterialsCmsContent() {
   const [previewItem, setPreviewItem] = React.useState<PreviewContentItem | null>(null);
 
   // Form State
+  const [formBatchId, setFormBatchId] = React.useState("");
+  const [formSubjectId, setFormSubjectId] = React.useState("");
   const [formCourseId, setFormCourseId] = React.useState("");
   const [formChapterId, setFormChapterId] = React.useState("");
   const [formTitle, setFormTitle] = React.useState("");
@@ -125,15 +133,19 @@ function StudyMaterialsCmsContent() {
 
     async function loadData() {
       try {
-        const [cData, chData, smData] = await Promise.all([
+        const [cData, chData, smData, bData, sData] = await Promise.all([
           CmsService.getCourses(supabase),
           CmsService.getChapters(supabase),
           CmsService.getStudyMaterials(supabase),
+          CmsService.getBatches(supabase),
+          CmsService.getSubjects(supabase),
         ]);
         if (!isMounted) return;
         setCourses(cData);
         setChapters(chData);
         setStudyMaterials(smData);
+        setBatches(bData);
+        setSubjects(sData);
       } catch {
         if (!isMounted) return;
         setFeedback({ type: "error", message: "Failed to load study materials and syllabus taxonomy." });
@@ -150,6 +162,30 @@ function StudyMaterialsCmsContent() {
       isMounted = false;
     };
   }, [supabase, refreshTrigger]);
+
+  // Selected batch's subjects for form
+  const formBatchSubjects = React.useMemo(() => {
+    if (!formBatchId) return subjects;
+    const b = batches.find((x) => x.id === formBatchId);
+    if (b?.batch_subjects && b.batch_subjects.length > 0) {
+      return (b.batch_subjects as Array<{ subject?: CmsSubject; subject_id: string }>)
+        .map((bs) => bs.subject)
+        .filter(Boolean) as CmsSubject[];
+    }
+    return subjects;
+  }, [batches, subjects, formBatchId]);
+
+  const handleBatchChangeInForm = (batchId: string) => {
+    setFormBatchId(batchId);
+    const b = batches.find((x) => x.id === batchId);
+    if (b?.batch_subjects && b.batch_subjects.length > 0) {
+      setFormSubjectId(b.batch_subjects[0].subject_id);
+    } else if (b?.subject_id) {
+      setFormSubjectId(b.subject_id);
+    } else if (subjects[0]) {
+      setFormSubjectId(subjects[0].id);
+    }
+  };
 
   // Dependent chapters based on selected course filter
   const filteredChaptersForFilter = React.useMemo(() => {
@@ -175,6 +211,16 @@ function StudyMaterialsCmsContent() {
 
   const handleOpenCreateModal = () => {
     setEditingMaterial(null);
+    const defaultBatch = batches[0]?.id || "";
+    setFormBatchId(defaultBatch);
+    const b = batches.find((x) => x.id === defaultBatch);
+    if (b?.batch_subjects && b.batch_subjects.length > 0) {
+      setFormSubjectId(b.batch_subjects[0].subject_id);
+    } else if (b?.subject_id) {
+      setFormSubjectId(b.subject_id);
+    } else {
+      setFormSubjectId(subjects[0]?.id || "");
+    }
     const defaultCourse = courses[0]?.id || "";
     setFormCourseId(defaultCourse);
     const relatedChapters = chapters.filter((ch) => ch.course_id === defaultCourse);
@@ -185,17 +231,12 @@ function StudyMaterialsCmsContent() {
     setFormFileSizeBytes(null);
     setFormPageCount(null);
     setFormDisplayOrder(studyMaterials.length + 1);
-    setFormIsVisible(true);
-    setFormStatus("PUBLISHED");
-    setFormStartsAt("");
-    setFormEndsAt("");
-    setFormErrors({});
-    setSignedDocPreview(null);
-    setIsModalOpen(true);
   };
 
   const handleOpenEditModal = async (sm: CmsStudyMaterial) => {
     setEditingMaterial(sm);
+    setFormBatchId(sm.batch_id || batches[0]?.id || "");
+    setFormSubjectId(sm.subject_id || subjects[0]?.id || "");
     // Find parent course from chapter or direct course_id
     let resolvedCourseId = sm.course_id || "";
     if (!resolvedCourseId && sm.chapter_id) {
@@ -320,6 +361,8 @@ function StudyMaterialsCmsContent() {
 
     const payload: Partial<CmsStudyMaterial> = {
       ...(editingMaterial ? { id: editingMaterial.id } : {}),
+      batch_id: formBatchId || null,
+      subject_id: formSubjectId || null,
       course_id: formCourseId || null,
       chapter_id: formChapterId || null,
       title: formTitle.trim(),
@@ -468,6 +511,9 @@ function StudyMaterialsCmsContent() {
         sm.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         sm.material_type.toLowerCase().includes(searchQuery.toLowerCase());
 
+      const matchesBatch = selectedBatchFilter === "ALL" || sm.batch_id === selectedBatchFilter;
+      const matchesSubject = selectedSubjectFilter === "ALL" || sm.subject_id === selectedSubjectFilter;
+
       let matchesCourse = true;
       if (selectedCourseFilter !== "ALL") {
         if (sm.course_id) {
@@ -484,9 +530,9 @@ function StudyMaterialsCmsContent() {
       const matchesType = materialTypeFilter === "ALL" || sm.material_type === materialTypeFilter;
       const matchesStatus = statusFilter === "ALL" || sm.status === statusFilter;
 
-      return matchesSearch && matchesCourse && matchesChapter && matchesType && matchesStatus;
+      return matchesSearch && matchesBatch && matchesSubject && matchesCourse && matchesChapter && matchesType && matchesStatus;
     });
-  }, [studyMaterials, searchQuery, selectedCourseFilter, selectedChapterFilter, materialTypeFilter, statusFilter, chapterMap]);
+  }, [studyMaterials, searchQuery, selectedBatchFilter, selectedSubjectFilter, selectedCourseFilter, selectedChapterFilter, materialTypeFilter, statusFilter, chapterMap]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -550,10 +596,10 @@ function StudyMaterialsCmsContent() {
 
       {/* 2. Search & Multi-Level Filters Toolbar */}
       <Card className="p-4 shadow-2xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="lg:col-span-1">
             <Input
-              placeholder="Search by document title or type..."
+              placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               icon={<Search className="h-4 w-4" />}
@@ -563,18 +609,15 @@ function StudyMaterialsCmsContent() {
 
           <div>
             <select
-              aria-label="Filter by course"
-              value={selectedCourseFilter}
-              onChange={(e) => {
-                setSelectedCourseFilter(e.target.value);
-                setSelectedChapterFilter("ALL");
-              }}
-              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              aria-label="Filter by batch"
+              value={selectedBatchFilter}
+              onChange={(e) => setSelectedBatchFilter(e.target.value)}
+              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
             >
-              <option value="ALL">All Courses</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
+              <option value="ALL">All Batches</option>
+              {batches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.title} {b.board_label ? `(${b.board_label})` : ""}
                 </option>
               ))}
             </select>
@@ -582,15 +625,15 @@ function StudyMaterialsCmsContent() {
 
           <div>
             <select
-              aria-label="Filter by chapter"
-              value={selectedChapterFilter}
-              onChange={(e) => setSelectedChapterFilter(e.target.value)}
-              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-medium text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              aria-label="Filter by subject"
+              value={selectedSubjectFilter}
+              onChange={(e) => setSelectedSubjectFilter(e.target.value)}
+              className="h-9 w-full text-xs rounded-lg border border-brand-border bg-brand-surface px-3 py-1 font-semibold text-brand-text-primary focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
             >
-              <option value="ALL">All Chapters</option>
-              {filteredChaptersForFilter.map((ch) => (
-                <option key={ch.id} value={ch.id}>
-                  Ch {ch.chapter_number}: {ch.title}
+              <option value="ALL">All Subjects</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -696,11 +739,22 @@ function StudyMaterialsCmsContent() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <p className="font-bold text-brand-text-primary line-clamp-1">{parentCourseTitle}</p>
-                          <p className="text-[11px] text-brand-text-muted line-clamp-1">
-                            {parentChapter ? `Ch ${parentChapter.chapter_number}: ${parentChapter.title}` : "Course-Wide"}
+                        <div className="space-y-1">
+                          <p className="font-bold text-brand-charcoal text-xs line-clamp-1">
+                            {sm.batch?.title || parentCourseTitle}
                           </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {sm.subject?.name && (
+                              <span className="text-[10px] font-bold text-brand-orange bg-orange-50 border border-orange-100 px-1.5 py-0.5 rounded">
+                                {sm.subject.name}
+                              </span>
+                            )}
+                            {parentChapter && (
+                              <span className="text-[10px] text-brand-text-muted">
+                                Ch {parentChapter.chapter_number}: {parentChapter.title}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-center">
@@ -839,7 +893,50 @@ function StudyMaterialsCmsContent() {
         maxWidth="lg"
       >
         <form onSubmit={handleSaveMaterial} className="space-y-4">
-          {/* Relational Selectors */}
+          {/* Batch & Subject Relational Selectors */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-orange-50/50 border border-orange-200/70">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-brand-text-primary flex items-center gap-1">
+                <span>Target Academic Batch *</span>
+              </label>
+              <select
+                aria-label="Select batch"
+                value={formBatchId}
+                onChange={(e) => handleBatchChangeInForm(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-white px-2.5 py-1 text-xs font-bold text-brand-charcoal focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              >
+                <option value="">Select Batch...</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.title} {b.board_label ? `(${b.board_label})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-brand-text-primary flex items-center gap-1">
+                <span>Target Subject *</span>
+              </label>
+              <select
+                aria-label="Select subject"
+                value={formSubjectId}
+                onChange={(e) => setFormSubjectId(e.target.value)}
+                disabled={isSaving}
+                className="h-9 w-full rounded-lg border border-brand-border bg-white px-2.5 py-1 text-xs font-bold text-brand-charcoal focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              >
+                <option value="">Select Subject...</option>
+                {formBatchSubjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Optional Course / Chapter taxonomy */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-brand-bg-warm/60 border border-brand-border">
             <div className="space-y-1">
               <label className="block text-xs font-bold text-brand-text-primary">Parent Course (Optional)</label>

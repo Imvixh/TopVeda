@@ -83,6 +83,7 @@ export default function AdminTestsPage() {
     boards: [],
     classes: [],
     subjects: [],
+    batches: [],
     courses: [],
     chapters: [],
   });
@@ -95,6 +96,7 @@ export default function AdminTestsPage() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = React.useState<string>("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = React.useState<string>("ALL");
+  const [selectedBatchFilter, setSelectedBatchFilter] = React.useState<string>("ALL");
   const [selectedBoardFilter, setSelectedBoardFilter] = React.useState<string>("ALL");
   const [selectedClassFilter, setSelectedClassFilter] = React.useState<string>("ALL");
   const [selectedSubjectFilter, setSelectedSubjectFilter] = React.useState<string>("ALL");
@@ -111,6 +113,7 @@ export default function AdminTestsPage() {
   const [formTitle, setFormTitle] = React.useState("");
   const [formDescription, setFormDescription] = React.useState("");
   const [formType, setFormType] = React.useState("chapter_quiz"); // 'chapter_quiz', 'test', 'practice_drill', 'mock_exam'
+  const [formBatchId, setFormBatchId] = React.useState("");
   const [formBoardId, setFormBoardId] = React.useState("");
   const [formClassId, setFormClassId] = React.useState("");
   const [formSubjectId, setFormSubjectId] = React.useState("");
@@ -145,6 +148,7 @@ export default function AdminTestsPage() {
         if (searchQuery) params.set("search", searchQuery);
         if (selectedTypeFilter !== "ALL") params.set("testType", selectedTypeFilter);
         if (selectedStatusFilter !== "ALL") params.set("status", selectedStatusFilter);
+        if (selectedBatchFilter !== "ALL") params.set("batchId", selectedBatchFilter);
         if (selectedBoardFilter !== "ALL") params.set("boardId", selectedBoardFilter);
         if (selectedClassFilter !== "ALL") params.set("classId", selectedClassFilter);
         if (selectedSubjectFilter !== "ALL") params.set("subjectId", selectedSubjectFilter);
@@ -175,7 +179,7 @@ export default function AdminTestsPage() {
     return () => {
       isMounted = false;
     };
-  }, [searchQuery, selectedTypeFilter, selectedStatusFilter, selectedBoardFilter, selectedClassFilter, selectedSubjectFilter, fetchTrigger]);
+  }, [searchQuery, selectedTypeFilter, selectedStatusFilter, selectedBatchFilter, selectedBoardFilter, selectedClassFilter, selectedSubjectFilter, fetchTrigger]);
 
   const loadData = React.useCallback((showRefreshing = false) => {
     if (showRefreshing) setIsRefreshing(true);
@@ -195,15 +199,26 @@ export default function AdminTestsPage() {
     return taxonomy.chapters.filter((ch) => ch.course_id === matchedCourse.id);
   }, [formBoardId, formClassId, formSubjectId, taxonomy]);
 
+  // Available subjects for the selected batch
+  const batchSubjects = React.useMemo(() => {
+    if (!formBatchId) return taxonomy.subjects;
+    const b = taxonomy.batches.find((item) => item.id === formBatchId);
+    if (!b || !b.batch_subjects || b.batch_subjects.length === 0) return taxonomy.subjects;
+    const subs = b.batch_subjects.map((bs) => bs.subject).filter(Boolean) as { id: string; name: string; code?: string }[];
+    return subs.length > 0 ? subs : taxonomy.subjects;
+  }, [formBatchId, taxonomy.batches, taxonomy.subjects]);
+
   // Open Create Wizard
   const handleOpenCreateWizard = () => {
     setTestId(undefined);
     setFormTitle("");
     setFormDescription("");
     setFormType("chapter_quiz");
+    const defaultBatch = taxonomy.batches[0]?.id || "";
     const defaultBoard = taxonomy.boards[0]?.id || "";
     const defaultClass = taxonomy.classes[0]?.id || "";
     const defaultSubject = taxonomy.subjects[0]?.id || "";
+    setFormBatchId(defaultBatch);
     setFormBoardId(defaultBoard);
     setFormClassId(defaultClass);
     setFormSubjectId(defaultSubject);
@@ -236,6 +251,7 @@ export default function AdminTestsPage() {
       setFormTitle(data.title);
       setFormDescription(data.description || "");
       setFormType(data.testType);
+      setFormBatchId(data.batchId || "");
 
       // Resolve Board & Class from course if any
       const course = taxonomy.courses.find((c) => c.id === data.courseId);
@@ -483,6 +499,7 @@ export default function AdminTestsPage() {
         totalMarks: totalCalculatedMarks,
         passingMarks: Math.round(totalCalculatedMarks * 0.4),
         accessTier: "FREE",
+        batchId: formBatchId || undefined,
         subjectId: formSubjectId || undefined,
         subjectName: matchedSubject?.name || "General",
         courseId: matchedCourse?.id || undefined,
@@ -675,7 +692,7 @@ export default function AdminTestsPage() {
 
       {/* Filter Bar */}
       <Card className="p-4 rounded-2xl bg-white border border-brand-border space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search */}
           <div className="relative lg:col-span-2">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" />
@@ -686,6 +703,20 @@ export default function AdminTestsPage() {
               className="pl-9 rounded-xl text-xs"
             />
           </div>
+
+          {/* Batch Filter */}
+          <select
+            value={selectedBatchFilter}
+            onChange={(e) => setSelectedBatchFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-brand-border text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"
+          >
+            <option value="ALL">All Batches</option>
+            {taxonomy.batches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.title} {b.board_label ? `(${b.board_label})` : ""}
+              </option>
+            ))}
+          </select>
 
           {/* Type Filter */}
           <select
@@ -756,11 +787,12 @@ export default function AdminTestsPage() {
             ))}
           </select>
 
-          {(selectedTypeFilter !== "ALL" || selectedStatusFilter !== "ALL" || selectedBoardFilter !== "ALL" || selectedClassFilter !== "ALL" || selectedSubjectFilter !== "ALL" || searchQuery) && (
+          {(selectedTypeFilter !== "ALL" || selectedStatusFilter !== "ALL" || selectedBatchFilter !== "ALL" || selectedBoardFilter !== "ALL" || selectedClassFilter !== "ALL" || selectedSubjectFilter !== "ALL" || searchQuery) && (
             <button
               onClick={() => {
                 setSelectedTypeFilter("ALL");
                 setSelectedStatusFilter("ALL");
+                setSelectedBatchFilter("ALL");
                 setSelectedBoardFilter("ALL");
                 setSelectedClassFilter("ALL");
                 setSelectedSubjectFilter("ALL");
@@ -867,6 +899,11 @@ export default function AdminTestsPage() {
 
                   {/* Academic Badges */}
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-brand-text-muted pt-1">
+                    {item.batchTitle && (
+                      <span className="px-2 py-0.5 rounded-lg bg-orange-100/70 text-brand-orange font-black border border-orange-200">
+                        {item.batchTitle}
+                      </span>
+                    )}
                     {item.boardName && (
                       <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-brand-charcoal font-bold">
                         {item.boardName}
@@ -1070,6 +1107,52 @@ export default function AdminTestsPage() {
                       </select>
                     </div>
 
+                    {/* Academic Targeting: Target Academic Batch */}
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-bold text-brand-charcoal flex items-center justify-between">
+                        <span>Target Academic Batch <span className="text-rose-500">*</span></span>
+                        <span className="text-[10px] text-brand-orange font-bold uppercase">Batch Centric Architecture</span>
+                      </label>
+                      <select
+                        value={formBatchId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormBatchId(val);
+                          const b = taxonomy.batches.find((item) => item.id === val);
+                          if (b?.batch_subjects && b.batch_subjects.length > 0) {
+                            const firstSubId = b.batch_subjects[0]?.subject?.id || b.batch_subjects[0]?.subject_id;
+                            if (firstSubId) setFormSubjectId(firstSubId);
+                          }
+                        }}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold bg-orange-50/30 border border-orange-200 text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"
+                      >
+                        <option value="">-- All / General Platform Test --</option>
+                        {taxonomy.batches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.title} {b.board_label ? `(${b.board_label})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Academic Targeting: Subject */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-brand-charcoal">
+                        Subject <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={formSubjectId}
+                        onChange={(e) => setFormSubjectId(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold bg-white border border-brand-border text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"
+                      >
+                        {batchSubjects.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     {/* Academic Targeting: Board */}
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-brand-charcoal">
@@ -1101,24 +1184,6 @@ export default function AdminTestsPage() {
                         {taxonomy.classes.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Academic Targeting: Subject */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-brand-charcoal">
-                        Subject <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={formSubjectId}
-                        onChange={(e) => setFormSubjectId(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold bg-white border border-brand-border text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"
-                      >
-                        {taxonomy.subjects.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
                           </option>
                         ))}
                       </select>

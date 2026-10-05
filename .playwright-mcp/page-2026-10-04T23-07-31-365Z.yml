@@ -1,0 +1,321 @@
+- generic [ref=f17e2]:
+  - complementary [ref=f17e7]:
+    - generic [ref=f17e8]:
+      - link "TopVeda CMS" [ref=f17e9] [cursor=pointer]:
+        - /url: /admin/cms
+        - generic [ref=f17e12]:
+          - generic "TopVeda" [ref=f17e13]:
+            - generic [ref=f17e14]: TOP
+            - generic [ref=f17e15]: VEDA
+          - generic [ref=f17e16]: CMS
+      - button "Collapse Sidebar" [ref=f17e18]
+    - generic [ref=f17e21]:
+      - generic [ref=f17e22]:
+        - paragraph [ref=f17e23]: CONTENT
+        - navigation [ref=f17e24]:
+          - link "Dashboard" [ref=f17e25] [cursor=pointer]:
+            - /url: /admin/cms
+          - link "Hero Banners" [ref=f17e32] [cursor=pointer]:
+            - /url: /admin/cms/hero
+          - link "New & Featured Batches" [ref=f17e36] [cursor=pointer]:
+            - /url: /admin/cms/batches/upcoming
+          - link "Ongoing Batches" [ref=f17e41] [cursor=pointer]:
+            - /url: /admin/cms/batches/ongoing
+          - link "Live Classes" [ref=f17e47] [cursor=pointer]:
+            - /url: /admin/cms/live-classes
+          - link "Latest Lectures" [ref=f17e55] [cursor=pointer]:
+            - /url: /admin/cms/lectures
+          - link "Explore Courses" [ref=f17e60] [cursor=pointer]:
+            - /url: /admin/cms/courses
+          - link "Study Materials" [ref=f17e65] [cursor=pointer]:
+            - /url: /admin/cms/study-materials
+          - link "Test & Practice" [ref=f17e70] [cursor=pointer]:
+            - /url: /admin/cms/tests
+      - generic [ref=f17e77]:
+        - paragraph [ref=f17e78]: ACADEMIC
+        - navigation [ref=f17e79]:
+          - link "Boards" [ref=f17e80] [cursor=pointer]:
+            - /url: /admin/cms/boards
+          - link "Classes" [ref=f17e84] [cursor=pointer]:
+            - /url: /admin/cms/classes
+          - link "Subjects" [ref=f17e91] [cursor=pointer]:
+            - /url: /admin/cms/subjects
+          - link "Chapters" [ref=f17e95] [cursor=pointer]:
+            - /url: /admin/cms/chapters
+      - generic [ref=f17e100]:
+        - paragraph [ref=f17e101]: ENGAGEMENT
+        - navigation [ref=f17e102]:
+          - link "Hub / Announcements" [ref=f17e103] [cursor=pointer]:
+            - /url: /admin/cms/hub
+          - link "Daily Motivation" [ref=f17e108] [cursor=pointer]:
+            - /url: /admin/cms/quotes
+      - generic [ref=f17e113]:
+        - paragraph [ref=f17e114]: REVIEW
+        - navigation [ref=f17e115]:
+          - link "Pending Reviews" [ref=f17e116] [cursor=pointer]:
+            - /url: /admin/cms/reviews
+      - generic [ref=f17e122]:
+        - paragraph [ref=f17e123]: AI CHATBOT
+        - navigation [ref=f17e124]:
+          - link "Overview & Settings" [ref=f17e125] [cursor=pointer]:
+            - /url: /admin/cms/chatbot
+          - link "Prompts" [ref=f17e130] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/prompts
+          - link "FAQs" [ref=f17e134] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/faqs
+          - link "Knowledge Sources" [ref=f17e139] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/knowledge
+      - generic [ref=f17e145]:
+        - paragraph [ref=f17e146]: INTEGRATIONS
+        - navigation [ref=f17e147]:
+          - link "YouTube Integration Phase 6A" [ref=f17e148] [cursor=pointer]:
+            - /url: /admin/cms/integrations/youtube
+            - generic [ref=f17e151]: YouTube Integration
+            - generic [ref=f17e152]: Phase 6A
+      - generic [ref=f17e153]:
+        - paragraph [ref=f17e154]: ADMINISTRATION
+        - navigation [ref=f17e155]:
+          - link "Admin Applications" [ref=f17e156] [cursor=pointer]:
+            - /url: /admin/applications
+          - link "Profile & Settings" [ref=f17e162] [cursor=pointer]:
+            - /url: /admin/cms/profile
+    - generic [ref=f17e167]:
+      - link "Admin Center" [ref=f17e168] [cursor=pointer]:
+        - /url: /admin
+      - generic [ref=f17e173]:
+        - link [ref=f17e174] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - generic [ref=f17e179]:
+            - paragraph [ref=f17e180]: Vishal Kumar
+            - paragraph [ref=f17e181]: SUPER_ADMIN
+        - button "Sign Out" [ref=f17e182]
+  - generic [ref=f17e186]:
+    - banner [ref=f17e187]:
+      - generic [ref=f17e189]:
+        - link "Admin" [ref=f17e190] [cursor=pointer]:
+          - /url: /admin
+        - link "CMS Suite" [ref=f17e193] [cursor=pointer]:
+          - /url: /admin/cms
+        - generic [ref=f17e196]: Test & Practice
+      - generic [ref=f17e197]:
+        - generic [ref=f17e198]: SUPER_ADMIN
+        - link [ref=f17e203] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - button "Profile" [ref=f17e204]
+        - link [ref=f17e209] [cursor=pointer]:
+          - /url: /student
+          - button "Preview Student Home" [ref=f17e210]
+        - button "Sign Out" [ref=f17e216]
+    - main [ref=f17e221]:
+      - generic [ref=f17e222]:
+        - generic [ref=f17e223]:
+          - generic [ref=f17e224]:
+            - heading "Test & Practice Management" [level=1] [ref=f17e231]
+            - paragraph [ref=f17e232]: Create, manage, and publish quizzes, chapter tests, practice drills, and mock exams.
+          - generic [ref=f17e233]:
+            - button "Refresh" [ref=f17e234]
+            - button "Create Test" [ref=f17e241]
+        - generic [ref=f17e244]:
+          - generic [ref=f17e245]:
+            - text: Total Tests
+            - paragraph [ref=f17e246]: "5"
+          - generic [ref=f17e247]:
+            - text: Published
+            - paragraph [ref=f17e248]: "5"
+          - generic [ref=f17e249]:
+            - text: Drafts
+            - paragraph [ref=f17e250]: "0"
+          - generic [ref=f17e251]:
+            - text: Drills & Quizzes
+            - paragraph [ref=f17e252]: "3"
+          - generic [ref=f17e253]:
+            - text: Mock Exams
+            - paragraph [ref=f17e254]: "1"
+          - generic [ref=f17e255]:
+            - text: Student Attempts
+            - paragraph [ref=f17e256]: "4"
+        - generic [ref=f17e257]:
+          - generic [ref=f17e258]:
+            - textbox "Search tests, subjects, chapters..." [ref=f17e265]
+            - combobox [ref=f17e266]:
+              - option "All Content Types" [selected]
+              - option "Chapter Quizzes"
+              - option "Test Series"
+              - option "Practice Drills"
+              - option "Mock Exams"
+            - combobox [ref=f17e267]:
+              - option "All Statuses" [selected]
+              - option "Published Only"
+              - option "Drafts Only"
+              - option "Archived Only"
+            - combobox [ref=f17e268]:
+              - option "All Subjects" [selected]
+              - option "Mathematics"
+              - option "Science"
+              - option "Physics"
+              - option "Chemistry"
+              - option "Biology"
+              - option "English"
+              - option "Commerce"
+          - generic [ref=f17e269]:
+            - generic [ref=f17e270]: "Targeting:"
+            - combobox [ref=f17e271]:
+              - option "All Boards" [selected]
+              - option "CBSE"
+              - option "Bihar Board"
+              - option "ICSE"
+              - option "Competitive Entrance"
+            - combobox [ref=f17e272]:
+              - option "All Classes" [selected]
+              - option "Class 10"
+              - option "Class 11"
+              - option "Class 12"
+              - option "JEE / NEET Target"
+        - generic [ref=f17e273]:
+          - generic [ref=f17e274]:
+            - generic [ref=f17e275]:
+              - generic [ref=f17e276]:
+                - generic [ref=f17e277]: Physics
+                - generic [ref=f17e282]:
+                  - generic [ref=f17e283]: PUBLISHED
+                  - generic [ref=f17e284]: Quiz
+              - generic [ref=f17e285]:
+                - heading "PHYSICS CLASS 10" [level=3] [ref=f17e286]
+                - paragraph [ref=f17e287]: Physics Class 10 Chapter - 01
+              - generic [ref=f17e288]:
+                - generic [ref=f17e289]: CBSE
+                - generic [ref=f17e290]: Class 10
+            - generic [ref=f17e291]:
+              - generic [ref=f17e292]:
+                - generic [ref=f17e293]:
+                  - generic [ref=f17e294]: Duration
+                  - text: 20m
+                - generic [ref=f17e295]:
+                  - generic [ref=f17e296]: Questions
+                  - generic [ref=f17e297]: 10 Qs
+                - generic [ref=f17e298]:
+                  - generic [ref=f17e299]: Marks
+                  - generic [ref=f17e300]: 10 M
+              - generic [ref=f17e301]:
+                - generic [ref=f17e302]: 0 Student Attempts
+                - button "Revert to Draft" [ref=f17e307]
+              - generic [ref=f17e308]:
+                - button "Preview" [ref=f17e309]
+                - button "Edit" [ref=f17e314]
+                - button "Delete or Archive Test" [ref=f17e318]
+          - generic [ref=f17e322]:
+            - generic [ref=f17e323]:
+              - generic [ref=f17e324]:
+                - generic [ref=f17e325]: Mathematics
+                - generic [ref=f17e330]:
+                  - generic [ref=f17e331]: PUBLISHED
+                  - generic [ref=f17e332]: Test Series
+              - heading "Class 10 CBSE Maths" [level=3] [ref=f17e334]
+              - generic [ref=f17e335]:
+                - generic [ref=f17e336]: CBSE
+                - generic [ref=f17e337]: Class 10
+                - generic [ref=f17e338]: Real Numbers & Trigonometry
+            - generic [ref=f17e339]:
+              - generic [ref=f17e340]:
+                - generic [ref=f17e341]:
+                  - generic [ref=f17e342]: Duration
+                  - text: 20m
+                - generic [ref=f17e343]:
+                  - generic [ref=f17e344]: Questions
+                  - generic [ref=f17e345]: 8 Qs
+                - generic [ref=f17e346]:
+                  - generic [ref=f17e347]: Marks
+                  - generic [ref=f17e348]: 8 M
+              - generic [ref=f17e349]:
+                - generic [ref=f17e350]: 1 Student Attempt
+                - button "Revert to Draft" [ref=f17e355]
+              - generic [ref=f17e356]:
+                - button "Preview" [ref=f17e357]
+                - button "Edit" [ref=f17e362]
+                - button "Delete or Archive Test" [ref=f17e366]
+          - generic [ref=f17e370]:
+            - generic [ref=f17e371]:
+              - generic [ref=f17e372]:
+                - generic [ref=f17e373]: Chemistry
+                - generic [ref=f17e378]:
+                  - generic [ref=f17e379]: PUBLISHED
+                  - generic [ref=f17e380]: Quiz
+              - heading "science" [level=3] [ref=f17e382]
+            - generic [ref=f17e384]:
+              - generic [ref=f17e385]:
+                - generic [ref=f17e386]:
+                  - generic [ref=f17e387]: Duration
+                  - text: 20m
+                - generic [ref=f17e388]:
+                  - generic [ref=f17e389]: Questions
+                  - generic [ref=f17e390]: 1 Qs
+                - generic [ref=f17e391]:
+                  - generic [ref=f17e392]: Marks
+                  - generic [ref=f17e393]: 1 M
+              - generic [ref=f17e394]:
+                - generic [ref=f17e395]: 2 Student Attempts
+                - button "Revert to Draft" [ref=f17e400]
+              - generic [ref=f17e401]:
+                - button "Preview" [ref=f17e402]
+                - button "Edit" [ref=f17e407]
+                - button "Delete or Archive Test" [ref=f17e411]
+          - generic [ref=f17e415]:
+            - generic [ref=f17e416]:
+              - generic [ref=f17e417]:
+                - generic [ref=f17e418]: Science
+                - generic [ref=f17e423]:
+                  - generic [ref=f17e424]: PUBLISHED
+                  - generic [ref=f17e425]: Practice Drill
+              - heading "Science Marathon" [level=3] [ref=f17e427]
+              - generic [ref=f17e428]:
+                - generic [ref=f17e429]: CBSE
+                - generic [ref=f17e430]: Class 10
+            - generic [ref=f17e431]:
+              - generic [ref=f17e432]:
+                - generic [ref=f17e433]:
+                  - generic [ref=f17e434]: Duration
+                  - text: Untimed
+                - generic [ref=f17e435]:
+                  - generic [ref=f17e436]: Questions
+                  - generic [ref=f17e437]: 1 Qs
+                - generic [ref=f17e438]:
+                  - generic [ref=f17e439]: Marks
+                  - generic [ref=f17e440]: 2 M
+              - generic [ref=f17e441]:
+                - generic [ref=f17e442]: 1 Student Attempt
+                - button "Revert to Draft" [ref=f17e447]
+              - generic [ref=f17e448]:
+                - button "Preview" [ref=f17e449]
+                - button "Edit" [ref=f17e454]
+                - button "Delete or Archive Test" [ref=f17e458]
+          - generic [ref=f17e462]:
+            - generic [ref=f17e463]:
+              - generic [ref=f17e464]:
+                - generic [ref=f17e465]: Science
+                - generic [ref=f17e470]:
+                  - generic [ref=f17e471]: PUBLISHED
+                  - generic [ref=f17e472]: Mock Exam
+              - generic [ref=f17e473]:
+                - heading "Class 10 CBSE Science All-India Mock Exam" [level=3] [ref=f17e474]
+                - paragraph [ref=f17e475]: Comprehensive full syllabus mock test simulating real CBSE board examination patterns and marking scheme.
+              - generic [ref=f17e476]:
+                - generic [ref=f17e477]: CBSE
+                - generic [ref=f17e478]: Class 10
+            - generic [ref=f17e479]:
+              - generic [ref=f17e480]:
+                - generic [ref=f17e481]:
+                  - generic [ref=f17e482]: Duration
+                  - text: 45m
+                - generic [ref=f17e483]:
+                  - generic [ref=f17e484]: Questions
+                  - generic [ref=f17e485]: 15 Qs
+                - generic [ref=f17e486]:
+                  - generic [ref=f17e487]: Marks
+                  - generic [ref=f17e488]: 50 M
+              - generic [ref=f17e489]:
+                - generic [ref=f17e490]: 0 Student Attempts
+                - button "Revert to Draft" [ref=f17e495]
+              - generic [ref=f17e496]:
+                - button "Preview" [ref=f17e497]
+                - button "Edit" [ref=f17e502]
+                - button "Delete or Archive Test" [ref=f17e506]

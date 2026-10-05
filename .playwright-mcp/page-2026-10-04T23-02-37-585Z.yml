@@ -1,0 +1,19 @@
+- generic [ref=f7e3]:
+  - generic [ref=f7e4]:
+    - generic "TopVeda" [ref=f7e8]:
+      - generic [ref=f7e9]: TOP
+      - generic [ref=f7e10]: VEDA
+    - generic [ref=f7e11]:
+      - generic [ref=f7e12]: ROOT ACCESS
+      - generic [ref=f7e13]: PORTAL 0
+    - heading "Super Admin Login" [level=1] [ref=f7e14]
+    - paragraph [ref=f7e15]: Authorized administrative access only. All actions are cryptographically audited.
+  - generic [ref=f7e17]:
+    - generic [ref=f7e18]:
+      - generic [ref=f7e19]: Super Admin Email
+      - textbox "superadmin@topveda.in" [ref=f7e25]
+    - generic [ref=f7e26]:
+      - generic [ref=f7e27]: Super Admin Password
+      - textbox "••••••••••••" [ref=f7e33]
+    - button "Continue to Security Challenge" [disabled]
+  - paragraph [ref=f7e40]: 3 consecutive failed password attempts trigger an automatic 1-hour account lockout.

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { CmsLiveClass, CmsBoard, CmsClassLevel, CmsSubject, CmsCourse, CmsChapter } from "@/types/cms.types";
+import { CmsLiveClass, CmsBoard, CmsClassLevel, CmsSubject, CmsCourse, CmsChapter, CmsBatch } from "@/types/cms.types";
 import {
   parseISTInputToUTC,
   formatLiveDateIST,
@@ -48,6 +48,7 @@ interface LiveClassesTabProps {
   subjects: CmsSubject[];
   courses: CmsCourse[];
   chapters: CmsChapter[];
+  batches?: CmsBatch[];
   isSuperAdmin?: boolean;
   onRefresh: () => void;
   setFeedback: (fb: { type: "success" | "error" | "info"; message: string } | null) => void;
@@ -62,6 +63,7 @@ export function LiveClassesTab({
   subjects,
   courses,
   chapters,
+  batches = [],
   isSuperAdmin = false,
   onRefresh,
   setFeedback,
@@ -69,10 +71,12 @@ export function LiveClassesTab({
   const [filter, setFilter] = React.useState<"ALL" | "TODAY" | "UPCOMING" | "LIVE" | "COMPLETED" | "TERMINATED" | "CANCELLED">("ALL");
   const [searchQuery, setSearchQuery] = React.useState("");
 
-  // Create Modal State (No duration, no course mapping)
+  // Create Modal State (Batch-Centric)
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
   const [createTopic, setCreateTopic] = React.useState("");
+  const [createBatchId, setCreateBatchId] = React.useState("");
+  const [createSubjectId, setCreateSubjectId] = React.useState("");
   const [createSubject, setCreateSubject] = React.useState("Mathematics");
   const [createDescription, setCreateDescription] = React.useState("");
   const [createDate, setCreateDate] = React.useState("");
@@ -138,7 +142,36 @@ export function LiveClassesTab({
     });
   }, [liveClasses, filter, searchQuery]);
 
-  // Handle Create Live Class (No duration input, no course mapping)
+  // Available subjects for selected batch
+  const batchSubjects = React.useMemo(() => {
+    if (!createBatchId) return subjects;
+    const b = batches.find((item) => item.id === createBatchId);
+    if (!b || !b.batch_subjects || b.batch_subjects.length === 0) return subjects;
+    const list = b.batch_subjects.map((bs) => bs.subject).filter(Boolean) as CmsSubject[];
+    return list.length > 0 ? list : subjects;
+  }, [createBatchId, batches, subjects]);
+
+  const handleBatchSelect = (bId: string) => {
+    setCreateBatchId(bId);
+    if (!bId) return;
+    const selectedBatch = batches.find((b) => b.id === bId);
+    if (!selectedBatch) return;
+    if (selectedBatch.board_id) setCreateBoardId(selectedBatch.board_id);
+    if (selectedBatch.class_id) setCreateClassId(selectedBatch.class_id);
+    if (selectedBatch.batch_subjects && selectedBatch.batch_subjects.length > 0) {
+      const firstSub = selectedBatch.batch_subjects[0]?.subject;
+      if (firstSub) {
+        setCreateSubjectId(firstSub.id);
+        setCreateSubject(firstSub.name);
+      }
+    } else if (selectedBatch.subject_id) {
+      setCreateSubjectId(selectedBatch.subject_id);
+      const sub = subjects.find((s) => s.id === selectedBatch.subject_id);
+      if (sub) setCreateSubject(sub.name);
+    }
+  };
+
+  // Handle Create Live Class (Batch-Centric)
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors({});
@@ -147,6 +180,7 @@ export function LiveClassesTab({
     if (!createTopic.trim()) errors.topic = "Lecture title / topic is required.";
     if (!createDate) errors.date = "Date is required.";
     if (!createStartTime) errors.startTime = "Start time is required.";
+    if (!createBatchId && batches.length > 0) errors.batch = "Please select a target batch.";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -156,6 +190,13 @@ export function LiveClassesTab({
     try {
       setIsCreating(true);
       setFeedback(null);
+
+      // Resolve subject ID
+      let effectiveSubjectId = createSubjectId;
+      if (!effectiveSubjectId) {
+        const matchingSub = batchSubjects.find((s) => s.name.toLowerCase() === createSubject.toLowerCase()) || batchSubjects[0] || subjects[0];
+        effectiveSubjectId = matchingSub?.id || "";
+      }
 
       // Parse user's IST input into canonical UTC ISO timestamp
       const scheduledStartUtc = parseISTInputToUTC(createDate, createStartTime);
@@ -171,6 +212,8 @@ export function LiveClassesTab({
         scheduledEnd: scheduledEndUtc,
         boardId: createBoardId || null,
         classId: createClassId || null,
+        batchId: createBatchId || null,
+        subjectId: effectiveSubjectId || null,
       };
 
       const res = await fetch("/api/teacher/live/create", {
@@ -196,6 +239,8 @@ export function LiveClassesTab({
         setCreateTopic("");
         setCreateDescription("");
         setCreateDate("");
+        setCreateBatchId("");
+        setCreateSubjectId("");
         onRefresh();
       }
     } catch (err: unknown) {
@@ -746,28 +791,55 @@ export function LiveClassesTab({
             {formErrors.topic && <p className="text-[11px] text-red-500">{formErrors.topic}</p>}
           </div>
 
-          {/* Academic Taxonomy Grid (Subject, Class Level, Board - No Course selector) */}
+          {/* Target Academic Batch Selection */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-brand-charcoal flex items-center justify-between">
+              <span>Target Academic Batch <span className="text-red-500">*</span></span>
+              <span className="text-[10px] text-brand-orange font-bold uppercase">Batch Centric Live Streaming</span>
+            </label>
+            <select
+              value={createBatchId}
+              onChange={(e) => handleBatchSelect(e.target.value)}
+              className={`w-full h-10 px-3 rounded-xl border ${formErrors.batch ? "border-red-500" : "border-brand-border/80"} bg-orange-50/30 text-xs text-brand-charcoal font-bold focus:ring-2 focus:ring-brand-orange/30`}
+            >
+              <option value="">Select Target Batch *</option>
+              {batches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.title} {b.board_label ? `(${b.board_label})` : ""}
+                </option>
+              ))}
+            </select>
+            {formErrors.batch && <p className="text-[11px] text-red-500">{formErrors.batch}</p>}
+          </div>
+
+          {/* Academic Taxonomy Grid (Subject, Class Level, Board - Batch Bound) */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-bold text-brand-charcoal">Subject *</label>
               <select
-                value={createSubject}
-                onChange={(e) => setCreateSubject(e.target.value)}
+                value={createSubjectId}
+                onChange={(e) => {
+                  const sId = e.target.value;
+                  setCreateSubjectId(sId);
+                  const foundSub = batchSubjects.find((s) => s.id === sId);
+                  if (foundSub) setCreateSubject(foundSub.name);
+                }}
                 className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium focus:ring-2 focus:ring-brand-orange/30"
               >
-                {subjects.length > 0 ? (
-                  subjects.map((s) => (
-                    <option key={s.id} value={s.name}>
+                {batchSubjects.length > 0 ? (
+                  batchSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
                   ))
                 ) : (
                   <>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="Physics">Physics</option>
-                    <option value="Chemistry">Chemistry</option>
-                    <option value="Biology">Biology</option>
-                    <option value="Science">Science</option>
+                    <option value="">Select Subject</option>
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
                   </>
                 )}
               </select>

@@ -200,17 +200,17 @@ export class StudentProgressService {
       // Fetch past / completed live classes accessible to the student
       let totalLiveClassesScheduled = 0;
       try {
-        let liveQuery = supabase
-          .from("cms_live_classes")
-          .select("id", { count: "exact", head: true })
-          .in("live_status", ["COMPLETED", "TERMINATED", "LIVE", "SCHEDULED"]);
-
         if (enrolledBatchIds.length > 0) {
-          liveQuery = liveQuery.in("batch_id", enrolledBatchIds);
-        }
+          const { count: liveCount } = await supabase
+            .from("cms_live_classes")
+            .select("id", { count: "exact", head: true })
+            .in("live_status", ["COMPLETED", "TERMINATED", "LIVE", "SCHEDULED"])
+            .in("batch_id", enrolledBatchIds);
 
-        const { count: liveCount } = await liveQuery;
-        totalLiveClassesScheduled = liveCount || 0;
+          totalLiveClassesScheduled = liveCount || 0;
+        } else {
+          totalLiveClassesScheduled = 0;
+        }
       } catch (liveErr) {
         console.warn("[StudentProgressService] Non-blocking live count warning:", liveErr);
       }

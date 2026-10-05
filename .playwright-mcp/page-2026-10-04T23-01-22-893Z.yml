@@ -1,0 +1,214 @@
+- generic [ref=f6e2]:
+  - complementary [ref=f6e7]:
+    - generic [ref=f6e8]:
+      - link "TopVeda Learn Today · Build Tomorrow" [ref=f6e9] [cursor=pointer]:
+        - /url: /student
+        - generic "TopVeda" [ref=f6e13]:
+          - generic [ref=f6e14]: TOP
+          - generic [ref=f6e15]: VEDA
+        - generic [ref=f6e16]: Learn Today · Build Tomorrow
+      - button "Collapse Sidebar" [ref=f6e17]
+    - navigation [ref=f6e20]:
+      - link "Home" [ref=f6e21] [cursor=pointer]:
+        - /url: /student
+      - link "My Learning" [ref=f6e27] [cursor=pointer]:
+        - /url: /student/learning
+      - link "Progress" [ref=f6e33] [cursor=pointer]:
+        - /url: /student/progress
+      - link "Live Classes" [ref=f6e39] [cursor=pointer]:
+        - /url: /student/live
+      - link "Tests & Practice" [ref=f6e45] [cursor=pointer]:
+        - /url: /student/tests
+      - link "Study Material" [ref=f6e52] [cursor=pointer]:
+        - /url: /student/study-material
+      - link "Boards" [ref=f6e58] [cursor=pointer]:
+        - /url: /student/boards
+      - link "Notifications" [ref=f6e64] [cursor=pointer]:
+        - /url: /student/notifications
+      - link "Profile" [ref=f6e70] [cursor=pointer]:
+        - /url: /student/profile
+    - generic [ref=f6e77]:
+      - generic [ref=f6e78]: Daily Motivation
+      - paragraph [ref=f6e83]: “Success is built by the small things you do consistently every day.”
+      - paragraph [ref=f6e84]: — TopVeda
+    - generic [ref=f6e85]:
+      - link [ref=f6e86] [cursor=pointer]:
+        - /url: /student/profile
+        - img "Abhay Kumar" [ref=f6e88]
+        - generic [ref=f6e89]:
+          - paragraph [ref=f6e90]: Abhay Kumar
+          - paragraph [ref=f6e91]: sycoodevil786@gmail.com
+      - button "Sign Out" [ref=f6e92]
+  - generic [ref=f6e96]:
+    - banner [ref=f6e97]:
+      - generic [ref=f6e98]:
+        - generic [ref=f6e100]:
+          - textbox "Search for courses, batches, lectures, notes, tests..." [ref=f6e101]
+          - generic: Ctrl K
+        - generic [ref=f6e102]:
+          - generic [ref=f6e103]:
+            - button "Switch" [ref=f6e104]
+            - button "Discussions" [ref=f6e108]
+            - link "Notifications" [ref=f6e111] [cursor=pointer]:
+              - /url: /student/notifications
+          - button "Abhay Kumar Abhay Kumar Class 10 · Student" [ref=f6e117]:
+            - img "Abhay Kumar" [ref=f6e119]
+            - generic [ref=f6e120]:
+              - generic [ref=f6e121]: Abhay Kumar
+              - generic [ref=f6e122]: Class 10 · Student
+    - main [ref=f6e125]:
+      - generic [ref=f6e126]:
+        - heading "Good Morning, Abhay! 👋" [level=1] [ref=f6e127]:
+          - generic [ref=f6e128]: Good Morning, Abhay!
+          - generic [ref=f6e129]: 👋
+        - paragraph [ref=f6e130]: Ready to continue your learning journey?
+      - generic [ref=f6e131]:
+        - generic [ref=f6e132]:
+          - generic [ref=f6e133]:
+            - generic [ref=f6e134]:
+              - heading "Learn. Practice. Grow." [level=1] [ref=f6e135]
+              - paragraph [ref=f6e136]: Your future is built by what you do today.
+            - link "Keep Learning →" [ref=f6e138] [cursor=pointer]:
+              - /url: "#featured-batches"
+          - generic [ref=f6e140]:
+            - img "TopVeda Mentorship" [ref=f6e142]
+            - generic:
+              - generic: Better Students
+              - generic: Brighter Futures
+        - button "Previous Slide" [ref=f6e143]
+        - button "Next Slide" [ref=f6e146]
+        - generic [ref=f6e149]:
+          - button "Go to slide 1" [ref=f6e150]
+          - button "Go to slide 2" [ref=f6e151]
+      - generic [ref=f6e152]:
+        - generic [ref=f6e153]:
+          - heading "Live Classes (Today)" [level=2] [ref=f6e154]
+          - link "See All" [ref=f6e155] [cursor=pointer]:
+            - /url: /student/live
+        - generic [ref=f6e160]:
+          - generic [ref=f6e161]:
+            - generic [ref=f6e162]:
+              - generic [ref=f6e163]: UPCOMING
+              - generic [ref=f6e164]:
+                - paragraph [ref=f6e165]: English
+                - paragraph [ref=f6e166]: Writing Skills
+                - paragraph [ref=f6e167]: By Arjun Sir
+            - img "By Arjun Sir" [ref=f6e169]
+          - generic [ref=f6e170]:
+            - generic [ref=f6e171]: Sep 23 • 2:00 AM
+            - button "Reminder" [ref=f6e176]
+      - generic [ref=f6e180]:
+        - generic [ref=f6e181]:
+          - heading "Latest Lectures" [level=2] [ref=f6e182]
+          - link "See All" [ref=f6e183] [cursor=pointer]:
+            - /url: /student/lectures
+        - generic [ref=f6e187]:
+          - link "TRIGONOMETRY BASICS 45:00 Trigonometry Basics By Rohit Sharma Mathematics 45 min" [ref=f6e188] [cursor=pointer]:
+            - /url: /student/lectures/70000000-0000-0000-0000-000000000001
+            - generic [ref=f6e189]:
+              - generic [ref=f6e190]: TRIGONOMETRY BASICS
+              - generic [ref=f6e196]: 45:00
+            - generic [ref=f6e197]:
+              - generic [ref=f6e198]:
+                - heading "Trigonometry Basics" [level=3] [ref=f6e199]
+                - generic [ref=f6e200]: By Rohit Sharma
+              - generic [ref=f6e206]:
+                - generic [ref=f6e207]: Mathematics
+                - generic [ref=f6e208]: 45 min
+          - link "Grammar Rules 32:00 Grammar Rules By Arjun Gupta English 32 min" [ref=f6e212] [cursor=pointer]:
+            - /url: /student/lectures/70000000-0000-0000-0000-000000000003
+            - generic [ref=f6e213]:
+              - generic [ref=f6e214]: Grammar Rules
+              - generic [ref=f6e220]: 32:00
+            - generic [ref=f6e221]:
+              - generic [ref=f6e222]:
+                - heading "Grammar Rules" [level=3] [ref=f6e223]
+                - generic [ref=f6e224]: By Arjun Gupta
+              - generic [ref=f6e230]:
+                - generic [ref=f6e231]: English
+                - generic [ref=f6e232]: 32 min
+      - generic [ref=f6e236]:
+        - heading "Explore Courses" [level=2] [ref=f6e238]
+        - generic [ref=f6e239]:
+          - generic [ref=f6e240]:
+            - link [ref=f6e241] [cursor=pointer]:
+              - /url: /student/courses?category=Mathematics
+              - generic [ref=f6e248]:
+                - paragraph [ref=f6e249]: Class 10
+                - paragraph [ref=f6e250]: Mathematics
+            - link [ref=f6e251] [cursor=pointer]:
+              - /url: /student/courses?category=Science
+              - generic [ref=f6e255]:
+                - paragraph [ref=f6e256]: Class 10
+                - paragraph [ref=f6e257]: Science
+            - link [ref=f6e258] [cursor=pointer]:
+              - /url: /student/courses?category=English
+              - generic [ref=f6e262]:
+                - paragraph [ref=f6e263]: Class 10
+                - paragraph [ref=f6e264]: English
+            - link [ref=f6e265] [cursor=pointer]:
+              - /url: /student/courses?category=PCM
+              - generic [ref=f6e271]:
+                - paragraph [ref=f6e272]: Class 10
+                - paragraph [ref=f6e273]: PCM
+            - link [ref=f6e274] [cursor=pointer]:
+              - /url: /student/courses?category=Science
+              - generic [ref=f6e278]:
+                - paragraph [ref=f6e279]: Class 12
+                - paragraph [ref=f6e280]: Science
+            - link [ref=f6e281] [cursor=pointer]:
+              - /url: /student/courses?category=Commerce
+              - generic [ref=f6e286]:
+                - paragraph [ref=f6e287]: Class 12
+                - paragraph [ref=f6e288]: Commerce
+            - link [ref=f6e289] [cursor=pointer]:
+              - /url: /student/courses?category=Preparation
+              - generic [ref=f6e293]:
+                - paragraph [ref=f6e294]: JEE
+                - paragraph [ref=f6e295]: Preparation
+            - link [ref=f6e296] [cursor=pointer]:
+              - /url: /student/courses?category=Preparation
+              - generic [ref=f6e302]:
+                - paragraph [ref=f6e303]: NEET
+                - paragraph [ref=f6e304]: Preparation
+          - button "Scroll right" [ref=f6e305] [cursor=pointer]
+      - generic [ref=f6e308]:
+        - generic [ref=f6e310]:
+          - heading "What's Happening on TopVeda?" [level=2] [ref=f6e316]
+          - paragraph [ref=f6e317]: Latest platform announcements, newly published materials & academic alerts.
+        - generic [ref=f6e318]:
+          - generic [ref=f6e319]:
+            - generic [ref=f6e320]:
+              - generic [ref=f6e321]: NEW BATCH
+              - generic [ref=f6e327]:
+                - heading "Class 10 Mathematics Batch" [level=3] [ref=f6e328]
+                - paragraph [ref=f6e329]: Enrollment is now officially open for the new 2026-27 Board Preparation batch.
+            - link "Explore Batch" [ref=f6e331] [cursor=pointer]:
+              - /url: /student/batches
+          - generic [ref=f6e336]:
+            - generic [ref=f6e337]:
+              - generic [ref=f6e338]: REVISION NOTES
+              - generic [ref=f6e343]:
+                - heading "New Science Formula Sheets" [level=3] [ref=f6e344]
+                - paragraph [ref=f6e345]: Comprehensive quick-revision PDF notes and mindmaps are ready for download.
+            - link "View Material" [ref=f6e347] [cursor=pointer]:
+              - /url: /student/study-material
+          - generic [ref=f6e352]:
+            - generic [ref=f6e353]:
+              - generic [ref=f6e354]: LIVE TODAY
+              - generic [ref=f6e361]:
+                - heading "Trigonometry Masterclass" [level=3] [ref=f6e362]
+                - paragraph [ref=f6e363]: Join Rohit Sir live at 6:00 PM for deep concept drills and PYQ problem-solving.
+            - link "View Class" [ref=f6e365] [cursor=pointer]:
+              - /url: /student/live
+          - generic [ref=f6e370]:
+            - generic [ref=f6e371]:
+              - generic [ref=f6e372]: STUDY TIP
+              - generic [ref=f6e377]:
+                - heading "Daily Practice Discipline" [level=3] [ref=f6e378]
+                - paragraph [ref=f6e379]: Solving 5 previous-year questions every evening boosts board retention by 40%.
+            - link "Read More" [ref=f6e381] [cursor=pointer]:
+              - /url: /student/learning
+  - generic [ref=f6e386]:
+    - generic [ref=f6e387]: TopVeda AI
+    - button "Open TopVeda AI Assistant" [ref=f6e392]

@@ -1,0 +1,22 @@
+- generic [ref=f7e3]:
+  - generic [ref=f7e4]:
+    - generic "TopVeda" [ref=f7e8]:
+      - generic [ref=f7e9]: TOP
+      - generic [ref=f7e10]: VEDA
+    - generic [ref=f7e11]:
+      - generic [ref=f7e12]: ROOT ACCESS
+      - generic [ref=f7e13]: AAL2 REQUIRED
+    - heading "Two-Factor Verification" [level=1] [ref=f7e50]
+    - paragraph [ref=f7e15]: Enter the 6-digit code from your authenticator app to verify identity.
+  - generic [ref=f7e16]:
+    - generic [ref=f7e77]: Super Administrator authentication verified (AAL2). Redirecting...
+    - generic [ref=f7e51]:
+      - generic [ref=f7e56]:
+        - paragraph [ref=f7e57]: Authenticator App
+        - paragraph [ref=f7e58]: Open Google Authenticator, Authy, or 1Password
+      - generic [ref=f7e59]:
+        - generic [ref=f7e60]: 6-Digit Verification Code
+        - textbox "123456" [disabled] [ref=f7e66]: "741767"
+      - button "Verifying Code..." [disabled]
+      - button "Cancel & Sign In with Different Account" [ref=f7e67]
+  - paragraph [ref=f7e40]: 3 consecutive failed password attempts trigger an automatic 1-hour account lockout.

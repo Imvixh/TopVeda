@@ -1,0 +1,234 @@
+- generic [ref=f16e167]:
+  - complementary [ref=f16e168]:
+    - generic [ref=f16e169]:
+      - link "TopVeda CMS" [ref=f16e170] [cursor=pointer]:
+        - /url: /admin/cms
+        - generic [ref=f16e173]:
+          - generic "TopVeda" [ref=f16e174]:
+            - generic [ref=f16e175]: TOP
+            - generic [ref=f16e176]: VEDA
+          - generic [ref=f16e177]: CMS
+      - button "Collapse Sidebar" [ref=f16e179]
+    - generic [ref=f16e182]:
+      - generic [ref=f16e183]:
+        - paragraph [ref=f16e184]: CONTENT
+        - navigation [ref=f16e185]:
+          - link "Dashboard" [ref=f16e186] [cursor=pointer]:
+            - /url: /admin/cms
+          - link "Hero Banners" [ref=f16e194] [cursor=pointer]:
+            - /url: /admin/cms/hero
+          - link "New & Featured Batches" [ref=f16e198] [cursor=pointer]:
+            - /url: /admin/cms/batches/upcoming
+          - link "Ongoing Batches" [ref=f16e203] [cursor=pointer]:
+            - /url: /admin/cms/batches/ongoing
+          - link "Live Classes" [ref=f16e209] [cursor=pointer]:
+            - /url: /admin/cms/live-classes
+          - link "Latest Lectures" [ref=f16e217] [cursor=pointer]:
+            - /url: /admin/cms/lectures
+          - link "Explore Courses" [ref=f16e222] [cursor=pointer]:
+            - /url: /admin/cms/courses
+          - link "Study Materials" [ref=f16e227] [cursor=pointer]:
+            - /url: /admin/cms/study-materials
+          - link "Test & Practice" [ref=f16e232] [cursor=pointer]:
+            - /url: /admin/cms/tests
+      - generic [ref=f16e238]:
+        - paragraph [ref=f16e239]: ACADEMIC
+        - navigation [ref=f16e240]:
+          - link "Boards" [ref=f16e241] [cursor=pointer]:
+            - /url: /admin/cms/boards
+          - link "Classes" [ref=f16e245] [cursor=pointer]:
+            - /url: /admin/cms/classes
+          - link "Subjects" [ref=f16e252] [cursor=pointer]:
+            - /url: /admin/cms/subjects
+          - link "Chapters" [ref=f16e256] [cursor=pointer]:
+            - /url: /admin/cms/chapters
+      - generic [ref=f16e261]:
+        - paragraph [ref=f16e262]: ENGAGEMENT
+        - navigation [ref=f16e263]:
+          - link "Hub / Announcements" [ref=f16e264] [cursor=pointer]:
+            - /url: /admin/cms/hub
+          - link "Daily Motivation" [ref=f16e269] [cursor=pointer]:
+            - /url: /admin/cms/quotes
+      - generic [ref=f16e274]:
+        - paragraph [ref=f16e275]: REVIEW
+        - navigation [ref=f16e276]:
+          - link "Pending Reviews" [ref=f16e277] [cursor=pointer]:
+            - /url: /admin/cms/reviews
+      - generic [ref=f16e283]:
+        - paragraph [ref=f16e284]: AI CHATBOT
+        - navigation [ref=f16e285]:
+          - link "Overview & Settings" [ref=f16e286] [cursor=pointer]:
+            - /url: /admin/cms/chatbot
+          - link "Prompts" [ref=f16e291] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/prompts
+          - link "FAQs" [ref=f16e295] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/faqs
+          - link "Knowledge Sources" [ref=f16e300] [cursor=pointer]:
+            - /url: /admin/cms/chatbot/knowledge
+      - generic [ref=f16e306]:
+        - paragraph [ref=f16e307]: INTEGRATIONS
+        - navigation [ref=f16e308]:
+          - link "YouTube Integration Phase 6A" [ref=f16e309] [cursor=pointer]:
+            - /url: /admin/cms/integrations/youtube
+            - generic [ref=f16e312]: YouTube Integration
+            - generic [ref=f16e313]: Phase 6A
+      - generic [ref=f16e314]:
+        - paragraph [ref=f16e315]: ADMINISTRATION
+        - navigation [ref=f16e316]:
+          - link "Admin Applications" [ref=f16e317] [cursor=pointer]:
+            - /url: /admin/applications
+          - link "Profile & Settings" [ref=f16e323] [cursor=pointer]:
+            - /url: /admin/cms/profile
+    - generic [ref=f16e328]:
+      - link "Admin Center" [ref=f16e329] [cursor=pointer]:
+        - /url: /admin
+      - generic [ref=f16e334]:
+        - link [ref=f16e335] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - generic [ref=f16e340]:
+            - paragraph [ref=f16e341]: Vishal Kumar
+            - paragraph [ref=f16e342]: SUPER_ADMIN
+        - button "Sign Out" [ref=f16e343]
+  - generic [ref=f16e347]:
+    - banner [ref=f16e348]:
+      - generic [ref=f16e350]:
+        - link "Admin" [ref=f16e351] [cursor=pointer]:
+          - /url: /admin
+        - link "CMS Suite" [ref=f16e354] [cursor=pointer]:
+          - /url: /admin/cms
+        - generic [ref=f16e564]: Ongoing Batches
+      - generic [ref=f16e355]:
+        - generic [ref=f16e356]: SUPER_ADMIN
+        - link [ref=f16e361] [cursor=pointer]:
+          - /url: /admin/cms/profile
+          - button "Profile" [ref=f16e362]
+        - link [ref=f16e367] [cursor=pointer]:
+          - /url: /student
+          - button "Preview Student Home" [ref=f16e368]
+        - button "Sign Out" [ref=f16e374]
+    - main [ref=f16e379]:
+      - generic [ref=f16e565]:
+        - generic [ref=f16e566]:
+          - generic [ref=f16e567]:
+            - generic [ref=f16e568]:
+              - generic [ref=f16e569]: STUDENT HOME · SECTION 2
+              - generic [ref=f16e570]: 0 Batches
+            - heading "Ongoing Batches" [level=1] [ref=f16e571]
+            - paragraph [ref=f16e577]: Active batches and daily live syllabus
+          - generic [ref=f16e578]:
+            - button "Customize Title" [ref=f16e579]
+            - button "Refresh" [ref=f16e583]
+            - button "Create Ongoing Batch" [ref=f16e589]
+        - generic [ref=f16e591]:
+          - link "New & Featured Batches" [ref=f16e592] [cursor=pointer]:
+            - /url: /admin/cms/batches/upcoming
+          - link "Ongoing Batches (0)" [ref=f16e597] [cursor=pointer]:
+            - /url: /admin/cms/batches/ongoing
+        - textbox "Search ongoing batches by title, board, or subject..." [ref=f16e609]
+        - generic [ref=f16e610]:
+          - paragraph [ref=f16e615]: No Ongoing Batches Found
+          - paragraph [ref=f16e616]: Active ongoing batches will appear here.
+          - button "Create Ongoing Batch" [ref=f16e617]
+        - dialog [ref=f16e619]:
+          - generic [ref=f16e621]:
+            - button "Close dialog" [ref=f16e622]
+            - generic [ref=f16e627]:
+              - generic [ref=f16e629]:
+                - generic [ref=f16e630]:
+                  - generic [ref=f16e631]: New Batch
+                  - generic [ref=f16e632]: Ongoing Cohort
+                - heading "Create Ongoing Batch" [level=3] [ref=f16e633]
+              - generic [ref=f16e634]:
+                - generic [ref=f16e635]:
+                  - generic [ref=f16e636]: 1. Batch Core Information
+                  - generic [ref=f16e641]:
+                    - generic [ref=f16e642]: Cohort Badge (Line 1) *
+                    - textbox "e.g. Class 10 (CBSE) or JEE 2027" [disabled] [ref=f16e645]: JEE / NEET Target (COMPETITIVE)
+                  - generic [ref=f16e646]:
+                    - generic [ref=f16e647]: Batch Title (Line 2) *
+                    - textbox "e.g. Mathematics or Science" [disabled] [ref=f16e650]: Mathematics
+                - generic [ref=f16e651]:
+                  - generic [ref=f16e652]: 2. Academic Mapping
+                  - generic [ref=f16e657]:
+                    - generic [ref=f16e658]:
+                      - generic [ref=f16e659]: Board *
+                      - combobox [disabled] [ref=f16e660]:
+                        - option "CBSE"
+                        - option "Bihar Board"
+                        - option "ICSE"
+                        - option "Competitive Entrance" [selected]
+                    - generic [ref=f16e661]:
+                      - generic [ref=f16e662]: Class *
+                      - combobox [disabled] [ref=f16e663]:
+                        - option "Class 10"
+                        - option "Class 11"
+                        - option "Class 12"
+                        - option "JEE / NEET Target" [selected]
+                  - generic [ref=f16e664]:
+                    - text: Subject
+                    - combobox [disabled] [ref=f16e665]:
+                      - option "General / All Subjects" [selected]
+                      - option "Mathematics"
+                      - option "Science"
+                      - option "Physics"
+                      - option "Chemistry"
+                      - option "Biology"
+                      - option "English"
+                      - option "Commerce"
+                - generic [ref=f16e666]:
+                  - generic [ref=f16e667]: 3. Status & CTA Style
+                  - generic [ref=f16e673]:
+                    - generic [ref=f16e674]:
+                      - text: Card Status Style
+                      - combobox [disabled] [ref=f16e675]:
+                        - option "Ongoing (Gray Button)" [selected]
+                        - option "Live Now (Orange Button)"
+                    - generic [ref=f16e676]:
+                      - text: Button CTA Text
+                      - textbox "Join Now or View Details" [disabled] [ref=f16e679]: View Details
+                - generic [ref=f16e680]:
+                  - text: Card Icon & Color Style
+                  - generic [ref=f16e681]:
+                    - button "Target (Green / Mathematics)" [ref=f16e682] [cursor=pointer]
+                    - button "Atom (Sky Blue / Science)" [ref=f16e692] [cursor=pointer]
+                    - button "Book (Amber / Commerce & Humanities)" [ref=f16e700] [cursor=pointer]
+                    - button "Graduation Cap (Indigo / JEE Foundation)" [ref=f16e706] [cursor=pointer]
+                    - button "Stethoscope (Purple / NEET Medical)" [ref=f16e713] [cursor=pointer]
+                - generic [ref=f16e721]:
+                  - text: Batch Description
+                  - textbox "Comprehensive syllabus coverage with daily live classes, formula sheets, mock tests, and revision notes." [disabled] [ref=f16e722]: Comprehensive JEE Foundation syllabus covering Science, Mathematics, and Physics with live classes, tests, and mentorship.
+                - generic [ref=f16e723]:
+                  - generic [ref=f16e724]: 4. Assigned Faculty (2)
+                  - generic [ref=f16e732]:
+                    - generic [ref=f16e733]:
+                      - generic [ref=f16e734]:
+                        - generic [ref=f16e735]: A
+                        - generic [ref=f16e737]:
+                          - paragraph [ref=f16e738]: 1. Abhay Kumar
+                          - paragraph [ref=f16e739]: abhayprofessional1@gmail.com
+                      - button "Remove teacher" [ref=f16e740] [cursor=pointer]
+                    - generic [ref=f16e765]:
+                      - generic [ref=f16e766]:
+                        - generic [ref=f16e767]: A
+                        - generic [ref=f16e769]:
+                          - paragraph [ref=f16e770]: 2. Amarendra Pratap
+                          - paragraph [ref=f16e771]: amarendrapratap30@gmail.com
+                      - button "Remove teacher" [ref=f16e772] [cursor=pointer]
+                  - combobox [ref=f16e745]:
+                    - option "+ Add Teacher to Batch..." [selected]
+                    - option "Amarendra Pratap (amarendrapratapara@gmail.com)"
+                    - option "Amrender (sarrafraj143@gmail.com)"
+                    - option "Pk priyadarshi (priyadarshi2212@gmail.com)"
+                    - option "Vishal Kumar (vksarraf143@gmail.com)"
+                - generic [ref=f16e746]:
+                  - generic [ref=f16e747]: 5. Display & Visibility
+                  - generic [ref=f16e752]:
+                    - generic [ref=f16e753]:
+                      - text: Display Order
+                      - spinbutton [disabled] [ref=f16e756]: "1"
+                    - generic [ref=f16e757]:
+                      - generic [ref=f16e758]: Visible
+                      - checkbox [checked] [disabled] [ref=f16e759] [cursor=pointer]
+              - generic [ref=f16e760]:
+                - button "Cancel" [disabled]
+                - button "Saving..." [disabled]

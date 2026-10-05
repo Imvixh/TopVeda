@@ -1,0 +1,22 @@
+- generic [active] [ref=f9e1]:
+  - generic [ref=f9e3]:
+    - generic [ref=f9e4]:
+      - generic "TopVeda" [ref=f9e8]:
+        - generic [ref=f9e9]: TOP
+        - generic [ref=f9e10]: VEDA
+      - generic [ref=f9e11]:
+        - generic [ref=f9e12]: ROOT ACCESS
+        - generic [ref=f9e13]: PORTAL 0
+      - heading "Super Admin Login" [level=1] [ref=f9e14]
+      - paragraph [ref=f9e15]: Authorized administrative access only. All actions are cryptographically audited.
+    - generic [ref=f9e17]:
+      - generic [ref=f9e18]:
+        - generic [ref=f9e19]: Super Admin Email
+        - textbox "superadmin@topveda.in" [ref=f9e25]
+      - generic [ref=f9e26]:
+        - generic [ref=f9e27]: Super Admin Password
+        - textbox "••••••••••••" [ref=f9e33]
+      - generic [ref=f9e34]: Loading security check...
+      - button "Continue to Security Challenge" [disabled]
+    - paragraph [ref=f9e40]: 3 consecutive failed password attempts trigger an automatic 1-hour account lockout.
+  - button "Open Next.js Dev Tools" [ref=f9e46] [cursor=pointer]

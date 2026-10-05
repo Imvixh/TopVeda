@@ -811,6 +811,7 @@ export default function TeacherWorkspacePage() {
                     subjects={subjects}
                     courses={courses}
                     chapters={chapters}
+                    batches={batches}
                     isSuperAdmin={isSuperAdmin}
                     onRefresh={handleManualRefresh}
                     setFeedback={setFeedback}

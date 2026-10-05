@@ -481,6 +481,12 @@ export class ContentAccessService {
             id,
             title,
             course_id,
+            board_id,
+            class_id,
+            batch_subjects:cms_batch_subjects(
+              subject_id,
+              subject:cms_subjects(id, name, code)
+            ),
             course:cms_courses(
               id,
               title,
@@ -522,10 +528,14 @@ export class ContentAccessService {
       // 3. Process enrollments into academic scope
       (enrollments || []).forEach((e: any) => {
         const course = e.course || e.batch?.course;
+        const batch = e.batch;
         if (e.course_id) scope.enrolledCourseIds.add(e.course_id);
         if (course?.id) scope.enrolledCourseIds.add(course.id);
         if (e.batch_id) scope.enrolledBatchIds.add(e.batch_id);
-        if (e.batch?.id) scope.enrolledBatchIds.add(e.batch.id);
+        if (batch?.id) scope.enrolledBatchIds.add(batch.id);
+
+        if (batch?.board_id) scope.enrolledBoardIds.add(batch.board_id);
+        if (batch?.class_id) scope.enrolledClassIds.add(batch.class_id);
 
         if (course?.board_id) scope.enrolledBoardIds.add(course.board_id);
         if (course?.board?.id) scope.enrolledBoardIds.add(course.board.id);
@@ -533,6 +543,29 @@ export class ContentAccessService {
         if (course?.class_level?.id) scope.enrolledClassIds.add(course.class_level.id);
         if (course?.subject_id) scope.enrolledSubjectIds.add(course.subject_id);
         if (course?.subject?.id) scope.enrolledSubjectIds.add(course.subject.id);
+
+        // Process batch multi-subjects
+        if (batch?.batch_subjects && Array.isArray(batch.batch_subjects)) {
+          batch.batch_subjects.forEach((bs: any) => {
+            if (bs.subject_id) scope.enrolledSubjectIds.add(bs.subject_id);
+            if (bs.subject?.id) scope.enrolledSubjectIds.add(bs.subject.id);
+            if (bs.subject?.name) {
+              const subName = bs.subject.name.trim().toLowerCase();
+              scope.enrolledSubjectNames.add(subName);
+              if (subName.includes("sci")) {
+                scope.enrolledSubjectNames.add("science");
+                scope.enrolledSubjectNames.add("physics");
+                scope.enrolledSubjectNames.add("chemistry");
+                scope.enrolledSubjectNames.add("biology");
+              }
+              if (subName.includes("math")) {
+                scope.enrolledSubjectNames.add("mathematics");
+                scope.enrolledSubjectNames.add("maths");
+                scope.enrolledSubjectNames.add("math");
+              }
+            }
+          });
+        }
 
         if (course?.subject?.name) {
           const name = course.subject.name.trim().toLowerCase();
