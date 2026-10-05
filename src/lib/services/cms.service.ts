@@ -643,6 +643,14 @@ export class CmsService {
         display_order,
         created_at,
         teacher:profiles(id, full_name, avatar_url, qualification, role)
+      ),
+      batch_subjects:cms_batch_subjects(
+        id,
+        batch_id,
+        subject_id,
+        display_order,
+        created_at,
+        subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
       )
     `);
 
@@ -676,6 +684,14 @@ export class CmsService {
           display_order,
           created_at,
           teacher:profiles(id, full_name, avatar_url, qualification, role)
+        ),
+        batch_subjects:cms_batch_subjects(
+          id,
+          batch_id,
+          subject_id,
+          display_order,
+          created_at,
+          subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
         )
       `)
       .or(`is_featured.eq.true,starts_at.gt.${nowIso}`);
@@ -716,6 +732,14 @@ export class CmsService {
           display_order,
           created_at,
           teacher:profiles(id, full_name, avatar_url, qualification, role)
+        ),
+        batch_subjects:cms_batch_subjects(
+          id,
+          batch_id,
+          subject_id,
+          display_order,
+          created_at,
+          subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
         )
       `)
       .or(`is_ongoing.eq.true,and(starts_at.not.is.null,starts_at.lte.${nowIso})`);
@@ -758,19 +782,28 @@ export class CmsService {
   }
 
   /**
-   * Upsert a Batch record and synchronize relational cms_batch_teachers mappings.
+   * Upsert a Batch record and synchronize relational cms_batch_teachers & cms_batch_subjects mappings.
    */
   static async upsertBatch(
     supabase: SupabaseClient,
     batch: Partial<CmsBatch>,
-    teacherIds?: string[]
+    teacherIds?: string[],
+    subjectIds?: string[]
   ): Promise<{ data: CmsBatch | null; error: Error | null }> {
     try {
-      const { board, class_level, subject, batch_teachers, lecture_count, ...cleanPayload } = batch;
+      const {
+        board,
+        class_level,
+        subject,
+        batch_teachers,
+        batch_subjects,
+        lecture_count,
+        ...cleanPayload
+      } = batch;
 
       const payload = {
         ...cleanPayload,
-        subject_id: cleanPayload.subject_id ? cleanPayload.subject_id : null,
+        subject_id: cleanPayload.subject_id ? cleanPayload.subject_id : (subjectIds && subjectIds.length > 0 ? subjectIds[0] : null),
         starts_at: cleanPayload.starts_at ? cleanPayload.starts_at : null,
         ends_at: cleanPayload.ends_at ? cleanPayload.ends_at : null,
         description: cleanPayload.description ? cleanPayload.description : null,
@@ -788,8 +821,8 @@ export class CmsService {
         savedBatch = res.data as CmsBatch;
       }
 
-      // If teacherIds is provided, synchronize cms_batch_teachers
-      if (teacherIds && savedBatch.id) {
+      // Synchronize cms_batch_teachers if teacherIds array is passed
+      if (teacherIds !== undefined && savedBatch.id) {
         await supabase.from("cms_batch_teachers").delete().eq("batch_id", savedBatch.id);
 
         const validTeacherIds = teacherIds.filter((tid) => Boolean(tid && typeof tid === "string" && tid.trim().length > 0));
@@ -802,6 +835,24 @@ export class CmsService {
           const { error: tErr } = await supabase.from("cms_batch_teachers").insert(teacherRows);
           if (tErr) {
             console.warn("[CmsService] Failed to bind batch teachers:", tErr.message);
+          }
+        }
+      }
+
+      // Synchronize cms_batch_subjects if subjectIds array is passed
+      if (subjectIds !== undefined && savedBatch.id) {
+        await supabase.from("cms_batch_subjects").delete().eq("batch_id", savedBatch.id);
+
+        const validSubjectIds = subjectIds.filter((sid) => Boolean(sid && typeof sid === "string" && sid.trim().length > 0));
+        if (validSubjectIds.length > 0) {
+          const subjectRows = validSubjectIds.map((sid, idx) => ({
+            batch_id: savedBatch.id,
+            subject_id: sid,
+            display_order: idx + 1,
+          }));
+          const { error: sErr } = await supabase.from("cms_batch_subjects").insert(subjectRows);
+          if (sErr) {
+            console.warn("[CmsService] Failed to bind batch subjects:", sErr.message);
           }
         }
       }
@@ -822,6 +873,7 @@ export class CmsService {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       await supabase.from("cms_batch_teachers").delete().eq("batch_id", batchId);
+      await supabase.from("cms_batch_subjects").delete().eq("batch_id", batchId);
       const { error } = await supabase.from("cms_batches").delete().eq("id", batchId);
       if (error) throw new Error(error.message);
       return { success: true };

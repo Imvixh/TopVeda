@@ -111,6 +111,10 @@ export default function FeaturedBatchesCmsPage() {
   const [formBoardId, setFormBoardId] = React.useState("");
   const [formClassId, setFormClassId] = React.useState("");
   const [formSubjectId, setFormSubjectId] = React.useState("");
+  const [formSelectedSubjectIds, setFormSelectedSubjectIds] = React.useState<string[]>([]);
+  const [formPricingType, setFormPricingType] = React.useState<"FREE" | "PAID">("FREE");
+  const [formPriceInr, setFormPriceInr] = React.useState<number | string>(0);
+  const [formDiscountPercent, setFormDiscountPercent] = React.useState<number | string>(0);
   const [formSubtitle, setFormSubtitle] = React.useState("");
   const [formDescription, setFormDescription] = React.useState("");
   const [formStartsAt, setFormStartsAt] = React.useState("");
@@ -186,6 +190,10 @@ export default function FeaturedBatchesCmsPage() {
     setFormBoardId(defaultBoard);
     setFormClassId(defaultClass);
     setFormSubjectId(defaultSubject);
+    setFormSelectedSubjectIds(defaultSubject ? [defaultSubject] : []);
+    setFormPricingType("FREE");
+    setFormPriceInr(0);
+    setFormDiscountPercent(0);
     setFormSubtitle("");
     setFormDescription("");
     setFormStartsAt("");
@@ -208,6 +216,16 @@ export default function FeaturedBatchesCmsPage() {
     setFormBoardId(b.board_id);
     setFormClassId(b.class_id);
     setFormSubjectId(b.subject_id || "");
+
+    const linkedSubIds = (b.batch_subjects || [])
+      .sort((x, y) => x.display_order - y.display_order)
+      .map((bs) => bs.subject_id);
+    setFormSelectedSubjectIds(linkedSubIds.length > 0 ? linkedSubIds : (b.subject_id ? [b.subject_id] : []));
+
+    setFormPricingType(b.pricing_type || "FREE");
+    setFormPriceInr(b.price_inr ?? 0);
+    setFormDiscountPercent(b.discount_percent ?? 0);
+
     setFormSubtitle(b.subtitle || "");
     setFormDescription(b.description || "");
 
@@ -316,7 +334,10 @@ export default function FeaturedBatchesCmsPage() {
         board_label: formBoardLabel.trim(),
         board_id: formBoardId,
         class_id: formClassId,
-        subject_id: formSubjectId || null,
+        subject_id: formSelectedSubjectIds[0] || formSubjectId || null,
+        pricing_type: formPricingType,
+        price_inr: formPricingType === "PAID" ? Number(formPriceInr) || 0 : 0,
+        discount_percent: formPricingType === "PAID" ? Number(formDiscountPercent) || 0 : 0,
         subtitle: formSubtitle.trim() || formTitle.trim(),
         description: formDescription.trim() || null,
         starts_at: formStartsAt ? new Date(formStartsAt).toISOString() : null,
@@ -336,7 +357,12 @@ export default function FeaturedBatchesCmsPage() {
         status: "PUBLISHED",
       };
 
-      const { data, error } = await CmsService.upsertBatch(supabase, payload, formSelectedTeacherIds);
+      const { data, error } = await CmsService.upsertBatch(
+        supabase,
+        payload,
+        formSelectedTeacherIds,
+        formSelectedSubjectIds
+      );
       if (error || !data) throw error || new Error("Failed to save batch.");
 
       setFeedback({
@@ -709,11 +735,16 @@ export default function FeaturedBatchesCmsPage() {
               </div>
             </div>
 
-            {/* Section 2: Academic Hierarchy */}
+            {/* Section 2: Academic Hierarchy & Master Taxonomy */}
             <div className="space-y-3 p-3.5 rounded-2xl bg-brand-bg-warm/70 border border-brand-border/80">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-brand-charcoal uppercase tracking-wider text-[11px]">
-                <GraduationCap className="h-3.5 w-3.5 text-brand-orange" />
-                <span>2. Academic Mapping</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-brand-charcoal uppercase tracking-wider text-[11px]">
+                  <GraduationCap className="h-3.5 w-3.5 text-brand-orange" />
+                  <span>2. Academic Mapping &amp; Subjects</span>
+                </div>
+                <span className="text-[10px] font-bold text-brand-orange bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                  {formSelectedSubjectIds.length} Subjects Included
+                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -727,7 +758,7 @@ export default function FeaturedBatchesCmsPage() {
                   >
                     {boards.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.name}
+                        {b.name} ({b.code})
                       </option>
                     ))}
                   </select>
@@ -750,22 +781,131 @@ export default function FeaturedBatchesCmsPage() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-brand-charcoal">Subject (Optional)</label>
-                <select
-                  value={formSubjectId}
-                  onChange={(e) => setFormSubjectId(e.target.value)}
-                  disabled={isSaving}
-                  className="w-full h-9 px-2.5 rounded-xl border border-brand-border bg-white text-xs font-semibold text-brand-charcoal"
-                >
-                  <option value="">General / All Subjects</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+              {/* Multi-Subject Selection Chips */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-bold text-brand-charcoal">
+                    Included Batch Subjects <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormSelectedSubjectIds(subjects.map((s) => s.id))}
+                      className="text-[10px] font-bold text-brand-orange hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => setFormSelectedSubjectIds([])}
+                      className="text-[10px] font-bold text-gray-500 hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-white border border-brand-border max-h-32 overflow-y-auto">
+                  {subjects.map((s) => {
+                    const isSelected = formSelectedSubjectIds.includes(s.id);
+                    return (
+                      <button
+                        type="button"
+                        key={s.id}
+                        onClick={() => {
+                          setFormSelectedSubjectIds((prev) =>
+                            isSelected ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                          );
+                        }}
+                        className={cn(
+                          "px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer",
+                          isSelected
+                            ? "bg-brand-orange text-white border-brand-orange shadow-2xs font-bold"
+                            : "bg-gray-50 text-brand-charcoal border-gray-200 hover:bg-gray-100"
+                        )}
+                      >
+                        {isSelected && <Check className="h-3 w-3 shrink-0" />}
+                        <span>{s.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+            </div>
+
+            {/* Section 3: Pricing Configuration */}
+            <div className="space-y-3 p-3.5 rounded-2xl bg-brand-bg-warm/70 border border-brand-border/80">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-brand-charcoal uppercase tracking-wider text-[11px]">
+                <Sparkles className="h-3.5 w-3.5 text-brand-orange" />
+                <span>3. Batch Pricing Model</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormPricingType("FREE")}
+                  className={cn(
+                    "p-2.5 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer",
+                    formPricingType === "FREE"
+                      ? "bg-emerald-500 text-white border-emerald-600 shadow-2xs"
+                      : "bg-white text-brand-charcoal border-brand-border hover:bg-gray-50"
+                  )}
+                >
+                  🎉 Free Batch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormPricingType("PAID")}
+                  className={cn(
+                    "p-2.5 rounded-xl border text-center text-xs font-bold transition-all cursor-pointer",
+                    formPricingType === "PAID"
+                      ? "bg-brand-orange text-white border-brand-orange shadow-2xs"
+                      : "bg-white text-brand-charcoal border-brand-border hover:bg-gray-50"
+                  )}
+                >
+                  💳 Paid Batch
+                </button>
+              </div>
+
+              {formPricingType === "PAID" && (
+                <div className="grid grid-cols-2 gap-2.5 pt-1 animate-fadeIn">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-brand-charcoal">Original Price (₹)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder="e.g. 4999"
+                      value={formPriceInr}
+                      onChange={(e) => setFormPriceInr(e.target.value)}
+                      disabled={isSaving}
+                      className="text-xs h-9 bg-white font-bold"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-brand-charcoal">Discount (%)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      placeholder="e.g. 20"
+                      value={formDiscountPercent}
+                      onChange={(e) => setFormDiscountPercent(e.target.value)}
+                      disabled={isSaving}
+                      className="text-xs h-9 bg-white font-bold"
+                    />
+                  </div>
+
+                  <div className="col-span-2 p-2 rounded-lg bg-orange-50 border border-orange-200 text-xs text-brand-charcoal font-semibold flex items-center justify-between">
+                    <span>Effective Student Fee:</span>
+                    <span className="font-extrabold text-brand-orange text-sm">
+                      ₹{Math.max(0, Math.round(Number(formPriceInr) * (1 - (Number(formDiscountPercent) || 0) / 100)))}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Section 3: Visual Theme & Badges */}

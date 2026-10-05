@@ -120,6 +120,15 @@ export interface CmsBatchTeacher {
   };
 }
 
+export interface CmsBatchSubject {
+  id: string;
+  batch_id: string;
+  subject_id: string;
+  display_order: number;
+  created_at: string;
+  subject?: CmsSubject;
+}
+
 export interface CmsSectionSetting {
   section_key: "upcoming_batches" | "ongoing_batches" | string;
   title: string;
@@ -147,6 +156,11 @@ export interface CmsBatch extends CmsAuditMetadata {
   educator_name: string;
   educator_avatar_url: string;
   lead_educator_id?: string | null;
+  pricing_type?: "FREE" | "PAID";
+  price_inr?: number;
+  discount_percent?: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
   bg_gradient: string;
   border_color: string;
   icon_type: string;
@@ -159,6 +173,7 @@ export interface CmsBatch extends CmsAuditMetadata {
   class_level?: CmsClassLevel;
   subject?: CmsSubject;
   batch_teachers?: CmsBatchTeacher[];
+  batch_subjects?: CmsBatchSubject[];
   lecture_count?: number;
 }
 
