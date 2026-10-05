@@ -644,7 +644,7 @@ export default function OngoingBatchesCmsPage() {
                 </div>
 
                 {/* EXACT STUDENT HOME ONGOING BATCH CARD PREVIEW */}
-                <div className="flex flex-col justify-between w-full rounded-2xl bg-white border border-brand-border/80 p-4 shadow-2xs select-none min-h-[145px]">
+                <div className="flex flex-col justify-between w-full rounded-2xl bg-white border border-brand-border/80 p-4 shadow-2xs select-none min-h-[160px]">
                   {/* Top Row: Subject Icon + Title */}
                   <div className="flex items-start gap-3">
                     <div
@@ -656,13 +656,37 @@ export default function OngoingBatchesCmsPage() {
                       <IconComponent className={cn("h-4 w-4", b.icon_color || "text-emerald-600")} />
                     </div>
 
-                    <div className="space-y-0.5">
-                      <p className="text-xs font-bold text-brand-text-primary leading-tight">
-                        {badgeText}
-                      </p>
-                      <p className="text-xs font-semibold text-brand-text-muted leading-tight">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold text-brand-charcoal bg-gray-100 px-2 py-0.5 rounded-md">
+                          {badgeText}
+                        </span>
+                        {b.pricing_type === "PAID" ? (
+                          <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                            ₹{Math.round((b.price_inr || 0) * (1 - (b.discount_percent || 0) / 100))}
+                            {b.discount_percent ? ` (${b.discount_percent}% OFF)` : ""}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                            FREE BATCH
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs font-bold text-brand-text-primary leading-snug">
                         {batchTitle}
                       </p>
+
+                      {b.batch_subjects && b.batch_subjects.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-0.5">
+                          {b.batch_subjects.map((bs) => (
+                            <span key={bs.subject_id} className="text-[9px] font-medium text-brand-text-muted bg-gray-50 border border-gray-100 px-1.5 py-0.2 rounded">
+                              {bs.subject?.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       <p
                         className={cn(
                           "text-[11px] font-bold pt-0.5 flex items-center gap-1",

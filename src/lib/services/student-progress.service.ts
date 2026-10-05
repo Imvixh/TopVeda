@@ -95,7 +95,7 @@ export class StudentProgressService {
             educator_name,
             batch_teachers:cms_batch_teachers(
               display_order,
-              teacher:profiles(id, full_name)
+              teacher:profiles!teacher_id(id, full_name)
             )
           )
         `)

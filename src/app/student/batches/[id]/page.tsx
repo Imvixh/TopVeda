@@ -104,7 +104,7 @@ export default function BatchDetailPage() {
           course_id,
           batch_teachers:cms_batch_teachers(
             display_order,
-            teacher:profiles(id, full_name, avatar_url, qualification)
+            teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
           ),
           board:cms_boards(name, code),
           subject:cms_subjects(name, code)
