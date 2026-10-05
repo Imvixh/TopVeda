@@ -1,45 +1,50 @@
 ---
-updated: 2026-10-05T02:00:00+05:30
+updated: 2026-10-05T12:08:00+05:30
 ---
 
 # Project State
 
 ## Current Position
 
-**Milestone:** M1 — Role System, Security Functions & Authorization Foundation  
-**Phase:** 1 — Architecture Reconciliation & Application-Side Companion Fix  
-**Status:** All application-side companion fixes & local verification complete (16/16 test cases passing, 0 typecheck errors, 99/99 build routes passed); ready for owner Supabase execution  
-**Plan:** Plan 1.2 — Security Reconciliation & Application-Side Companion Fix  
+**Milestone:** TopVeda Architecture v7.0 Pure Batch-Centric Platform Alignment  
+**Phase:** Phase 1 — Database Migrations M1–M6 Complete & Batch-Centric CMS Suite Deployed  
+**Status:** All 6 database migration phases executed in Supabase; CmsService multi-subject join table sync, pricing model, and dynamic batch forms implemented & build passed (99/99 routes); commit `2b5ab46` pushed to GitHub.  
+**Plan:** Pure Batch-Centric Platform Architecture  
 
-## Last Action
+## Completed Migrations & Executions
 
-1. Completed one-pass application-side companion fix across all `cms_live_classes` access points:
-   - Replaced all user-context `.select("*")` on `cms_live_classes` with explicit safe column projections, preventing unauthorized access to private provider fields.
-   - Enforced strict student join timing in `src/lib/services/student-live.service.ts`: `canJoin = false` and `isLive = false` when `now < scheduled_start` (T-10m teacher prep window is teacher-only).
-   - Hardened attendance tracking in `src/lib/services/student-progress.service.ts`: reject heartbeats before `scheduled_start`, require `live_status = 'LIVE'`, enforce active STUDENT role & active batch enrollment, capped at 60s/heartbeat.
-   - Updated live routes (`/session`, `/start`, `/end`, `/create`, `/cancel`, `/reschedule`, `/terminate`): teachers operate assigned classes without Super Admin approval; live completion creates `DRAFT` lecture without Super Admin approval; private provider session credentials fetched strictly server-side with `createAdminClient()` only after authorization.
-   - For completed sessions, resolved recordings strictly from linked `cms_lectures` with `status = 'PUBLISHED'` and `is_visible = true`.
-2. Verified with automated companion authorization test suite (`scripts/test-live-companion-authorization.mjs`): **16/16 PASS**.
-3. Executed `npx tsc --noEmit` (`npm run typecheck`) and `npm run build`: **0 errors, 99/99 routes successfully built**.
+1. **Phase M1**: Security Reconciliation & Role System (`20261006000001_m1_security_reconciliation.sql`) — **APPLIED & VERIFIED**
+2. **Phase M2**: Academic Join Tables (`cms_batch_subjects`, `cms_batch_teachers`, `cms_batch_tests`) (`20261006000002_m2_academic_join_tables.sql`) — **APPLIED & VERIFIED**
+3. **Phase M3**: Live Interaction & Moderation Tables (`20261006000003_m3_live_interaction_tables.sql`) — **APPLIED & VERIFIED**
+4. **Phase M4**: Test Versioning & Immutability Engine (`20261006000004_m4_test_immutability_tables.sql`) — **APPLIED & VERIFIED**
+5. **Phase M5**: Application RPCs & Private Storage Buckets (`20261006000005_m5_application_rpcs_and_storage.sql`) — **APPLIED & VERIFIED**
+6. **Phase M6**: Historical Backfill & Immutability Verification (`20261006000006_m6_historical_backfill_and_verification.sql`) — **APPLIED & VERIFIED**
+
+## Batch-Centric Platform Features Implemented
+
+1. **Multi-Subject Batch Mapping**:
+   - `CmsService.upsertBatch` synchronizes `cms_batch_subjects` and `cms_batch_teachers`.
+   - Batch creation/edit modals on `/admin/cms/batches/upcoming` and `/admin/cms/batches/ongoing` support multi-subject chips with instant toggle, select all, and clear.
+2. **Batch Pricing Model**:
+   - Configurable pricing model (`FREE` vs `PAID`).
+   - Original price (₹) and discount percentage (%) inputs with dynamic effective student fee preview.
+3. **Dynamic Master Taxonomy**:
+   - Board and Class dropdowns dynamically pull from database (`cms_boards`, `cms_class_levels`).
+   - Batch start date (`starts_at`) configuration.
+4. **Production Build Validation**:
+   - Next.js Turbopack build passed with 0 errors across all 99 routes.
 
 ## Next Steps
 
-1. Owner reviews [supabase/migrations/20261006000001_m1_security_reconciliation.sql](file:///D:/TopVeda/TopVeda/supabase/migrations/20261006000001_m1_security_reconciliation.sql) (or `M1_SECURITY_RECONCILIATION_FINAL.sql`).
-2. Owner executes [M1_PREFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_PREFLIGHT.sql) in Supabase SQL Editor.
-3. Owner executes the forward migration in Supabase SQL Editor.
-4. Owner executes [M1_POSTFLIGHT.sql](file:///D:/TopVeda/TopVeda/M1_POSTFLIGHT.sql) in Supabase SQL Editor.
+1. End-to-end verification across user journeys (Super Admin batch creation, Teacher workspace session scheduling, Student batch enrollment and gated learning access).
+2. Live validation using Playwright MCP on production environment.
 
 ## Active Decisions
 
 | Decision | Choice | Made | Affects |
 |---|---|---|---|
-| Role Model | Strictly 3 roles: `STUDENT`, `ADMIN`, `SUPER_ADMIN` | 2026-10-05 | `profiles.role`, all RLS policies, routing |
-| Teacher Identity | `ADMIN` is the teacher role; scoped via `cms_batch_teachers` | 2026-10-05 | Content creation, live classes, storage |
-| Live Class Operation | Direct scheduling & operation by assigned ADMIN; recording review by SUPER_ADMIN | 2026-10-05 | Live class RLS, attendance, session route |
-| Test Authority | Exclusively `SUPER_ADMIN` | 2026-10-05 | Test creation APIs, test RLS, teacher portal |
-| Storage Binding | Exact database record association via `<batch>/<record>/<file>` | 2026-10-05 | Storage RLS on all 3 buckets |
-
-## Blockers
-
-- None. All application-side code changes, typechecks, local tests, and Next.js builds are complete. Remote SQL migration execution is queued for manual owner execution in Supabase.
+| Platform Model | Pure Batch-Centric Platform (All access cascades from enrolled Batch) | 2026-10-05 | Enrollment, content access, tests, live classes |
+| Role Model | Strictly 3 roles: `STUDENT`, `ADMIN` (Teacher), `SUPER_ADMIN` | 2026-10-05 | `profiles.role`, RLS, routing |
+| Batch Subject Join | Many-to-Many via `cms_batch_subjects` | 2026-10-05 | CmsService, batch forms, student syllabus |
+| Batch Pricing | Built-in `pricing_type` (`FREE`/`PAID`), `price_inr`, `discount_percent` | 2026-10-05 | Batches, payments, enrollment |
 
