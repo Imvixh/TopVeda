@@ -1119,9 +1119,13 @@ export default function AdminTestsPage() {
                           const val = e.target.value;
                           setFormBatchId(val);
                           const b = taxonomy.batches.find((item) => item.id === val);
-                          if (b?.batch_subjects && b.batch_subjects.length > 0) {
-                            const firstSubId = b.batch_subjects[0]?.subject?.id || b.batch_subjects[0]?.subject_id;
-                            if (firstSubId) setFormSubjectId(firstSubId);
+                          if (b) {
+                            if (b.board_id) setFormBoardId(b.board_id);
+                            if (b.class_id) setFormClassId(b.class_id);
+                            if (b.batch_subjects && b.batch_subjects.length > 0) {
+                              const firstSubId = b.batch_subjects[0]?.subject?.id || b.batch_subjects[0]?.subject_id;
+                              if (firstSubId) setFormSubjectId(firstSubId);
+                            }
                           }
                         }}
                         className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold bg-orange-50/30 border border-orange-200 text-brand-charcoal focus:outline-none focus:ring-1 focus:ring-brand-orange"

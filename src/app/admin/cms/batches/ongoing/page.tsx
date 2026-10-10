@@ -303,7 +303,6 @@ export default function OngoingBatchesCmsPage() {
 
     const errors: Record<string, string> = {};
     if (!formTitle.trim()) errors.title = "Batch title is required.";
-    if (!formBadgeText.trim()) errors.badgeText = "Cohort / Board badge text is required.";
     if (!formBoardId) errors.boardId = "Please select an educational board.";
     if (!formClassId) errors.classId = "Please select an academic class.";
 
@@ -317,8 +316,10 @@ export default function OngoingBatchesCmsPage() {
       setFeedback(null);
 
       const selectedBoard = boards.find((b) => b.id === formBoardId);
-      const boardLabel = selectedBoard ? `${selectedBoard.name} Board` : formBadgeText.trim();
-      const cleanSlug = `${formBadgeText}-${formTitle}`
+      const selectedClass = classLevels.find((c) => c.id === formClassId);
+      const autoBadge = formBadgeText.trim() || [selectedClass?.name, selectedBoard?.code ? `(${selectedBoard.code})` : selectedBoard?.name].filter(Boolean).join(" ") || "Ongoing Cohort";
+      const boardLabel = selectedBoard ? `${selectedBoard.name} Board` : autoBadge;
+      const cleanSlug = `${autoBadge}-${formTitle}`
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
@@ -337,7 +338,7 @@ export default function OngoingBatchesCmsPage() {
         price_inr: formPricingType === "PAID" ? Number(formPriceInr) || 0 : 0,
         discount_percent: formPricingType === "PAID" ? Number(formDiscountPercent) || 0 : 0,
         board_label: boardLabel,
-        badge_text: formBadgeText.trim(),
+        badge_text: autoBadge,
         subtitle: editingBatch?.subtitle || "Daily Live Classes, Recorded Syllabus & Tests",
         description: formDescription.trim() || null,
         starts_at: editingBatch?.starts_at || new Date().toISOString(),
@@ -801,26 +802,12 @@ export default function OngoingBatchesCmsPage() {
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-brand-charcoal">
-                  Cohort Badge (Line 1) <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  value={formBadgeText}
-                  onChange={(e) => setFormBadgeText(e.target.value)}
-                  placeholder="e.g. Class 10 (CBSE) or JEE 2027"
-                  disabled={isSaving}
-                  className={cn("text-xs h-9", formErrors.badgeText && "border-red-500")}
-                />
-                {formErrors.badgeText && <p className="text-[10px] text-red-500 font-medium">{formErrors.badgeText}</p>}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-brand-charcoal">
-                  Batch Title (Line 2) <span className="text-red-500">*</span>
+                  Batch Title <span className="text-red-500">*</span>
                 </label>
                 <Input
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="e.g. Mathematics or Science"
+                  placeholder="e.g. Mathematics Board Masterclass or Complete Science Batch"
                   disabled={isSaving}
                   className={cn("text-xs h-9", formErrors.title && "border-red-500")}
                 />

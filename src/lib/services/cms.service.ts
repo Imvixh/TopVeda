@@ -663,6 +663,52 @@ export class CmsService {
   }
 
   /**
+   * Fetch Batches assigned to a specific teacher (via cms_batch_teachers join table)
+   */
+  static async getTeacherBatches(
+    supabase: SupabaseClient,
+    teacherId: string
+  ): Promise<CmsBatch[]> {
+    // Resolve the batch IDs assigned to this teacher
+    const { data: teacherRows } = await supabase
+      .from("cms_batch_teachers")
+      .select("batch_id")
+      .eq("teacher_id", teacherId);
+
+    const batchIds = ((teacherRows ?? []) as { batch_id: string }[]).map((r) => r.batch_id);
+    if (batchIds.length === 0) return [];
+
+    const { data } = await supabase
+      .from("cms_batches")
+      .select(`
+        *,
+        board:cms_boards(id, name, code),
+        class_level:cms_class_levels(id, name, code),
+        subject:cms_subjects(id, name, code),
+        batch_teachers:cms_batch_teachers(
+          id,
+          batch_id,
+          teacher_id,
+          display_order,
+          created_at,
+          teacher:profiles!teacher_id(id, full_name, avatar_url, qualification, role)
+        ),
+        batch_subjects:cms_batch_subjects(
+          id,
+          batch_id,
+          subject_id,
+          primary_teacher_id,
+          created_at,
+          subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
+        )
+      `)
+      .in("id", batchIds)
+      .order("display_order", { ascending: true });
+
+    return (data as CmsBatch[]) ?? [];
+  }
+
+  /**
    * Fetch New & Featured Batches (is_featured=true OR starts_at > NOW()) with relations
    */
   static async getUpcomingBatches(

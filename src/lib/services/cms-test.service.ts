@@ -7,6 +7,8 @@ export interface AcademicTaxonomy {
   batches: {
     id: string;
     title: string;
+    board_id?: string;
+    class_id?: string;
     board_label?: string;
     batch_subjects?: Array<{ subject_id: string; subject?: { id: string; name: string; code?: string } }>;
   }[];
@@ -138,6 +140,8 @@ export class CmsTestService {
         supabase.from("cms_batches").select(`
           id,
           title,
+          board_id,
+          class_id,
           board_label,
           batch_subjects:cms_batch_subjects(
             subject_id,

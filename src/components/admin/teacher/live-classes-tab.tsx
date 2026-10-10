@@ -812,70 +812,36 @@ export function LiveClassesTab({
             {formErrors.batch && <p className="text-[11px] text-red-500">{formErrors.batch}</p>}
           </div>
 
-          {/* Academic Taxonomy Grid (Subject, Class Level, Board - Batch Bound) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Subject *</label>
-              <select
-                value={createSubjectId}
-                onChange={(e) => {
-                  const sId = e.target.value;
-                  setCreateSubjectId(sId);
-                  const foundSub = batchSubjects.find((s) => s.id === sId);
-                  if (foundSub) setCreateSubject(foundSub.name);
-                }}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium focus:ring-2 focus:ring-brand-orange/30"
-              >
-                {batchSubjects.length > 0 ? (
-                  batchSubjects.map((s) => (
+          {/* Subject Selector (Batch-Bound) */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-brand-charcoal">Subject *</label>
+            <select
+              value={createSubjectId}
+              onChange={(e) => {
+                const sId = e.target.value;
+                setCreateSubjectId(sId);
+                const foundSub = batchSubjects.find((s) => s.id === sId);
+                if (foundSub) setCreateSubject(foundSub.name);
+              }}
+              className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium focus:ring-2 focus:ring-brand-orange/30"
+            >
+              {batchSubjects.length > 0 ? (
+                batchSubjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="">Select Subject</option>
+                  {subjects.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="">Select Subject</option>
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Class Level</label>
-              <select
-                value={createClassId}
-                onChange={(e) => setCreateClassId(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                <option value="">Select Class (Optional)</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Board</label>
-              <select
-                value={createBoardId}
-                onChange={(e) => setCreateBoardId(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                <option value="">Select Board (Optional)</option>
-                {boards.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+                  ))}
+                </>
+              )}
+            </select>
           </div>
 
           {/* Schedule Date & Time Row (2 Columns - No Duration Input) */}

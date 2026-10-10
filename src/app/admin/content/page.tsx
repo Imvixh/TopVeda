@@ -180,7 +180,7 @@ export default function TeacherWorkspacePage() {
           CmsService.getSubjects(supabase),
           CmsService.getCourses(supabase),
           CmsService.getChapters(supabase),
-          CmsService.getBatches(supabase),
+          CmsService.getTeacherBatches(supabase, activeTeacherId),
           CmsService.getTeacherStatistics(supabase, activeTeacherId),
         ]);
 

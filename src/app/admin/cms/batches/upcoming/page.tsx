@@ -305,7 +305,6 @@ export default function FeaturedBatchesCmsPage() {
     const errors: Record<string, string> = {};
 
     if (!formTitle.trim()) errors.title = "Batch title is required.";
-    if (!formBoardLabel.trim()) errors.boardLabel = "Class / Board label is required.";
     if (!formBoardId) errors.boardId = "Please select a curriculum Board.";
     if (!formClassId) errors.classId = "Please select a Class Level.";
 
@@ -323,6 +322,10 @@ export default function FeaturedBatchesCmsPage() {
       const primaryTeacherName = primaryTeacher?.fullName || editingBatch?.educator_name || "Educator";
       const primaryTeacherAvatar = primaryTeacher?.avatarUrl || editingBatch?.educator_avatar_url || "/assets/student/teacher-male-1.jpg";
 
+      const selectedBoard = boards.find((b) => b.id === formBoardId);
+      const selectedClass = classLevels.find((c) => c.id === formClassId);
+      const autoBoardLabel = formBoardLabel.trim() || [selectedClass?.name, selectedBoard?.code ? `(${selectedBoard.code})` : selectedBoard?.name].filter(Boolean).join(" ") || "Upcoming Batch";
+
       const slug = editingBatch
         ? editingBatch.slug
         : `${formTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString().slice(-4)}`;
@@ -331,7 +334,7 @@ export default function FeaturedBatchesCmsPage() {
         ...(editingBatch ? { id: editingBatch.id } : {}),
         title: formTitle.trim(),
         slug,
-        board_label: formBoardLabel.trim(),
+        board_label: autoBoardLabel,
         board_id: formBoardId,
         class_id: formClassId,
         subject_id: formSelectedSubjectIds[0] || formSubjectId || null,
@@ -707,19 +710,7 @@ export default function FeaturedBatchesCmsPage() {
                 {formErrors.title && <p className="text-[10px] text-red-500 font-medium">{formErrors.title}</p>}
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-brand-charcoal">
-                  Cohort / Board Tag <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  placeholder="e.g. Class 10 CBSE or JEE 2027"
-                  value={formBoardLabel}
-                  onChange={(e) => setFormBoardLabel(e.target.value)}
-                  disabled={isSaving}
-                  className={cn("text-xs h-9", formErrors.boardLabel && "border-red-500")}
-                />
-                {formErrors.boardLabel && <p className="text-[10px] text-red-500 font-medium">{formErrors.boardLabel}</p>}
-              </div>
+
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-brand-charcoal">
