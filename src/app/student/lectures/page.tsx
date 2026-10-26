@@ -123,7 +123,10 @@ export default function LecturesPage() {
           subject: l.cms_batches?.title || l.subject || "Academic",
           teacher_name: l.teacher_name || "TopVeda Faculty",
           duration_human: l.duration_human,
-          duration_formatted: l.duration_formatted || "45:00",
+          duration_formatted:
+            l.duration_formatted && l.duration_formatted !== "45:00"
+              ? l.duration_formatted
+              : (l.duration_human || (l.duration_seconds ? `${Math.floor(l.duration_seconds / 60)} min` : "")),
           thumbnail_bg: l.thumbnail_bg || "from-[#0F2042] via-[#162D59] to-[#0A162B]",
           category_tag: l.category_tag,
         }))

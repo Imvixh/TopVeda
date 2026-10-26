@@ -73,7 +73,7 @@ export class StorageService {
     supabase: SupabaseClient,
     bucket: CmsBucketId,
     path: string,
-    file: File | Blob,
+    file: File | Blob | Buffer | ArrayBuffer,
     options?: { contentType?: string; upsert?: boolean }
   ): Promise<{ path: string | null; error: Error | null }> {
     try {

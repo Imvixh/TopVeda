@@ -309,9 +309,16 @@ function LecturesCmsContent() {
     setFormTeacherName(lec.teacher_name || "");
     setFormCategoryTag(lec.category_tag || "Full Lecture");
 
-    const mins = Math.floor((lec.duration_seconds || 0) / 60);
-    const secs = (lec.duration_seconds || 0) % 60;
-    setFormDurationMinutes(mins || 45);
+    let mins = Math.floor((lec.duration_seconds || 0) / 60);
+    let secs = (lec.duration_seconds || 0) % 60;
+    if (mins === 0 && secs === 0 && lec.duration_formatted) {
+      const parts = lec.duration_formatted.split(":");
+      if (parts.length === 2) {
+        mins = parseInt(parts[0], 10) || 0;
+        secs = parseInt(parts[1], 10) || 0;
+      }
+    }
+    setFormDurationMinutes(mins);
     setFormDurationSecondsRemaining(secs);
 
     setFormThumbnailUrl(lec.thumbnail_url || "/thumbnails/default-lecture.jpg");
@@ -426,21 +433,9 @@ function LecturesCmsContent() {
     const formattedMinutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
     const formattedSeconds = String(totalSeconds % 60).padStart(2, "0");
     const durationFormatted = `${formattedMinutes}:${formattedSeconds}`;
-    const durationHuman = `${Math.floor(totalSeconds / 60)} min`;
-
-    // Preserve real YouTube duration if existing lecture already has it
-    const finalDurationSeconds =
-      editingLecture && editingLecture.duration_seconds && editingLecture.duration_seconds > 0
-        ? editingLecture.duration_seconds
-        : totalSeconds;
-    const finalDurationFormatted =
-      editingLecture && editingLecture.duration_formatted && editingLecture.duration_formatted !== "45:00"
-        ? editingLecture.duration_formatted
-        : durationFormatted;
-    const finalDurationHuman =
-      editingLecture && editingLecture.duration_human && editingLecture.duration_human !== "45 min"
-        ? editingLecture.duration_human
-        : durationHuman;
+    const durationHuman = totalSeconds >= 3600
+      ? `${Math.floor(totalSeconds / 3600)} hr ${Math.floor((totalSeconds % 3600) / 60)} min`
+      : `${Math.floor(totalSeconds / 60)} min`;
 
     const payload: Partial<CmsLecture> = {
       ...(editingLecture ? { id: editingLecture.id } : {}),
@@ -456,9 +451,9 @@ function LecturesCmsContent() {
       subject: formSubject.trim() || "Mathematics",
       teacher_name: formTeacherName.trim() || "TopVeda Educator",
       category_tag: formCategoryTag.trim() || "Full Lecture",
-      duration_seconds: finalDurationSeconds,
-      duration_formatted: finalDurationFormatted,
-      duration_human: finalDurationHuman,
+      duration_seconds: totalSeconds,
+      duration_formatted: durationFormatted,
+      duration_human: durationHuman,
       thumbnail_url: formThumbnailUrl.trim(),
       thumbnail_bg: formThumbnailBg.trim(),
       video_stream_id: formVideoStreamId.trim() || (editingLecture?.video_stream_id || null),

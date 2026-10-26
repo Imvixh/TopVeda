@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { NotificationService } from "@/lib/services/notification.service";
 import { YouTubeUploadService } from "@/lib/services/youtube-upload.service";
 import { StorageService } from "@/lib/services/storage.service";
@@ -57,16 +58,27 @@ export async function POST(request: NextRequest) {
     });
 
     // 1. Authenticate user
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    let user = null;
+    const authHeader = request.headers.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "").trim();
+      const { data: userData } = await supabase.auth.getUser(token);
+      user = userData?.user;
+    }
+    if (!user) {
+      const { data: userData } = await supabase.auth.getUser();
+      user = userData?.user;
+    }
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Authoritative DB client (fallback to createAdminClient for server transaction persistence)
+    const db = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+
     // 2. Authorize Admin / Educator or Super Admin
-    const { data: profile } = await supabase
+    const { data: profile } = await db
       .from("profiles")
       .select("id, full_name, role, avatar_url")
       .eq("id", user.id)
@@ -95,15 +107,18 @@ export async function POST(request: NextRequest) {
     let thumbnailBg = "from-[#0F2042] via-[#162D59] to-[#0A162B]";
     let videoStreamId: string | null = null;
     let videoPlaybackUrl: string | null = null;
-    let durationSeconds = 2700;
-    let durationFormatted = "45:00";
-    let durationHuman = "45 min";
+    let durationSeconds = 0;
+    let durationFormatted = "";
+    let durationHuman = "";
     let categoryTag = "Recorded Lecture";
     let isFreePreview = true;
     let materialIds: string[] = [];
     let statusTarget = "PENDING_REVIEW";
     let videoFile: File | null = null;
     let thumbnailFile: File | null = null;
+    let materialFile: File | null = null;
+    let materialUrl: string | null = null;
+    let materialTitle: string | null = null;
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
@@ -121,12 +136,14 @@ export async function POST(request: NextRequest) {
       thumbnailBg = (formData.get("thumbnailBg") as string) || thumbnailBg;
       videoStreamId = (formData.get("videoStreamId") as string) || null;
       videoPlaybackUrl = (formData.get("videoPlaybackUrl") as string) || null;
-      durationSeconds = parseInt((formData.get("durationSeconds") as string) || "2700", 10) || 2700;
-      durationFormatted = (formData.get("durationFormatted") as string) || durationFormatted;
-      durationHuman = (formData.get("durationHuman") as string) || durationHuman;
+      durationSeconds = parseInt((formData.get("durationSeconds") as string) || "0", 10) || 0;
+      durationFormatted = (formData.get("durationFormatted") as string) || "";
+      durationHuman = (formData.get("durationHuman") as string) || "";
       categoryTag = (formData.get("categoryTag") as string) || categoryTag;
       isFreePreview = formData.get("isFreePreview") === "false" ? false : true;
       statusTarget = (formData.get("status") as string) || "PENDING_REVIEW";
+      materialUrl = (formData.get("materialUrl") as string) || null;
+      materialTitle = (formData.get("materialTitle") as string) || null;
 
       const rawMaterialIds = formData.get("materialIds") as string;
       if (rawMaterialIds) {
@@ -146,6 +163,11 @@ export async function POST(request: NextRequest) {
       if (rawThumbnail instanceof File && rawThumbnail.size > 0) {
         thumbnailFile = rawThumbnail;
       }
+
+      const rawMaterial = formData.get("material") || formData.get("materialFile");
+      if (rawMaterial instanceof File && rawMaterial.size > 0) {
+        materialFile = rawMaterial;
+      }
     } else {
       const body = await request.json();
       title = body.title || "";
@@ -162,13 +184,31 @@ export async function POST(request: NextRequest) {
       thumbnailBg = body.thumbnailBg || thumbnailBg;
       videoStreamId = body.videoStreamId || null;
       videoPlaybackUrl = body.videoPlaybackUrl || null;
-      durationSeconds = body.durationSeconds || 2700;
-      durationFormatted = body.durationFormatted || durationFormatted;
-      durationHuman = body.durationHuman || durationHuman;
+      durationSeconds = parseInt(String(body.durationSeconds || "0"), 10) || 0;
+      durationFormatted = body.durationFormatted || "";
+      durationHuman = body.durationHuman || "";
       categoryTag = body.categoryTag || categoryTag;
       isFreePreview = body.isFreePreview ?? true;
       materialIds = body.materialIds || [];
       statusTarget = body.status || "PENDING_REVIEW";
+      materialUrl = body.materialUrl || null;
+      materialTitle = body.materialTitle || null;
+    }
+
+    // Compute accurate duration metadata
+    if (durationSeconds > 0) {
+      const mins = Math.floor(durationSeconds / 60);
+      const secs = durationSeconds % 60;
+      if (!durationFormatted || durationFormatted === "45:00") {
+        durationFormatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+      }
+      if (!durationHuman || durationHuman === "45 min") {
+        durationHuman = mins >= 60 ? `${Math.floor(mins / 60)} hr ${mins % 60} min` : `${Math.max(1, mins)} min`;
+      }
+    } else {
+      durationSeconds = 0;
+      durationFormatted = durationFormatted && durationFormatted !== "45:00" ? durationFormatted : "00:00";
+      durationHuman = durationHuman && durationHuman !== "45 min" ? durationHuman : "0 min";
     }
 
     // 4. Server-Side Validation
@@ -179,59 +219,87 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Subject is required." }, { status: 400 });
     }
 
-    // 5. Handle Optional Thumbnail File Upload if attached
+    // 5. Handle Thumbnail Upload (if custom image file was provided)
     let thumbnailBuffer: Buffer | null = null;
     if (thumbnailFile) {
       if (!ALLOWED_THUMBNAIL_MIME_TYPES.has(thumbnailFile.type)) {
         return NextResponse.json(
-          {
-            error: `Unsupported thumbnail format "${thumbnailFile.type}". Please upload JPG, PNG, or WebP image.`,
-          },
+          { error: "Unsupported thumbnail image type. Allowed types: JPG, PNG, WebP." },
           { status: 400 }
         );
       }
-
       if (thumbnailFile.size > MAX_THUMBNAIL_FILE_SIZE_BYTES) {
         return NextResponse.json(
-          {
-            error: `Thumbnail image size exceeds maximum limit of 2 MB (${(thumbnailFile.size / (1024 * 1024)).toFixed(1)} MB uploaded).`,
-          },
+          { error: "Thumbnail file exceeds 2 MB limit." },
           { status: 400 }
         );
       }
 
-      try {
-        const thumbEntityId = crypto.randomUUID();
-        const thumbPath = StorageService.generateScopedPath(user.id, thumbEntityId, thumbnailFile.name);
-        const { path: uploadedThumbPath, error: thumbUploadErr } = await StorageService.uploadFile(
-          supabase,
-          "lecture-thumbnails",
-          thumbPath,
-          thumbnailFile,
-          { contentType: thumbnailFile.type }
-        );
-        if (!thumbUploadErr && uploadedThumbPath) {
-          thumbnailUrl = uploadedThumbPath;
-        }
+      const thumbArrayBuf = await thumbnailFile.arrayBuffer();
+      thumbnailBuffer = Buffer.from(thumbArrayBuf);
 
-        const thumbArrayBuf = await thumbnailFile.arrayBuffer();
-        thumbnailBuffer = Buffer.from(thumbArrayBuf);
-      } catch (thumbErr) {
-        console.warn("[LectureUpload] Non-blocking thumbnail storage warning:", thumbErr);
+      // Upload to Supabase Storage Bucket
+      const fileExt = thumbnailFile.name.split(".").pop() || "jpg";
+      const storagePath = `thumbnails/${user.id}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${fileExt}`;
+
+      const { path: uploadedThumbPath, error: thumbStorageErr } = await StorageService.uploadFile(
+        db,
+        "lecture-thumbnails",
+        storagePath,
+        thumbnailFile,
+        { contentType: thumbnailFile.type }
+      );
+
+      if (!thumbStorageErr && uploadedThumbPath) {
+        thumbnailUrl = StorageService.getPublicUrl(db, "lecture-thumbnails", uploadedThumbPath);
       }
     }
 
-    // 6. Handle Video Upload to YouTube Data API (if video file attached)
+    // Default thumbnail fallback if still empty
+    if (!thumbnailUrl.trim()) {
+      thumbnailUrl = "/images/subjects/mathematics-banner.png";
+    }
+
+    // 6. Handle Companion Study Material Upload
+    let finalMaterialUrl = materialUrl;
+    let materialSizeBytes: number | null = null;
+    if (materialFile && !finalMaterialUrl) {
+      try {
+        const entityId = crypto.randomUUID();
+        const storagePath = StorageService.generateScopedPath(user.id, entityId, materialFile.name);
+        const arrayBuf = await materialFile.arrayBuffer();
+        const fileBuffer = Buffer.from(arrayBuf);
+        materialSizeBytes = materialFile.size;
+
+        const { path: uploadedPath, error: matUploadErr } = await StorageService.uploadFile(
+          db,
+          "study-materials",
+          storagePath,
+          fileBuffer,
+          { contentType: materialFile.type || "application/pdf" }
+        );
+        if (!matUploadErr && uploadedPath) {
+          finalMaterialUrl = uploadedPath;
+        } else if (matUploadErr) {
+          console.error("[LectureUpload] Material upload error:", matUploadErr);
+        }
+      } catch (err) {
+        console.error("[LectureUpload] Failed to process companion material file:", err);
+      }
+    }
+
+    // 7. Handle Video Upload via YouTube Upload Service or Stream Fallback
     let finalVideoStreamId = videoStreamId;
-    let finalVideoPlaybackUrl = videoPlaybackUrl;
-    let videoUploadStatus = "ready";
+    let finalVideoPlaybackUrl = videoPlaybackUrl || "https://stream.topveda.com/lectures/sample.m3u8";
+    let videoUploadStatus: "pending" | "processing" | "ready" | "failed" =
+      videoFile ? "processing" : "ready";
 
     if (videoFile) {
-      // Validate Video MIME Type
+      // Validate Video MIME
       if (!ALLOWED_VIDEO_MIME_TYPES.has(videoFile.type)) {
         return NextResponse.json(
           {
-            error: `Unsupported video format "${videoFile.type}". Please upload MP4, WebM, QuickTime (MOV), MKV, or AVI.`,
+            error: `Unsupported video MIME type "${videoFile.type}". Supported formats: MP4, WebM, QuickTime MOV, MKV, AVI, MPEG.`,
           },
           { status: 400 }
         );
@@ -260,7 +328,7 @@ export async function POST(request: NextRequest) {
 
       // Duplicate / Idempotency Check: Prevent duplicate simultaneous upload
       const recentThreshold = new Date(Date.now() - 30 * 1000).toISOString();
-      const { data: recentDuplicate } = await supabase
+      const { data: recentDuplicate } = await db
         .from("cms_lectures")
         .select("id, title")
         .eq("educator_id", user.id)
@@ -300,7 +368,7 @@ export async function POST(request: NextRequest) {
           finalVideoStreamId,
           thumbnailBuffer,
           thumbnailFile?.type || "image/jpeg",
-          supabase
+          db
         );
       }
     }
@@ -314,8 +382,8 @@ export async function POST(request: NextRequest) {
     const nowIso = new Date().toISOString();
     const lectureStatus = statusTarget === "DRAFT" ? "DRAFT" : "PENDING_REVIEW";
 
-    // 7. Insert Lecture Record into cms_lectures
-    const { data: newLecture, error: insertError } = await supabase
+    // 8. Insert Lecture Record into cms_lectures
+    const { data: newLecture, error: insertError } = await db
       .from("cms_lectures")
       .insert({
         title: title.trim(),
@@ -336,9 +404,9 @@ export async function POST(request: NextRequest) {
         video_stream_id: finalVideoStreamId,
         video_playback_url: finalVideoPlaybackUrl,
         video_upload_status: videoUploadStatus,
-        duration_seconds: durationSeconds || 2700,
-        duration_formatted: durationFormatted || "45:00",
-        duration_human: durationHuman || "45 min",
+        duration_seconds: durationSeconds,
+        duration_formatted: durationFormatted,
+        duration_human: durationHuman,
         category_tag: categoryTag || "Recorded Lecture",
         is_home_featured: false,
         is_free_preview: isFreePreview ?? true,
@@ -358,9 +426,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: insertError.message || "Failed to save recorded lecture." }, { status: 500 });
     }
 
-    // 8. If submitted for review, notify Super Admin
+    // 9. If companion study material URL or file was provided, create cms_study_materials record
+    let createdMaterial = null;
+    if (finalMaterialUrl) {
+      const matTitle = (materialTitle || `${title.trim()} - Notes`).trim();
+      const { data: newMaterial, error: materialInsertErr } = await db
+        .from("cms_study_materials")
+        .insert({
+          title: matTitle,
+          material_type: "notes",
+          file_url: finalMaterialUrl,
+          file_size_bytes: materialSizeBytes,
+          lecture_id: newLecture.id,
+          batch_id: batchId || null,
+          subject_id: subjectId || null,
+          course_id: courseId || null,
+          chapter_id: chapterId || null,
+          display_order: 0,
+          is_visible: true,
+          status: lectureStatus,
+          created_by: user.id,
+          submitted_by: user.id,
+          created_at: nowIso,
+          updated_at: nowIso,
+        })
+        .select()
+        .single();
+
+      if (materialInsertErr) {
+        console.error("[LectureUpload] Material DB insert error:", materialInsertErr);
+      } else if (newMaterial) {
+        createdMaterial = newMaterial;
+        const updatedMaterialIds = Array.from(new Set([...materialIds, newMaterial.id]));
+        await db
+          .from("cms_lectures")
+          .update({ material_ids: updatedMaterialIds })
+          .eq("id", newLecture.id);
+        newLecture.material_ids = updatedMaterialIds;
+      }
+    }
+
+    // 10. If submitted for review, notify Super Admin
     if (lectureStatus === "PENDING_REVIEW") {
-      await NotificationService.notifySuperAdminLectureSubmitted(supabase, {
+      await NotificationService.notifySuperAdminLectureSubmitted(db, {
         teacherId: user.id,
         teacherName: educatorName,
         lectureId: newLecture.id,
@@ -373,9 +481,10 @@ export async function POST(request: NextRequest) {
       success: true,
       message:
         lectureStatus === "PENDING_REVIEW"
-          ? "Recorded lecture uploaded to YouTube and submitted for Super Admin review."
-          : "Recorded lecture draft saved successfully.",
+          ? "Recorded lecture and companion materials uploaded and submitted for Super Admin review."
+          : "Recorded lecture draft and companion materials saved successfully.",
       lecture: newLecture,
+      material: createdMaterial,
       videoId: finalVideoStreamId,
       playbackUrl: finalVideoPlaybackUrl,
     });

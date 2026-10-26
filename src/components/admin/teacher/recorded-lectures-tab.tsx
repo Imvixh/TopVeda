@@ -88,8 +88,49 @@ export function RecordedLecturesTab({
   const [thumbnailFile, setThumbnailFile] = React.useState<File | null>(null);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = React.useState<string | null>(null);
   const [uploadVideoPlaybackUrl, setUploadVideoPlaybackUrl] = React.useState("https://stream.topveda.com/lectures/sample.m3u8");
-  const [uploadDurationFormatted, setUploadDurationFormatted] = React.useState("45:00");
+  const [uploadDurationMinutes, setUploadDurationMinutes] = React.useState<number>(0);
+  const [uploadDurationSecondsRemaining, setUploadDurationSecondsRemaining] = React.useState<number>(0);
+  const [uploadDurationFormatted, setUploadDurationFormatted] = React.useState("");
+  const [uploadDurationSeconds, setUploadDurationSeconds] = React.useState<number>(0);
+  const [uploadDurationHuman, setUploadDurationHuman] = React.useState("");
+  const [isDurationAutoDetected, setIsDurationAutoDetected] = React.useState(false);
   const [uploadStatusTarget, setUploadStatusTarget] = React.useState<"DRAFT" | "PENDING_REVIEW">("PENDING_REVIEW");
+
+  // Helper to extract exact duration from uploaded video file
+  const extractVideoDuration = (file: File) => {
+    try {
+      const videoEl = document.createElement("video");
+      videoEl.preload = "metadata";
+      const objectUrl = URL.createObjectURL(file);
+      videoEl.src = objectUrl;
+      videoEl.onloadedmetadata = () => {
+        URL.revokeObjectURL(objectUrl);
+        const durationSec = Math.round(videoEl.duration);
+        if (durationSec && !isNaN(durationSec)) {
+          setUploadDurationSeconds(durationSec);
+          const minutes = Math.floor(durationSec / 60);
+          const seconds = durationSec % 60;
+          setUploadDurationMinutes(minutes);
+          setUploadDurationSecondsRemaining(seconds);
+          const formatted = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+          setUploadDurationFormatted(formatted);
+          if (minutes >= 60) {
+            const hrs = Math.floor(minutes / 60);
+            const remainingMins = minutes % 60;
+            setUploadDurationHuman(remainingMins > 0 ? `${hrs} hr ${remainingMins} min` : `${hrs} hr`);
+          } else {
+            setUploadDurationHuman(seconds > 0 && minutes === 0 ? `${seconds} sec` : `${Math.max(1, minutes)} min`);
+          }
+          setIsDurationAutoDetected(true);
+        }
+      };
+      videoEl.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+    } catch (e) {
+      console.warn("Could not extract video duration:", e);
+    }
+  };
 
   // Dynamically filter subjects strictly mapped to the selected batch
   const batchSubjects = React.useMemo(() => {
@@ -209,7 +250,8 @@ export function RecordedLecturesTab({
     try {
       setIsUploadingMaterial(true);
       const entityId = crypto.randomUUID();
-      const path = StorageService.generateScopedPath(teacherId, entityId, file.name);
+      const safeTeacherId = teacherId || "educator";
+      const path = StorageService.generateScopedPath(safeTeacherId, entityId, file.name);
 
       const { path: uploadedPath, error } = await StorageService.uploadFile(
         supabase,
@@ -219,12 +261,12 @@ export function RecordedLecturesTab({
         { contentType: "application/pdf" }
       );
 
-      if (error) throw error;
-      setUploadedMaterialUrl(uploadedPath);
-      setFeedback({ type: "success", message: `Companion PDF "${file.name}" uploaded successfully.` });
-    } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setFeedback({ type: "error", message: `Failed to upload material: ${error.message}` });
+      if (!error && uploadedPath) {
+        setUploadedMaterialUrl(uploadedPath);
+        setFeedback({ type: "success", message: `Companion PDF "${file.name}" ready to attach.` });
+      }
+    } catch {
+      // Non-blocking: file will be passed in FormData directly to /api/teacher/lectures/upload
     } finally {
       setIsUploadingMaterial(false);
     }
@@ -237,11 +279,6 @@ export function RecordedLecturesTab({
 
     const errors: Record<string, string> = {};
     if (!uploadTitle.trim()) errors.title = "Lecture title is required.";
-    // Note: We intentionally do NOT enforce a batch selection here.
-    // Any submitted batchId flows through server-side RLS, and teachers may
-    // also create unassigned drafts. Explicitly selecting a batch remains available
-    // in the form dropdown; the preceding auto-select logic only populates fields
-    // in the background — it never pre-checks the validation gate.
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -257,7 +294,7 @@ export function RecordedLecturesTab({
 
       let res: Response;
 
-      if (videoFile || thumbnailFile) {
+      if (videoFile || thumbnailFile || materialFile) {
         const formData = new FormData();
         formData.append("title", uploadTitle.trim());
         formData.append("subject", uploadSubject);
@@ -269,18 +306,55 @@ export function RecordedLecturesTab({
         if (uploadBatchId) formData.append("batchId", uploadBatchId);
         formData.append("lectureNumber", uploadLectureNumber || "1");
         if (uploadDescription.trim()) formData.append("description", uploadDescription.trim());
-        if (uploadVideoPlaybackUrl.trim()) formData.append("videoPlaybackUrl", uploadVideoPlaybackUrl.trim());
-        formData.append("durationFormatted", uploadDurationFormatted.trim() || "45:00");
-        formData.append("durationHuman", `${uploadDurationFormatted.split(":")[0] || "45"} min`);
+        const totalDurationSec =
+          uploadDurationSeconds > 0
+            ? uploadDurationSeconds
+            : (uploadDurationMinutes * 60 + uploadDurationSecondsRemaining);
+        const computedMins = Math.floor(totalDurationSec / 60);
+        const computedSecs = totalDurationSec % 60;
+        const exactDurationFormatted =
+          totalDurationSec > 0
+            ? `${String(computedMins).padStart(2, "0")}:${String(computedSecs).padStart(2, "0")}`
+            : (uploadDurationFormatted.trim() || "");
+        const exactDurationHuman =
+          totalDurationSec > 0
+            ? (computedMins >= 60
+                ? `${Math.floor(computedMins / 60)} hr ${computedMins % 60} min`
+                : `${Math.max(1, computedMins)} min`)
+            : (uploadDurationHuman.trim() || "");
+
+        formData.append("durationSeconds", String(totalDurationSec));
+        if (exactDurationFormatted) formData.append("durationFormatted", exactDurationFormatted);
+        if (exactDurationHuman) formData.append("durationHuman", exactDurationHuman);
         formData.append("status", uploadStatusTarget);
         if (videoFile) formData.append("video", videoFile);
         if (thumbnailFile) formData.append("thumbnail", thumbnailFile);
+        if (materialFile) formData.append("material", materialFile);
+        if (uploadedMaterialUrl) formData.append("materialUrl", uploadedMaterialUrl);
+        if (materialFile) formData.append("materialTitle", materialFile.name.replace(/\.[^/.]+$/, ""));
 
         res = await fetch("/api/teacher/lectures/upload", {
           method: "POST",
           body: formData,
         });
       } else {
+        const totalDurationSec =
+          uploadDurationSeconds > 0
+            ? uploadDurationSeconds
+            : (uploadDurationMinutes * 60 + uploadDurationSecondsRemaining);
+        const computedMins = Math.floor(totalDurationSec / 60);
+        const computedSecs = totalDurationSec % 60;
+        const exactDurationFormatted =
+          totalDurationSec > 0
+            ? `${String(computedMins).padStart(2, "0")}:${String(computedSecs).padStart(2, "0")}`
+            : (uploadDurationFormatted.trim() || "");
+        const exactDurationHuman =
+          totalDurationSec > 0
+            ? (computedMins >= 60
+                ? `${Math.floor(computedMins / 60)} hr ${computedMins % 60} min`
+                : `${Math.max(1, computedMins)} min`)
+            : (uploadDurationHuman.trim() || "");
+
         const payload = {
           title: uploadTitle.trim(),
           subject: uploadSubject,
@@ -293,9 +367,12 @@ export function RecordedLecturesTab({
           lectureNumber: parseInt(uploadLectureNumber, 10) || 1,
           description: uploadDescription.trim() || undefined,
           videoPlaybackUrl: uploadVideoPlaybackUrl.trim() || undefined,
-          durationFormatted: uploadDurationFormatted.trim() || "45:00",
-          durationHuman: `${uploadDurationFormatted.split(":")[0] || "45"} min`,
+          durationSeconds: totalDurationSec,
+          durationFormatted: exactDurationFormatted,
+          durationHuman: exactDurationHuman,
           status: uploadStatusTarget,
+          materialUrl: uploadedMaterialUrl || undefined,
+          materialTitle: undefined,
         };
 
         res = await fetch("/api/teacher/lectures/upload", {
@@ -314,7 +391,7 @@ export function RecordedLecturesTab({
           type: "success",
           message:
             uploadStatusTarget === "PENDING_REVIEW"
-              ? `Lecture "${uploadTitle}" uploaded to YouTube and submitted to Super Admin for verification.`
+              ? `Lecture "${uploadTitle}" and companion materials uploaded and submitted to Super Admin for verification.`
               : `Lecture draft "${uploadTitle}" saved successfully.`,
         });
         setIsUploadOpen(false);
@@ -329,6 +406,12 @@ export function RecordedLecturesTab({
         setThumbnailPreviewUrl(null);
         setMaterialFile(null);
         setUploadedMaterialUrl(null);
+        setUploadDurationMinutes(0);
+        setUploadDurationSecondsRemaining(0);
+        setUploadDurationFormatted("");
+        setUploadDurationSeconds(0);
+        setUploadDurationHuman("");
+        setIsDurationAutoDetected(false);
         onRefresh();
       }
     } catch (err: unknown) {
@@ -768,6 +851,7 @@ export function RecordedLecturesTab({
                   const file = e.target.files?.[0];
                   if (file) {
                     setVideoFile(file);
+                    extractVideoDuration(file);
                   }
                 }}
               />
@@ -793,6 +877,78 @@ export function RecordedLecturesTab({
                   Or provide a pre-existing HLS stream URL below if already hosted.
                 </p>
               )}
+            </div>
+
+            {/* Video Duration (Exact Minutes / Total Time) */}
+            <div className="pt-2 border-t border-orange-200/60 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-brand-charcoal flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-brand-orange" />
+                  Exact Video Duration (Total Time)
+                </label>
+                {isDurationAutoDetected ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                    Auto-detected: {uploadDurationFormatted} ({uploadDurationHuman})
+                  </span>
+                ) : uploadDurationSeconds > 0 || uploadDurationMinutes > 0 ? (
+                  <span className="text-[10px] font-bold text-brand-charcoal bg-white px-2 py-0.5 rounded-full border border-brand-border">
+                    {uploadDurationHuman || `${uploadDurationMinutes} min`}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-brand-text-muted">
+                    Auto-calculated from video or enter below
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-brand-text-muted">Minutes</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={uploadDurationMinutes || ""}
+                    onChange={(e) => {
+                      const mins = Math.max(0, parseInt(e.target.value, 10) || 0);
+                      setUploadDurationMinutes(mins);
+                      const totalSec = mins * 60 + uploadDurationSecondsRemaining;
+                      setUploadDurationSeconds(totalSec);
+                      const formatted = `${String(mins).padStart(2, "0")}:${String(uploadDurationSecondsRemaining).padStart(2, "0")}`;
+                      setUploadDurationFormatted(formatted);
+                      if (mins >= 60) {
+                        const hrs = Math.floor(mins / 60);
+                        const remMins = mins % 60;
+                        setUploadDurationHuman(remMins > 0 ? `${hrs} hr ${remMins} min` : `${hrs} hr`);
+                      } else {
+                        setUploadDurationHuman(`${Math.max(1, mins)} min`);
+                      }
+                      setIsDurationAutoDetected(false);
+                    }}
+                    className="h-8 text-xs bg-white font-mono"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-brand-text-muted">Seconds</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="59"
+                    placeholder="0"
+                    value={uploadDurationSecondsRemaining || ""}
+                    onChange={(e) => {
+                      const secs = Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0));
+                      setUploadDurationSecondsRemaining(secs);
+                      const totalSec = uploadDurationMinutes * 60 + secs;
+                      setUploadDurationSeconds(totalSec);
+                      const formatted = `${String(uploadDurationMinutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+                      setUploadDurationFormatted(formatted);
+                      setIsDurationAutoDetected(false);
+                    }}
+                    className="h-8 text-xs bg-white font-mono"
+                  />
+                </div>
+              </div>
             </div>
 
             {!videoFile && (

@@ -297,23 +297,43 @@ export default function BatchDetailPage() {
         is_enrolled: isEnrolled,
         teachers: mappedTeachers,
         subjects: mappedSubjects,
-        lectures: (lecturesRes.data || []).map((l) => ({
-          id: l.id,
-          title: l.title,
-          duration_formatted: l.duration_formatted || "45:00",
-          teacher_name: l.teacher_name,
-        })),
+        lectures: (
+          lecturesRes.data && lecturesRes.data.length > 0
+            ? lecturesRes.data
+            : (batchData.batch_lectures || [])
+        ).map((l: { id: string; title: string; duration_formatted?: string | null; duration_human?: string | null; duration_seconds?: number | null; teacher_name?: string | null }) => {
+          let durationStr = l.duration_formatted;
+          if (!durationStr || durationStr === "45:00") {
+            if (l.duration_human && l.duration_human !== "45 min") {
+              durationStr = l.duration_human;
+            } else if (l.duration_seconds && l.duration_seconds > 0) {
+              const m = Math.floor(l.duration_seconds / 60);
+              const s = l.duration_seconds % 60;
+              durationStr = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+            }
+          }
+          return {
+            id: l.id,
+            title: l.title,
+            duration_formatted: durationStr || l.duration_human || (l.duration_seconds ? `${Math.floor(l.duration_seconds / 60)} min` : ""),
+            teacher_name: l.teacher_name,
+          };
+        }),
         liveClasses: (liveRes.data || []).map((lc) => ({
           id: lc.id,
           topic: lc.topic,
           time_display: lc.scheduled_start ? formatLiveTimeDisplay(lc.scheduled_start) : lc.time_display,
           is_live: lc.live_status === "LIVE" || lc.is_live,
         })),
-        studyMaterials: (materialsRes.data || []).map((m) => ({
+        studyMaterials: (
+          materialsRes.data && materialsRes.data.length > 0
+            ? materialsRes.data
+            : (batchData.batch_study_materials || [])
+        ).map((m: { id: string; title: string; material_type?: string | null; file_format?: string | null }) => ({
           id: m.id,
           title: m.title,
           material_type: m.material_type || "Notes",
-          file_format: "PDF",
+          file_format: m.file_format || "PDF",
         })),
         tests: (testsRes.data || []).map((t) => ({
           id: t.id,
