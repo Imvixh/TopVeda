@@ -237,7 +237,11 @@ export function RecordedLecturesTab({
 
     const errors: Record<string, string> = {};
     if (!uploadTitle.trim()) errors.title = "Lecture title is required.";
-    if (!uploadBatchId && availableBatches.length > 0) errors.batch = "Please select an assigned batch.";
+    // Note: We intentionally do NOT enforce a batch selection here.
+    // Any submitted batchId flows through server-side RLS, and teachers may
+    // also create unassigned drafts. Explicitly selecting a batch remains available
+    // in the form dropdown; the preceding auto-select logic only populates fields
+    // in the background — it never pre-checks the validation gate.
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
