@@ -458,47 +458,10 @@ export class ContentAccessService {
     }
 
     try {
-      // 1. Fetch Active Enrollments matching My Learning relational structure
+      // 1. Fetch Active Enrollments
       const { data: enrollments, error: enrollError } = await supabase
         .from("student_enrollments")
-        .select(`
-          id,
-          student_id,
-          course_id,
-          batch_id,
-          status,
-          course:cms_courses(
-            id,
-            title,
-            board_id,
-            class_id,
-            subject_id,
-            board:cms_boards(id, name, code),
-            subject:cms_subjects(id, name, code),
-            class_level:cms_class_levels(id, name, code)
-          ),
-          batch:cms_batches(
-            id,
-            title,
-            course_id,
-            board_id,
-            class_id,
-            batch_subjects:cms_batch_subjects(
-              subject_id,
-              subject:cms_subjects(id, name, code)
-            ),
-            course:cms_courses(
-              id,
-              title,
-              board_id,
-              class_id,
-              subject_id,
-              board:cms_boards(id, name, code),
-              subject:cms_subjects(id, name, code),
-              class_level:cms_class_levels(id, name, code)
-            )
-          )
-        `)
+        .select("id, student_id, course_id, batch_id, status")
         .eq("student_id", userId)
         .eq("status", "ACTIVE");
 
@@ -525,64 +488,118 @@ export class ContentAccessService {
       scope.validEntitlements = validEntitlements;
       scope.hasAllAccess = validEntitlements.some((e: any) => e.content_type === "ALL_ACCESS");
 
-      // 3. Process enrollments into academic scope
+      // 3. Process direct IDs into academic scope
+      const enrolledBatchIds = new Set<string>();
+      const enrolledCourseIds = new Set<string>();
+
       (enrollments || []).forEach((e: any) => {
-        const course = e.course || e.batch?.course;
-        const batch = e.batch;
-        if (e.course_id) scope.enrolledCourseIds.add(e.course_id);
-        if (course?.id) scope.enrolledCourseIds.add(course.id);
-        if (e.batch_id) scope.enrolledBatchIds.add(e.batch_id);
-        if (batch?.id) scope.enrolledBatchIds.add(batch.id);
-
-        if (batch?.board_id) scope.enrolledBoardIds.add(batch.board_id);
-        if (batch?.class_id) scope.enrolledClassIds.add(batch.class_id);
-
-        if (course?.board_id) scope.enrolledBoardIds.add(course.board_id);
-        if (course?.board?.id) scope.enrolledBoardIds.add(course.board.id);
-        if (course?.class_id) scope.enrolledClassIds.add(course.class_id);
-        if (course?.class_level?.id) scope.enrolledClassIds.add(course.class_level.id);
-        if (course?.subject_id) scope.enrolledSubjectIds.add(course.subject_id);
-        if (course?.subject?.id) scope.enrolledSubjectIds.add(course.subject.id);
-
-        // Process batch multi-subjects
-        if (batch?.batch_subjects && Array.isArray(batch.batch_subjects)) {
-          batch.batch_subjects.forEach((bs: any) => {
-            if (bs.subject_id) scope.enrolledSubjectIds.add(bs.subject_id);
-            if (bs.subject?.id) scope.enrolledSubjectIds.add(bs.subject.id);
-            if (bs.subject?.name) {
-              const subName = bs.subject.name.trim().toLowerCase();
-              scope.enrolledSubjectNames.add(subName);
-              if (subName.includes("sci")) {
-                scope.enrolledSubjectNames.add("science");
-                scope.enrolledSubjectNames.add("physics");
-                scope.enrolledSubjectNames.add("chemistry");
-                scope.enrolledSubjectNames.add("biology");
-              }
-              if (subName.includes("math")) {
-                scope.enrolledSubjectNames.add("mathematics");
-                scope.enrolledSubjectNames.add("maths");
-                scope.enrolledSubjectNames.add("math");
-              }
-            }
-          });
+        if (e.course_id) {
+          scope.enrolledCourseIds.add(e.course_id);
+          enrolledCourseIds.add(e.course_id);
         }
-
-        if (course?.subject?.name) {
-          const name = course.subject.name.trim().toLowerCase();
-          scope.enrolledSubjectNames.add(name);
-          if (name.includes("sci")) {
-            scope.enrolledSubjectNames.add("science");
-            scope.enrolledSubjectNames.add("physics");
-            scope.enrolledSubjectNames.add("chemistry");
-            scope.enrolledSubjectNames.add("biology");
-          }
-          if (name.includes("math")) {
-            scope.enrolledSubjectNames.add("mathematics");
-            scope.enrolledSubjectNames.add("maths");
-            scope.enrolledSubjectNames.add("math");
-          }
+        if (e.batch_id) {
+          scope.enrolledBatchIds.add(e.batch_id);
+          enrolledBatchIds.add(e.batch_id);
         }
       });
+
+      validEntitlements.forEach((e: any) => {
+        if (e.content_type === "COURSE" && e.content_id) {
+          scope.enrolledCourseIds.add(e.content_id);
+          enrolledCourseIds.add(e.content_id);
+        }
+        if (e.content_type === "BATCH" && e.content_id) {
+          scope.enrolledBatchIds.add(e.content_id);
+          enrolledBatchIds.add(e.content_id);
+        }
+      });
+
+      // 4. Resolve details for enrolled batches
+      if (enrolledBatchIds.size > 0) {
+        const { data: batchesData } = await supabase
+          .from("cms_batches")
+          .select(`
+            id,
+            title,
+            course_id,
+            board_id,
+            class_id,
+            subject_id,
+            batch_subjects:cms_batch_subjects(
+              subject_id,
+              subject:cms_subjects(id, name, code)
+            )
+          `)
+          .in("id", Array.from(enrolledBatchIds));
+
+        (batchesData || []).forEach((b: any) => {
+          if (b.board_id) scope.enrolledBoardIds.add(b.board_id);
+          if (b.class_id) scope.enrolledClassIds.add(b.class_id);
+          if (b.subject_id) scope.enrolledSubjectIds.add(b.subject_id);
+          if (b.course_id) {
+            scope.enrolledCourseIds.add(b.course_id);
+            enrolledCourseIds.add(b.course_id);
+          }
+
+          if (b.batch_subjects && Array.isArray(b.batch_subjects)) {
+            b.batch_subjects.forEach((bs: any) => {
+              if (bs.subject_id) scope.enrolledSubjectIds.add(bs.subject_id);
+              if (bs.subject?.id) scope.enrolledSubjectIds.add(bs.subject.id);
+              if (bs.subject?.name) {
+                const subName = bs.subject.name.trim().toLowerCase();
+                scope.enrolledSubjectNames.add(subName);
+                if (subName.includes("sci")) {
+                  scope.enrolledSubjectNames.add("science");
+                  scope.enrolledSubjectNames.add("physics");
+                  scope.enrolledSubjectNames.add("chemistry");
+                  scope.enrolledSubjectNames.add("biology");
+                }
+                if (subName.includes("math")) {
+                  scope.enrolledSubjectNames.add("mathematics");
+                  scope.enrolledSubjectNames.add("maths");
+                  scope.enrolledSubjectNames.add("math");
+                }
+              }
+            });
+          }
+        });
+      }
+
+      // 5. Resolve details for enrolled courses
+      if (enrolledCourseIds.size > 0) {
+        const { data: coursesData } = await supabase
+          .from("cms_courses")
+          .select(`
+            id,
+            title,
+            board_id,
+            class_id,
+            subject_id,
+            subject:cms_subjects(id, name)
+          `)
+          .in("id", Array.from(enrolledCourseIds));
+
+        (coursesData || []).forEach((c: any) => {
+          if (c.board_id) scope.enrolledBoardIds.add(c.board_id);
+          if (c.class_id) scope.enrolledClassIds.add(c.class_id);
+          if (c.subject_id) scope.enrolledSubjectIds.add(c.subject_id);
+          if (c.subject?.name) {
+            const name = c.subject.name.trim().toLowerCase();
+            scope.enrolledSubjectNames.add(name);
+            if (name.includes("sci")) {
+              scope.enrolledSubjectNames.add("science");
+              scope.enrolledSubjectNames.add("physics");
+              scope.enrolledSubjectNames.add("chemistry");
+              scope.enrolledSubjectNames.add("biology");
+            }
+            if (name.includes("math")) {
+              scope.enrolledSubjectNames.add("mathematics");
+              scope.enrolledSubjectNames.add("maths");
+              scope.enrolledSubjectNames.add("math");
+            }
+          }
+        });
+      }
 
       // 4. Resolve Course / Batch Entitlements
       const extraBatchIds: string[] = [];

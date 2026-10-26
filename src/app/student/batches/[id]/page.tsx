@@ -119,7 +119,7 @@ export default function BatchDetailPage() {
     try {
       setIsLoading(true);
 
-      // 1. Fetch Batch with relational board, subjects, and batch_teachers
+      // 1. Fetch Batch metadata
       const { data: batchData, error: batchError } = await supabase
         .from("cms_batches")
         .select(`
@@ -134,18 +134,7 @@ export default function BatchDetailPage() {
           educator_avatar_url,
           starts_at,
           course_id,
-          batch_teachers:cms_batch_teachers(
-            display_order,
-            teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
-          ),
-          batch_subjects:cms_batch_subjects(
-            display_order,
-            subject_id,
-            subject:cms_subjects(id, name, code),
-            teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
-          ),
-          board:cms_boards(name, code),
-          subject:cms_subjects(name, code)
+          is_ongoing
         `)
         .eq("id", batchId)
         .eq("status", "PUBLISHED")
@@ -160,58 +149,68 @@ export default function BatchDetailPage() {
       // Check upcoming status
       const nowMs = Date.now();
       const startsAtMs = batchData.starts_at ? new Date(batchData.starts_at).getTime() : 0;
-      const isUpcoming = startsAtMs > nowMs;
+      const isUpcoming = startsAtMs > nowMs && !batchData.is_ongoing;
 
-      // 2. Check Enrollment
-      let isEnrolled = false;
-      if (user) {
-        const { data: enroll } = await supabase
-          .from("student_enrollments")
-          .select("id")
-          .eq("student_id", user.id)
+      // 2. Parallel queries for relations, lectures, live classes, materials, tests, and enrollment
+      const [
+        enrollmentRes,
+        teachersRes,
+        subjectsRes,
+        lecturesRes,
+        liveRes,
+        materialsRes,
+        testsRes,
+      ] = await Promise.all([
+        user
+          ? supabase
+              .from("student_enrollments")
+              .select("id")
+              .eq("student_id", user.id)
+              .eq("batch_id", batchId)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase
+          .from("cms_batch_teachers")
+          .select("display_order, teacher:profiles!fk_cms_batch_teachers_teacher(id, full_name, avatar_url, qualification)")
           .eq("batch_id", batchId)
-          .maybeSingle();
+          .order("display_order", { ascending: true }),
+        supabase
+          .from("cms_batch_subjects")
+          .select("subject_id, subject:cms_subjects(id, name, code)")
+          .eq("batch_id", batchId),
+        supabase
+          .from("cms_lectures")
+          .select("id, title, duration_formatted, duration_human, teacher_name, display_order")
+          .eq("batch_id", batchId)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true)
+          .order("display_order", { ascending: true }),
+        supabase
+          .from("cms_live_classes")
+          .select("id, topic, time_display, is_live, live_status, scheduled_start")
+          .eq("batch_id", batchId)
+          .eq("is_visible", true)
+          .in("live_status", ["SCHEDULED", "LIVE"])
+          .order("scheduled_start", { ascending: true }),
+        supabase
+          .from("cms_study_materials")
+          .select("id, title, material_type, file_url")
+          .eq("batch_id", batchId)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true),
+        supabase
+          .from("student_tests")
+          .select("id, title, test_type, total_marks, duration_minutes, total_questions, subject_name")
+          .eq("batch_id", batchId)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true)
+          .order("display_order", { ascending: true }),
+      ]);
 
-        isEnrolled = !!enroll;
-      }
+      const isEnrolled = !!enrollmentRes.data;
 
-      // 3. Fetch Real Batch Lectures
-      const { data: lecturesData } = await supabase
-        .from("cms_lectures")
-        .select("id, title, duration_formatted, duration_human, teacher_name, display_order")
-        .eq("batch_id", batchId)
-        .eq("status", "PUBLISHED")
-        .eq("is_visible", true)
-        .order("display_order", { ascending: true });
-
-      // 4. Fetch Batch Live Classes
-      const { data: liveData } = await supabase
-        .from("cms_live_classes")
-        .select("id, topic, time_display, is_live, live_status, scheduled_start")
-        .eq("batch_id", batchId)
-        .eq("is_visible", true)
-        .in("live_status", ["SCHEDULED", "LIVE"])
-        .order("scheduled_start", { ascending: true });
-
-      // 5. Fetch Batch Study Materials
-      const { data: materialsData } = await supabase
-        .from("cms_study_materials")
-        .select("id, title, material_type, file_format")
-        .eq("batch_id", batchId)
-        .eq("status", "PUBLISHED")
-        .eq("is_visible", true);
-
-      // 6. Fetch Batch Tests
-      const { data: testsData } = await supabase
-        .from("student_tests")
-        .select("id, title, test_type, total_marks, duration_minutes, total_questions, subject_name")
-        .eq("batch_id", batchId)
-        .eq("status", "PUBLISHED")
-        .eq("is_visible", true)
-        .order("display_order", { ascending: true });
-
-      // Map relational teachers
-      const rawTeachers = (batchData.batch_teachers || []) as unknown as Array<{
+      // Map teachers
+      const rawTeachers = (teachersRes.data || []) as unknown as Array<{
         display_order?: number;
         teacher?: { id: string; full_name: string; avatar_url: string | null; qualification?: string | null } | Array<{ id: string; full_name: string; avatar_url: string | null; qualification?: string | null }>;
       }>;
@@ -233,60 +232,37 @@ export default function BatchDetailPage() {
           qualification: bt.teacher!.qualification || null,
         }));
 
-      // If no relational teachers exist, fallback to legacy educator_name
       if (mappedTeachers.length === 0 && batchData.educator_name) {
         mappedTeachers.push({
-          id: "legacy",
+          id: "primary",
           fullName: batchData.educator_name,
           avatarUrl: batchData.educator_avatar_url || null,
         });
       }
 
-      // Map relational subjects
-      const rawSubjects = (batchData.batch_subjects || []) as unknown as Array<{
-        display_order?: number;
+      // Map subjects
+      const rawSubjects = (subjectsRes.data || []) as unknown as Array<{
         subject_id?: string;
         subject?: { id: string; name: string; code?: string } | Array<{ id: string; name: string; code?: string }>;
-        teacher?: { id: string; full_name: string; avatar_url: string | null; qualification?: string | null } | Array<{ id: string; full_name: string; avatar_url: string | null; qualification?: string | null }>;
       }>;
 
       const mappedSubjects: SubjectDetail[] = rawSubjects
         .map((bs) => {
           const sub = Array.isArray(bs.subject) ? bs.subject[0] : bs.subject;
-          const t = Array.isArray(bs.teacher) ? bs.teacher[0] : bs.teacher;
           return {
             id: sub?.id || bs.subject_id || "",
             name: sub?.name || "Subject",
             code: sub?.code,
-            teacherName: t?.full_name,
-            teacherAvatar: t?.avatar_url,
-            teacherQualification: t?.qualification,
           };
         })
         .filter((s) => Boolean(s.id));
-
-      // Fallback to legacy single subject if no batch_subjects exist
-      if (mappedSubjects.length === 0) {
-        const singleSub = Array.isArray(batchData.subject) ? batchData.subject[0] : (batchData.subject as { name?: string; code?: string } | null);
-        if (singleSub?.name) {
-          mappedSubjects.push({
-            id: "default",
-            name: singleSub.name,
-            code: singleSub.code,
-            teacherName: batchData.educator_name || undefined,
-          });
-        }
-      }
-
-      const boardObj = Array.isArray(batchData.board) ? batchData.board[0] : (batchData.board as { name?: string; code?: string } | null);
-      const resolvedBoardLabel = boardObj?.name || batchData.board_label;
 
       setBatch({
         id: batchData.id,
         title: batchData.title,
         subtitle: batchData.subtitle,
         description: batchData.description,
-        board_label: resolvedBoardLabel,
+        board_label: batchData.board_label || "CBSE Board",
         badge_text: batchData.badge_text,
         badge_variant: batchData.badge_variant,
         starts_at: batchData.starts_at,
@@ -295,25 +271,25 @@ export default function BatchDetailPage() {
         is_enrolled: isEnrolled,
         teachers: mappedTeachers,
         subjects: mappedSubjects,
-        lectures: (lecturesData || []).map((l) => ({
+        lectures: (lecturesRes.data || []).map((l) => ({
           id: l.id,
           title: l.title,
           duration_formatted: l.duration_formatted || "45:00",
           teacher_name: l.teacher_name,
         })),
-        liveClasses: (liveData || []).map((lc) => ({
+        liveClasses: (liveRes.data || []).map((lc) => ({
           id: lc.id,
           topic: lc.topic,
           time_display: lc.scheduled_start ? formatLiveTimeDisplay(lc.scheduled_start) : lc.time_display,
           is_live: lc.live_status === "LIVE" || lc.is_live,
         })),
-        studyMaterials: (materialsData || []).map((m) => ({
+        studyMaterials: (materialsRes.data || []).map((m) => ({
           id: m.id,
           title: m.title,
           material_type: m.material_type || "Notes",
-          file_format: m.file_format || "PDF",
+          file_format: "PDF",
         })),
-        tests: (testsData || []).map((t) => ({
+        tests: (testsRes.data || []).map((t) => ({
           id: t.id,
           title: t.title,
           test_type: t.test_type,
@@ -423,35 +399,33 @@ export default function BatchDetailPage() {
                     )}
                   </div>
 
-                  {/* Enrollment CTA: ONLY for Ongoing Batches (Never for Upcoming) */}
-                  {!batch.is_upcoming && (
-                    <div>
-                      {batch.is_enrolled ? (
-                        <div className="flex items-center gap-2.5">
-                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm font-bold">
-                            <CheckCircle2 className="h-4 w-4" />
-                            Enrolled in Batch
-                          </span>
+                  {/* Enrollment CTA: Prominently available at top */}
+                  <div>
+                    {batch.is_enrolled ? (
+                      <div className="flex items-center gap-2.5">
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm font-bold">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Enrolled in Batch
+                        </span>
 
-                          <Link
-                            href="/student/learning"
-                            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-brand-charcoal hover:bg-black text-white text-xs sm:text-sm font-bold shadow-xs transition-colors"
-                          >
-                            <span>Go to My Learning</span>
-                            <ChevronRight className="h-4 w-4" />
-                          </Link>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={handleEnroll}
-                          disabled={isEnrolling}
-                          className="px-7 py-2.5 sm:py-3 rounded-full bg-brand-orange hover:bg-brand-orange-hover text-white text-sm sm:text-base font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                        <Link
+                          href="/student/learning"
+                          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-brand-charcoal hover:bg-black text-white text-xs sm:text-sm font-bold shadow-xs transition-colors"
                         >
-                          {isEnrolling ? "Enrolling..." : "Enroll in Batch"}
-                        </button>
-                      )}
-                    </div>
-                  )}
+                          <span>Go to My Learning</span>
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleEnroll}
+                        disabled={isEnrolling}
+                        className="px-7 py-2.5 sm:py-3 rounded-full bg-brand-orange hover:bg-brand-orange-hover text-white text-sm sm:text-base font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {isEnrolling ? "Enrolling..." : "Enroll in Batch"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Upcoming Starting Date Banner */}

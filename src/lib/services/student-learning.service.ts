@@ -38,7 +38,7 @@ export class StudentLearningService {
           enrolled_at,
           completed_at,
           last_accessed_at,
-          course:cms_courses(
+          cms_courses(
             id,
             title,
             category,
@@ -49,21 +49,16 @@ export class StudentLearningService {
             access_tier,
             short_description,
             board:cms_boards(id, name, code),
-            subject:cms_subjects(id, name, code),
-            class_level:cms_class_levels(id, name, code)
+            subject:cms_subjects(id, name, code)
           ),
-          batch:cms_batches(
+          cms_batches!student_enrollments_batch_id_fkey(
             id,
             title,
             board_label,
             subtitle,
             description,
             educator_name,
-            educator_avatar_url,
-            batch_teachers:cms_batch_teachers(
-              display_order,
-              teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
-            )
+            educator_avatar_url
           )
         `)
         .eq("student_id", userId)
@@ -75,10 +70,10 @@ export class StudentLearningService {
 
       const enrolledList = enrollments || [];
       const enrolledCourseIds = enrolledList
-        .map((e) => (e.course as { id?: string })?.id)
+        .map((e: any) => e.course_id || (e.cms_courses || e.course)?.id)
         .filter(Boolean) as string[];
       const enrolledBatchIds = enrolledList
-        .map((e) => (e.batch as { id?: string })?.id)
+        .map((e: any) => e.batch_id || (e.cms_batches || e.batch)?.id)
         .filter(Boolean) as string[];
 
       // 2. Fetch Published Lectures to calculate exact dynamic progress
@@ -154,8 +149,8 @@ export class StudentLearningService {
       let latestProgressWatchedAt = 0;
 
       for (const e of enrolledList) {
-        const course = e.course as any;
-        const batch = e.batch as any;
+        const course = (e as any).cms_courses || (e as any).course;
+        const batch = (e as any).cms_batches || (e as any).batch;
         if (!course && !batch) continue;
 
         const courseId = course?.id || e.course_id;
@@ -434,14 +429,14 @@ export class StudentLearningService {
       // 1. Validate Access via ContentAccessService
       const access = await ContentAccessService.checkAccess(supabase, {
         userId,
-        contentType: "COURSE",
-        contentId: courseId,
+        contentType: batchId ? "BATCH" : "COURSE",
+        contentId: batchId || courseId,
       });
 
       if (!access.granted || access.isLocked) {
         return {
           success: false,
-          error: access.reason || "You are not eligible to enroll in this course.",
+          error: access.reason || "You are not eligible to enroll in this course or batch.",
         };
       }
 

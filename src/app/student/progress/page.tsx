@@ -235,10 +235,10 @@ export default function ProgressTrackerPage() {
                   </div>
                   <div>
                     <span className="text-2xl sm:text-3xl font-black text-brand-charcoal tabular-nums">
-                      {totalLiveScheduled > 0 ? `${liveAttendancePct}%` : "100%"}
+                      {totalLiveScheduled > 0 ? `${liveAttendancePct}%` : "0%"}
                     </span>
                     <p className="text-[10px] font-semibold text-brand-text-muted mt-0.5">
-                      {liveAttended} of {totalLiveScheduled || liveAttended} Sessions
+                      {liveAttended} of {totalLiveScheduled} Sessions
                     </p>
                   </div>
                 </div>

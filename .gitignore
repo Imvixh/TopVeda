@@ -31,6 +31,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.playwright-mcp/
+
 
 # environment files (strictly ignore all real/local env files)
 .env

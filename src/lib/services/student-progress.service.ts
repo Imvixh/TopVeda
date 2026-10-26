@@ -78,25 +78,20 @@ export class StudentProgressService {
           status,
           enrolled_at,
           last_accessed_at,
-          course:cms_courses(
+          cms_courses(
             id,
             title,
             category,
             subject_id,
             board:cms_boards(id, name, code),
-            subject:cms_subjects(id, name, code),
-            class_level:cms_class_levels(id, name, code)
+            subject:cms_subjects(id, name, code)
           ),
-          batch:cms_batches(
+          cms_batches!student_enrollments_batch_id_fkey(
             id,
             title,
             board_label,
             subtitle,
-            educator_name,
-            batch_teachers:cms_batch_teachers(
-              display_order,
-              teacher:profiles!teacher_id(id, full_name)
-            )
+            educator_name
           )
         `)
         .eq("student_id", userId);
@@ -107,7 +102,7 @@ export class StudentProgressService {
 
       const enrolledList = enrollments || [];
       const enrolledBatchIds = enrolledList
-        .map((e) => (e.batch as { id?: string })?.id || e.batch_id)
+        .map((e: any) => (e.cms_batches || e.batch)?.id || e.batch_id)
         .filter(Boolean) as string[];
 
       // 2. Fetch Published Lectures
@@ -317,22 +312,9 @@ export class StudentProgressService {
         { subjectName: string; totalLecs: number; completedLecs: number; lectureIds: Set<string> }
       >();
 
-      enrolledList.forEach((e) => {
-        const course = e.course as {
-          id?: string;
-          title?: string;
-          category?: string;
-          class_level?: { name?: string };
-          subject?: { name?: string };
-          board?: { name?: string };
-        } | null;
-        const batch = e.batch as {
-          id?: string;
-          title?: string;
-          board_label?: string;
-          educator_name?: string | null;
-          batch_teachers?: Array<{ teacher?: { full_name?: string } }>;
-        } | null;
+      enrolledList.forEach((e: any) => {
+        const course = e.cms_courses || e.course;
+        const batch = e.cms_batches || e.batch;
         const courseId = course?.id || e.course_id;
         const batchId = batch?.id || e.batch_id || null;
 

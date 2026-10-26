@@ -532,16 +532,17 @@ export default function MyLearningPage() {
             </div>
           )}
 
-          {/* Section: Recommended For You (Real Database Offerings) */}
+          {/* Section: Recommended For You (Modernized with Single 'Explore' CTA) */}
           {!isLoading && recommendedCourses.length > 0 && (
             <div className="pt-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-base sm:text-lg font-black text-brand-charcoal tracking-tight">
-                    Recommended For You
+                  <h2 className="text-base sm:text-lg font-black text-brand-charcoal tracking-tight flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-brand-orange" />
+                    <span>Recommended For You</span>
                   </h2>
                   <p className="text-xs font-medium text-brand-text-muted">
-                    Curated courses and batches available for enrollment
+                    Curated board preparation batches &amp; courses ready for discovery
                   </p>
                 </div>
               </div>
@@ -549,69 +550,67 @@ export default function MyLearningPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {recommendedCourses.map((rec) => {
                   const { Icon, badgeBg, accentBorder } = getSubjectTheme(rec.category, rec.iconType);
-                  const isEnrolling = isEnrollingId === (rec.courseId || rec.id);
 
                   return (
                     <div
                       key={rec.id}
                       className={cn(
-                        "p-5 rounded-3xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card transition-all duration-200 flex flex-col justify-between space-y-4",
+                        "group p-5 sm:p-6 rounded-3xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card hover:-translate-y-0.5 transition-all duration-200 flex flex-col justify-between space-y-4 relative overflow-hidden",
                         accentBorder
                       )}
                     >
-                      <div className="flex items-start gap-3.5">
+                      {/* Top Row: Icon + Board badge & title */}
+                      <div className="flex items-start gap-4">
                         <div
                           className={cn(
-                            "w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 shadow-3xs",
+                            "w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 shadow-3xs transition-transform duration-200 group-hover:scale-105",
                             badgeBg
                           )}
                         >
-                          <Icon className="h-5 w-5 stroke-[2.2]" />
+                          <Icon className="h-6 w-6 stroke-[2.2]" />
                         </div>
                         <div className="flex-1 min-w-0 space-y-1">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-text-muted">
-                            {rec.boardName}
-                          </span>
-                          <h3 className="text-sm sm:text-base font-black text-brand-charcoal truncate">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-orange-50 border border-orange-200 text-brand-orange">
+                              {rec.boardName}
+                            </span>
+                            {rec.category && (
+                              <span className="text-[10px] font-bold text-brand-text-muted">
+                                • {rec.category}
+                              </span>
+                            )}
+                          </div>
+
+                          <h3 className="text-sm sm:text-base font-black text-brand-charcoal truncate group-hover:text-brand-orange transition-colors">
                             {rec.title}
                           </h3>
-                          <p className="text-xs font-medium text-brand-text-muted line-clamp-2">
-                            {rec.topicsSubtitle || "Comprehensive curriculum coverage, notes & practice tests."}
+
+                          <p className="text-xs font-medium text-brand-text-muted line-clamp-2 leading-relaxed">
+                            {rec.topicsSubtitle || "Comprehensive curriculum coverage, structured daily live lectures & mock tests."}
                           </p>
+
                           {rec.educatorName && (
-                            <p className="text-[11px] font-semibold text-brand-charcoal/80 pt-0.5">
-                              Faculty: {rec.educatorName}
-                            </p>
+                            <div className="flex items-center gap-1.5 pt-1 text-[11px] font-semibold text-brand-charcoal/80">
+                              <User className="h-3.5 w-3.5 text-brand-orange" />
+                              <span className="text-brand-text-muted">Faculty:</span>
+                              <span className="font-bold text-brand-charcoal">{rec.educatorName}</span>
+                            </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
-                        {rec.accessTier === "FREE" ? (
-                          <button
-                            onClick={() => handleEnrollItem({ courseId: rec.courseId || undefined, batchId: rec.batchId || undefined })}
-                            disabled={isEnrolling}
-                            className={cn(
-                              "inline-flex items-center justify-center px-5 py-2 rounded-full border border-orange-200 hover:border-brand-orange bg-white hover:bg-orange-50 text-brand-orange text-xs font-bold shadow-2xs transition-all active:scale-[0.98] cursor-pointer",
-                              isEnrolling && "opacity-70 cursor-wait"
-                            )}
-                          >
-                            {isEnrolling ? (
-                              <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                                <span>Enrolling...</span>
-                              </>
-                            ) : (
-                              <span>Enroll Now</span>
-                            )}
-                          </button>
-                        ) : null}
+                      {/* Bottom Action: Single Clean 'Explore' CTA */}
+                      <div className="flex items-center justify-between pt-3 border-t border-gray-100/90">
+                        <span className="text-[11px] font-bold text-brand-text-muted">
+                          Interactive Batch Syllabus
+                        </span>
 
                         <Link
                           href={rec.exploreUrl}
-                          className="inline-flex items-center justify-center px-4 py-2 rounded-full bg-brand-charcoal hover:bg-brand-charcoal/90 text-white text-xs font-bold transition-colors"
+                          className="inline-flex items-center justify-center gap-1.5 px-5 py-2 rounded-full bg-brand-charcoal hover:bg-black text-white text-xs font-bold shadow-xs hover:shadow-md transition-all active:scale-[0.98]"
                         >
-                          Explore
+                          <span>Explore</span>
+                          <ArrowRight className="h-3.5 w-3.5 text-brand-orange transition-transform duration-200 group-hover:translate-x-0.5" />
                         </Link>
                       </div>
                     </div>

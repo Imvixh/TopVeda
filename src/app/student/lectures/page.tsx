@@ -42,11 +42,49 @@ export default function LecturesPage() {
   const [selectedSubject, setSelectedSubject] = React.useState("ALL");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
+  const [hasNoEnrollments, setHasNoEnrollments] = React.useState(false);
+
   const fetchLectures = React.useCallback(async () => {
     try {
       setIsLoading(true);
+      setHasNoEnrollments(false);
 
-      const { data, error } = await supabase
+      // Check role
+      let isPrivileged = false;
+      if (user) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        isPrivileged = prof?.role === "SUPER_ADMIN" || prof?.role === "ADMIN";
+      }
+
+      // Check student enrolled batch and course IDs
+      let enrolledBatchIds: string[] = [];
+      let enrolledCourseIds: string[] = [];
+
+      if (user && !isPrivileged) {
+        const { data: enrollments } = await supabase
+          .from("student_enrollments")
+          .select("batch_id, course_id")
+          .eq("student_id", user.id)
+          .eq("status", "ACTIVE");
+
+        (enrollments || []).forEach((e) => {
+          if (e.batch_id) enrolledBatchIds.push(e.batch_id);
+          if (e.course_id) enrolledCourseIds.push(e.course_id);
+        });
+
+        // If student is not enrolled in any batch or course, mark empty
+        if (enrolledBatchIds.length === 0 && enrolledCourseIds.length === 0) {
+          setLectures([]);
+          setHasNoEnrollments(true);
+          return;
+        }
+      }
+
+      let query = supabase
         .from("cms_lectures")
         .select(`
           id,
@@ -57,11 +95,21 @@ export default function LecturesPage() {
           duration_formatted,
           thumbnail_bg,
           category_tag,
-          display_order
+          display_order,
+          batch_id,
+          cms_batches:batch_id(title)
         `)
         .eq("status", "PUBLISHED")
         .eq("is_visible", true)
         .order("display_order", { ascending: true });
+
+      if (user && !isPrivileged && (enrolledBatchIds.length > 0 || enrolledCourseIds.length > 0)) {
+        if (enrolledBatchIds.length > 0) {
+          query = query.in("batch_id", enrolledBatchIds);
+        }
+      }
+
+      const { data, error } = await query;
 
       if (error || !data) {
         setLectures([]);
@@ -69,10 +117,10 @@ export default function LecturesPage() {
       }
 
       setLectures(
-        data.map((l) => ({
+        data.map((l: any) => ({
           id: l.id,
           title: l.title,
-          subject: l.subject || "Academic",
+          subject: l.cms_batches?.title || l.subject || "Academic",
           teacher_name: l.teacher_name || "TopVeda Faculty",
           duration_human: l.duration_human,
           duration_formatted: l.duration_formatted || "45:00",
@@ -85,7 +133,7 @@ export default function LecturesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [supabase]);
+  }, [user, supabase]);
 
   React.useEffect(() => {
     if (!isAuthLoading) {
@@ -179,10 +227,24 @@ export default function LecturesPage() {
           ) : filteredLectures.length === 0 ? (
             <div className="p-12 text-center bg-white rounded-3xl border border-brand-border space-y-3">
               <BookOpen className="h-10 w-10 text-brand-text-subtle mx-auto" />
-              <h2 className="text-base font-bold text-brand-charcoal">No Lectures Found</h2>
-              <p className="text-xs text-brand-text-muted">
-                Try adjusting your search query or subject filters.
+              <h2 className="text-base font-bold text-brand-charcoal">
+                {hasNoEnrollments ? "No Batch Enrollments" : "No Lectures Found"}
+              </h2>
+              <p className="text-xs text-brand-text-muted max-w-md mx-auto">
+                {hasNoEnrollments
+                  ? "You are not currently enrolled in any academic batches. Explore our dedicated board preparation batches to unlock full syllabus video lectures."
+                  : "Try adjusting your search query or subject filters."}
               </p>
+              {hasNoEnrollments && (
+                <div className="pt-2">
+                  <Link
+                    href="/student/batches"
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold shadow-xs transition-all"
+                  >
+                    <span>Explore Academic Batches</span>
+                  </Link>
+                </div>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

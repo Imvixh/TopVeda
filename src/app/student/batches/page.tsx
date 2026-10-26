@@ -65,7 +65,6 @@ export default function BatchesPage() {
         `)
         .eq("status", "PUBLISHED")
         .eq("is_visible", true)
-        .or(`is_ongoing.eq.true,starts_at.lte.${nowIso}`)
         .order("display_order", { ascending: true });
 
       if (error || !batchesData) {

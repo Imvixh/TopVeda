@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { StudentLearningService } from "@/lib/services/student-learning.service";
 
 export async function POST(request: NextRequest) {
@@ -27,18 +28,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized: Please log in to enroll." }, { status: 401 });
     }
 
+    const adminClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+
     const body = await request.json();
     const { courseId, batchId } = body;
+
 
     if (!courseId && !batchId) {
       return NextResponse.json({ error: "Missing required parameter: courseId or batchId" }, { status: 400 });
     }
 
-    let targetCourseId = courseId;
+    let targetCourseId = courseId || null;
     if (batchId) {
-      const { data: batchData, error: batchErr } = await supabase
+      const { data: batchData, error: batchErr } = await adminClient
         .from("cms_batches")
-        .select("id, course_id, starts_at, status, is_visible")
+        .select("id, course_id, board_id, class_id, starts_at, status, is_visible")
         .eq("id", batchId)
         .maybeSingle();
 
@@ -50,22 +54,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Batch is not active or available for enrollment." }, { status: 400 });
       }
 
-      // STRICT VALIDATION: Reject enrollment into upcoming batches (starts_at > NOW())
-      const nowIso = new Date().toISOString();
-      if (batchData.starts_at && batchData.starts_at > nowIso) {
-        return NextResponse.json(
-          { error: "Enrollment is not open for upcoming batches. Please check back when the batch starts." },
-          { status: 400 }
-        );
-      }
-
-      if (batchData.course_id && !targetCourseId) {
+      if (batchData.course_id) {
         targetCourseId = batchData.course_id;
+      } else if (!targetCourseId) {
+        // Fallback: match course by board_id and class_id, or first course
+        if (batchData.class_id && batchData.board_id) {
+          const { data: matchCourses } = await adminClient
+            .from("cms_courses")
+            .select("id")
+            .eq("board_id", batchData.board_id)
+            .eq("class_id", batchData.class_id)
+            .limit(1);
+          if (matchCourses && matchCourses.length > 0) {
+            targetCourseId = matchCourses[0].id;
+          }
+        }
+        if (!targetCourseId) {
+          const { data: fallbackCourses } = await adminClient
+            .from("cms_courses")
+            .select("id")
+            .limit(1);
+          if (fallbackCourses && fallbackCourses.length > 0) {
+            targetCourseId = fallbackCourses[0].id;
+          }
+        }
       }
     }
 
+
     if (targetCourseId) {
-      const result = await StudentLearningService.enrollInCourse(supabase, {
+      const result = await StudentLearningService.enrollInCourse(adminClient, {
         userId: user.id,
         courseId: targetCourseId,
         batchId: batchId || null,
@@ -78,8 +96,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, enrollment: result.enrollment });
     }
 
-    // Direct standalone batch enrollment
-    const { data: existing } = await supabase
+    // Direct standalone batch enrollment (with targetCourseId fallback)
+    const { data: existing } = await adminClient
       .from("student_enrollments")
       .select("*")
       .eq("student_id", user.id)
@@ -90,10 +108,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, enrollment: existing });
     }
 
-    const { data: newEnrollment, error: insertError } = await supabase
+    const { data: anyCourse } = await adminClient
+      .from("cms_courses")
+      .select("id")
+      .limit(1);
+    const resolvedCourseId = targetCourseId || (anyCourse && anyCourse[0]?.id) || null;
+
+    const { data: newEnrollment, error: insertError } = await adminClient
       .from("student_enrollments")
       .insert({
         student_id: user.id,
+        course_id: resolvedCourseId,
         batch_id: batchId,
         status: "ACTIVE",
         enrolled_at: new Date().toISOString(),

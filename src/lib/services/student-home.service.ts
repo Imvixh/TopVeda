@@ -165,7 +165,7 @@ export async function fetchPublishedFeaturedBatches(
         display_order,
         batch_teachers:cms_batch_teachers(
           display_order,
-          teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
+          teacher:profiles!fk_cms_batch_teachers_teacher(id, full_name, avatar_url, qualification)
         )
       `)
       .eq("status", "PUBLISHED")
@@ -268,7 +268,7 @@ export async function fetchPublishedOngoingBatches(
         educator_avatar_url,
         batch_teachers:cms_batch_teachers(
           display_order,
-          teacher:profiles!teacher_id(id, full_name, avatar_url, qualification)
+          teacher:profiles!fk_cms_batch_teachers_teacher(id, full_name, avatar_url, qualification)
         )
       `)
       .eq("status", "PUBLISHED")
