@@ -86,6 +86,17 @@ export async function POST(request: NextRequest) {
       });
       if (isAssigned) {
         isAuthorizedTeacher = true;
+      } else {
+        const adminDb = createAdminClient();
+        const { data: batchTeacher } = await adminDb
+          .from("cms_batch_teachers")
+          .select("id")
+          .eq("batch_id", liveClass.batch_id)
+          .eq("teacher_id", user.id)
+          .maybeSingle();
+        if (batchTeacher) {
+          isAuthorizedTeacher = true;
+        }
       }
     }
 

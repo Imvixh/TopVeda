@@ -669,43 +669,80 @@ export class CmsService {
     supabase: SupabaseClient,
     teacherId: string
   ): Promise<CmsBatch[]> {
-    // Resolve the batch IDs assigned to this teacher
+    // 1. Resolve batch IDs assigned to this teacher from cms_batch_teachers
     const { data: teacherRows } = await supabase
       .from("cms_batch_teachers")
       .select("batch_id")
       .eq("teacher_id", teacherId);
 
-    const batchIds = ((teacherRows ?? []) as { batch_id: string }[]).map((r) => r.batch_id);
-    if (batchIds.length === 0) return [];
+    // 2. Resolve batch IDs from cms_batch_subjects where primary_teacher_id matches
+    const { data: subjectRows } = await supabase
+      .from("cms_batch_subjects")
+      .select("batch_id")
+      .eq("primary_teacher_id", teacherId);
 
-    const { data } = await supabase
+    // 3. Resolve batch IDs from cms_batches where lead_educator_id matches
+    const { data: leadRows } = await supabase
       .from("cms_batches")
-      .select(`
-        *,
-        board:cms_boards(id, name, code),
-        class_level:cms_class_levels(id, name, code),
-        subject:cms_subjects(id, name, code),
-        batch_teachers:cms_batch_teachers(
-          id,
-          batch_id,
-          teacher_id,
-          display_order,
-          created_at,
-          teacher:profiles!teacher_id(id, full_name, avatar_url, qualification, role)
-        ),
-        batch_subjects:cms_batch_subjects(
-          id,
-          batch_id,
-          subject_id,
-          primary_teacher_id,
-          created_at,
-          subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
-        )
-      `)
-      .in("id", batchIds)
-      .order("display_order", { ascending: true });
+      .select("id")
+      .eq("lead_educator_id", teacherId);
 
-    return (data as CmsBatch[]) ?? [];
+    const idSet = new Set<string>();
+    ((teacherRows ?? []) as { batch_id: string }[]).forEach((r) => r.batch_id && idSet.add(r.batch_id));
+    ((subjectRows ?? []) as { batch_id: string }[]).forEach((r) => r.batch_id && idSet.add(r.batch_id));
+    ((leadRows ?? []) as { id: string }[]).forEach((r) => r.id && idSet.add(r.id));
+
+    const batchIds = Array.from(idSet);
+
+    if (batchIds.length > 0) {
+      const { data } = await supabase
+        .from("cms_batches")
+        .select(`
+          *,
+          board:cms_boards(id, name, code),
+          class_level:cms_class_levels(id, name, code),
+          subject:cms_subjects(id, name, code),
+          batch_teachers:cms_batch_teachers(
+            id,
+            batch_id,
+            teacher_id,
+            display_order,
+            created_at,
+            teacher:profiles!teacher_id(id, full_name, avatar_url, qualification, role)
+          ),
+          batch_subjects:cms_batch_subjects(
+            id,
+            batch_id,
+            subject_id,
+            primary_teacher_id,
+            created_at,
+            subject:cms_subjects(id, name, code, icon_name, icon_color, icon_bg)
+          )
+        `)
+        .in("id", batchIds)
+        .order("display_order", { ascending: true });
+
+      if (data && data.length > 0) {
+        return (data as CmsBatch[]);
+      }
+    }
+
+    // 4. Client-side fetch fallback to authenticated API if RLS filtered direct query
+    if (typeof window !== "undefined") {
+      try {
+        const res = await fetch(`/api/teacher/batches?teacherId=${encodeURIComponent(teacherId)}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (Array.isArray(json.batches) && json.batches.length > 0) {
+            return json.batches as CmsBatch[];
+          }
+        }
+      } catch {
+        // graceful fallback to empty array
+      }
+    }
+
+    return [];
   }
 
   /**

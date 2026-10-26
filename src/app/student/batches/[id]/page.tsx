@@ -119,31 +119,49 @@ export default function BatchDetailPage() {
     try {
       setIsLoading(true);
 
-      // 1. Fetch Batch metadata
-      const { data: batchData, error: batchError } = await supabase
-        .from("cms_batches")
-        .select(`
-          id,
-          title,
-          subtitle,
-          description,
-          board_label,
-          badge_text,
-          badge_variant,
-          educator_name,
-          educator_avatar_url,
-          starts_at,
-          course_id,
-          is_ongoing
-        `)
-        .eq("id", batchId)
-        .eq("status", "PUBLISHED")
-        .eq("is_visible", true)
-        .single();
+      // 1. Fetch Batch metadata with API route fallback
+      let batchData: any = null;
+      try {
+        const apiRes = await fetch(`/api/student/batches/${batchId}`);
+        if (apiRes.ok) {
+          const apiJson = await apiRes.json();
+          if (apiJson.batch) {
+            batchData = apiJson.batch;
+          }
+        }
+      } catch {
+        // graceful fallback to direct client query
+      }
 
-      if (batchError || !batchData) {
-        setBatch(null);
-        return;
+      if (!batchData) {
+        const { data: sbBatch, error: batchError } = await supabase
+          .from("cms_batches")
+          .select(`
+            id,
+            title,
+            subtitle,
+            description,
+            board_label,
+            badge_text,
+            badge_variant,
+            educator_name,
+            educator_avatar_url,
+            starts_at,
+            course_id,
+            is_ongoing,
+            board:cms_boards(id, name, code),
+            class_level:cms_class_levels(id, name, code)
+          `)
+          .eq("id", batchId)
+          .eq("status", "PUBLISHED")
+          .eq("is_visible", true)
+          .single();
+
+        if (batchError || !sbBatch) {
+          setBatch(null);
+          return;
+        }
+        batchData = sbBatch;
       }
 
       // Check upcoming status
@@ -209,8 +227,10 @@ export default function BatchDetailPage() {
 
       const isEnrolled = !!enrollmentRes.data;
 
-      // Map teachers
-      const rawTeachers = (teachersRes.data || []) as unknown as Array<{
+      // Map teachers (with API relation fallback)
+      const rawTeachers = ((teachersRes.data && teachersRes.data.length > 0)
+        ? teachersRes.data
+        : (batchData.batch_teachers || [])) as unknown as Array<{
         display_order?: number;
         teacher?: { id: string; full_name: string; avatar_url: string | null; qualification?: string | null } | Array<{ id: string; full_name: string; avatar_url: string | null; qualification?: string | null }>;
       }>;
@@ -240,8 +260,10 @@ export default function BatchDetailPage() {
         });
       }
 
-      // Map subjects
-      const rawSubjects = (subjectsRes.data || []) as unknown as Array<{
+      // Map subjects (with API relation fallback)
+      const rawSubjects = ((subjectsRes.data && subjectsRes.data.length > 0)
+        ? subjectsRes.data
+        : (batchData.batch_subjects || [])) as unknown as Array<{
         subject_id?: string;
         subject?: { id: string; name: string; code?: string } | Array<{ id: string; name: string; code?: string }>;
       }>;
@@ -257,12 +279,16 @@ export default function BatchDetailPage() {
         })
         .filter((s) => Boolean(s.id));
 
+      const resolvedBoardLabel = (batchData.board && batchData.board.code !== "CBSE" && batchData.board_label?.includes("CBSE"))
+        ? [batchData.class_level?.name, batchData.board.name || batchData.board.code].filter(Boolean).join(" ")
+        : (batchData.board_label || "Upcoming Batch");
+
       setBatch({
         id: batchData.id,
         title: batchData.title,
         subtitle: batchData.subtitle,
         description: batchData.description,
-        board_label: batchData.board_label || "CBSE Board",
+        board_label: resolvedBoardLabel,
         badge_text: batchData.badge_text,
         badge_variant: batchData.badge_variant,
         starts_at: batchData.starts_at,

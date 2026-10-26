@@ -75,7 +75,7 @@ export function Modal({
       {/* Dialog Surface */}
       <div
         className={cn(
-          "relative w-full rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-modal transition-all duration-200 animate-in fade-in-0 zoom-in-95",
+          "relative w-full max-h-[90vh] flex flex-col rounded-2xl border border-brand-border bg-brand-surface p-6 shadow-modal transition-all duration-200 animate-in fade-in-0 zoom-in-95",
           maxWidthMap[maxWidth],
           className
         )}
@@ -84,14 +84,14 @@ export function Modal({
         <button
           onClick={onClose}
           type="button"
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-text-muted hover:bg-brand-bg-peach hover:text-brand-orange transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-text-muted hover:bg-brand-bg-peach hover:text-brand-orange transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange z-10"
           aria-label="Close dialog"
         >
           <X className="h-5 w-5" />
         </button>
 
         {title && (
-          <div className="mb-4 pr-6">
+          <div className="mb-3 pr-6 shrink-0">
             <h3
               id="modal-title"
               className="text-lg font-bold text-brand-text-primary"
@@ -109,7 +109,7 @@ export function Modal({
           </div>
         )}
 
-        <div className="mt-2">{children}</div>
+        <div className="mt-1 flex-1 overflow-y-auto pr-1.5 custom-scrollbar">{children}</div>
       </div>
     </div>
   );

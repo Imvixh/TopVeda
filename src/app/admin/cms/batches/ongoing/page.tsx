@@ -194,8 +194,12 @@ export default function OngoingBatchesCmsPage() {
     const defaultClass = classLevels[0]?.id || "";
     const defaultSubject = subjects[0]?.id || "";
 
+    const initialBoard = boards[0];
+    const initialClass = classLevels[0];
+    const initialBadge = [initialClass?.name, initialBoard?.code ? `(${initialBoard.code})` : initialBoard?.name].filter(Boolean).join(" ") || "Class 10";
+
     setFormTitle("Mathematics");
-    setFormBadgeText("Class 10 (CBSE)");
+    setFormBadgeText(initialBadge);
     setFormBoardId(defaultBoard);
     setFormClassId(defaultClass);
     setFormSubjectId(defaultSubject);

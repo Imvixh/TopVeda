@@ -49,27 +49,27 @@ const BADGE_STYLES: Record<string, string> = {
 
 const GRADIENT_PRESETS = [
   {
-    label: "Sky Blue (Math)",
+    label: "Sky Blue",
     bg: "from-sky-50/70 via-blue-50/40 to-indigo-50/30",
     border: "border-sky-100",
   },
   {
-    label: "Rose Pink (Science)",
+    label: "Rose Pink",
     bg: "from-rose-50/70 via-pink-50/40 to-red-50/30",
     border: "border-rose-100",
   },
   {
-    label: "Emerald Green (Foundation)",
+    label: "Emerald Green",
     bg: "from-emerald-50/70 via-teal-50/40 to-cyan-50/30",
     border: "border-emerald-100",
   },
   {
-    label: "Royal Purple (NEET)",
+    label: "Royal Purple",
     bg: "from-purple-50/70 via-violet-50/40 to-fuchsia-50/30",
     border: "border-purple-100",
   },
   {
-    label: "Warm Amber (Commerce)",
+    label: "Warm Amber",
     bg: "from-amber-50/70 via-orange-50/40 to-yellow-50/30",
     border: "border-amber-100",
   },
@@ -185,8 +185,12 @@ export default function FeaturedBatchesCmsPage() {
     const defaultClass = classLevels[0]?.id || "";
     const defaultSubject = subjects[0]?.id || "";
 
+    const initialBoard = boards[0];
+    const initialClass = classLevels[0];
+    const initialLabel = [initialClass?.name, initialBoard?.name || initialBoard?.code].filter(Boolean).join(" ") || "Upcoming Batch";
+
     setFormTitle("");
-    setFormBoardLabel("Class 10 CBSE");
+    setFormBoardLabel(initialLabel);
     setFormBoardId(defaultBoard);
     setFormClassId(defaultClass);
     setFormSubjectId(defaultSubject);
@@ -324,7 +328,7 @@ export default function FeaturedBatchesCmsPage() {
 
       const selectedBoard = boards.find((b) => b.id === formBoardId);
       const selectedClass = classLevels.find((c) => c.id === formClassId);
-      const autoBoardLabel = formBoardLabel.trim() || [selectedClass?.name, selectedBoard?.code ? `(${selectedBoard.code})` : selectedBoard?.name].filter(Boolean).join(" ") || "Upcoming Batch";
+      const autoBoardLabel = [selectedClass?.name, selectedBoard?.name || selectedBoard?.code].filter(Boolean).join(" ") || formBoardLabel.trim() || "Upcoming Batch";
 
       const slug = editingBatch
         ? editingBatch.slug
@@ -353,6 +357,7 @@ export default function FeaturedBatchesCmsPage() {
         status_type: "ongoing",
         educator_name: primaryTeacherName,
         educator_avatar_url: primaryTeacherAvatar,
+        lead_educator_id: primaryTeacher?.id || null,
         cta_text: "Explore →",
         cta_link: "/student/batches",
         display_order: Number(formDisplayOrder) || 1,
@@ -743,7 +748,13 @@ export default function FeaturedBatchesCmsPage() {
                   <label className="text-xs font-bold text-brand-charcoal">Board <span className="text-red-500">*</span></label>
                   <select
                     value={formBoardId}
-                    onChange={(e) => setFormBoardId(e.target.value)}
+                    onChange={(e) => {
+                      const newBoardId = e.target.value;
+                      setFormBoardId(newBoardId);
+                      const bObj = boards.find((b) => b.id === newBoardId);
+                      const cObj = classLevels.find((c) => c.id === formClassId);
+                      setFormBoardLabel([cObj?.name, bObj?.name || bObj?.code].filter(Boolean).join(" "));
+                    }}
                     disabled={isSaving}
                     className="w-full h-9 px-2.5 rounded-xl border border-brand-border bg-white text-xs font-semibold text-brand-charcoal"
                   >
@@ -759,7 +770,13 @@ export default function FeaturedBatchesCmsPage() {
                   <label className="text-xs font-bold text-brand-charcoal">Class <span className="text-red-500">*</span></label>
                   <select
                     value={formClassId}
-                    onChange={(e) => setFormClassId(e.target.value)}
+                    onChange={(e) => {
+                      const newClassId = e.target.value;
+                      setFormClassId(newClassId);
+                      const bObj = boards.find((b) => b.id === formBoardId);
+                      const cObj = classLevels.find((c) => c.id === newClassId);
+                      setFormBoardLabel([cObj?.name, bObj?.name || bObj?.code].filter(Boolean).join(" "));
+                    }}
                     disabled={isSaving}
                     className="w-full h-9 px-2.5 rounded-xl border border-brand-border bg-white text-xs font-semibold text-brand-charcoal"
                   >

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
 import { StorageService } from "@/lib/services/storage.service";
+import { cn } from "@/lib/utils";
 import { CmsLecture, CmsBoard, CmsClassLevel, CmsSubject, CmsCourse, CmsChapter, CmsBatch, ContentStatus } from "@/types/cms.types";
 import {
   Video,
@@ -64,15 +65,10 @@ export function RecordedLecturesTab({
   const [filter, setFilter] = React.useState<"ALL" | "DRAFT" | "PENDING_REVIEW" | "REJECTED" | "APPROVED" | "PUBLISHED">("ALL");
   const [searchQuery, setSearchQuery] = React.useState("");
 
-  // Filter only valid Ongoing Batches for prominent selection
-  const ongoingBatches = React.useMemo(() => {
-    const nowIso = new Date().toISOString();
+  // Available batches for this teacher (includes ongoing, featured, and upcoming cohorts)
+  const availableBatches = React.useMemo(() => {
     return batches.filter(
-      (b) =>
-        b.status === "PUBLISHED" &&
-        b.is_visible !== false &&
-        (!b.starts_at || b.starts_at <= nowIso) &&
-        (!b.ends_at || b.ends_at >= nowIso)
+      (b) => b.status === "PUBLISHED" && b.is_visible !== false
     );
   }, [batches]);
 
@@ -81,6 +77,7 @@ export function RecordedLecturesTab({
   const [isUploading, setIsUploading] = React.useState(false);
   const [uploadTitle, setUploadTitle] = React.useState("");
   const [uploadSubject, setUploadSubject] = React.useState("Mathematics");
+  const [uploadSubjectId, setUploadSubjectId] = React.useState("");
   const [uploadBoardId, setUploadBoardId] = React.useState("");
   const [uploadClassId, setUploadClassId] = React.useState("");
   const [uploadCourseId, setUploadCourseId] = React.useState("");
@@ -94,6 +91,29 @@ export function RecordedLecturesTab({
   const [uploadDurationFormatted, setUploadDurationFormatted] = React.useState("45:00");
   const [uploadStatusTarget, setUploadStatusTarget] = React.useState<"DRAFT" | "PENDING_REVIEW">("PENDING_REVIEW");
 
+  // Dynamically filter subjects strictly mapped to the selected batch
+  const batchSubjects = React.useMemo(() => {
+    if (!uploadBatchId) return subjects;
+    const selectedBatch = batches.find((b) => b.id === uploadBatchId);
+    if (!selectedBatch) return subjects;
+
+    const linked = (selectedBatch.batch_subjects || [])
+      .map((bs) => (Array.isArray(bs.subject) ? bs.subject[0] : bs.subject))
+      .filter((s): s is CmsSubject => Boolean(s && s.id && s.name));
+
+    if (linked.length > 0) return linked;
+
+    if (selectedBatch.subject?.id && selectedBatch.subject?.name) {
+      return [selectedBatch.subject];
+    }
+    if (selectedBatch.subject_id) {
+      const match = subjects.find((s) => s.id === selectedBatch.subject_id);
+      if (match) return [match];
+    }
+
+    return subjects;
+  }, [uploadBatchId, batches, subjects]);
+
   const handleBatchSelect = (batchId: string) => {
     setUploadBatchId(batchId);
     if (!batchId) return;
@@ -101,23 +121,15 @@ export function RecordedLecturesTab({
     const selectedBatch = batches.find((b) => b.id === batchId);
     if (!selectedBatch) return;
 
-    // Auto-fill Board
+    // Auto-fill Board & Class in background
     if (selectedBatch.board_id) {
       setUploadBoardId(selectedBatch.board_id);
     }
-    // Auto-fill Class
     if (selectedBatch.class_id) {
       setUploadClassId(selectedBatch.class_id);
     }
-    // Auto-fill Subject
-    if (selectedBatch.subject_id) {
-      const matchingSub = subjects.find((s) => s.id === selectedBatch.subject_id);
-      if (matchingSub) setUploadSubject(matchingSub.name);
-    } else if (selectedBatch.subject?.name) {
-      setUploadSubject(selectedBatch.subject.name);
-    }
 
-    // Auto-fill Course
+    // Auto-fill Course in background
     let targetCourse = courses.find((c) => c.id === selectedBatch.course_id);
     if (!targetCourse) {
       targetCourse = courses.find(
@@ -136,6 +148,29 @@ export function RecordedLecturesTab({
     }
     if (targetCourse) {
       setUploadCourseId(targetCourse.id);
+    }
+
+    // Auto-set lecture number in background
+    const batchLectureCount = lectures.filter((l) => l.batch_id === batchId).length;
+    setUploadLectureNumber(String(batchLectureCount + 1));
+
+    // Auto-select first included subject of this batch
+    const linked = (selectedBatch.batch_subjects || [])
+      .map((bs) => (Array.isArray(bs.subject) ? bs.subject[0] : bs.subject))
+      .filter((s): s is CmsSubject => Boolean(s && s.name));
+
+    if (linked.length > 0) {
+      setUploadSubject(linked[0].name);
+      setUploadSubjectId(linked[0].id);
+    } else if (selectedBatch.subject?.name) {
+      setUploadSubject(selectedBatch.subject.name);
+      setUploadSubjectId(selectedBatch.subject.id || "");
+    } else if (selectedBatch.subject_id) {
+      const matchingSub = subjects.find((s) => s.id === selectedBatch.subject_id);
+      if (matchingSub) {
+        setUploadSubject(matchingSub.name);
+        setUploadSubjectId(matchingSub.id);
+      }
     }
   };
 
@@ -202,6 +237,7 @@ export function RecordedLecturesTab({
 
     const errors: Record<string, string> = {};
     if (!uploadTitle.trim()) errors.title = "Lecture title is required.";
+    if (!uploadBatchId && availableBatches.length > 0) errors.batch = "Please select an assigned batch.";
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -212,18 +248,22 @@ export function RecordedLecturesTab({
       setIsUploading(true);
       setFeedback(null);
 
+      const matchingSub = batchSubjects.find((s) => s.name === uploadSubject) || subjects.find((s) => s.name === uploadSubject);
+      const resolvedSubjectId = uploadSubjectId || matchingSub?.id || null;
+
       let res: Response;
 
       if (videoFile || thumbnailFile) {
         const formData = new FormData();
         formData.append("title", uploadTitle.trim());
         formData.append("subject", uploadSubject);
+        if (resolvedSubjectId) formData.append("subjectId", resolvedSubjectId);
         if (uploadBoardId) formData.append("boardId", uploadBoardId);
         if (uploadClassId) formData.append("classId", uploadClassId);
         if (uploadCourseId) formData.append("courseId", uploadCourseId);
         if (uploadChapterId) formData.append("chapterId", uploadChapterId);
         if (uploadBatchId) formData.append("batchId", uploadBatchId);
-        formData.append("lectureNumber", uploadLectureNumber);
+        formData.append("lectureNumber", uploadLectureNumber || "1");
         if (uploadDescription.trim()) formData.append("description", uploadDescription.trim());
         if (uploadVideoPlaybackUrl.trim()) formData.append("videoPlaybackUrl", uploadVideoPlaybackUrl.trim());
         formData.append("durationFormatted", uploadDurationFormatted.trim() || "45:00");
@@ -240,6 +280,7 @@ export function RecordedLecturesTab({
         const payload = {
           title: uploadTitle.trim(),
           subject: uploadSubject,
+          subjectId: resolvedSubjectId,
           boardId: uploadBoardId || null,
           classId: uploadClassId || null,
           courseId: uploadCourseId || null,
@@ -617,35 +658,39 @@ export function RecordedLecturesTab({
         maxWidth="lg"
       >
         <form onSubmit={handleUploadSubmit} className="space-y-4 pt-2">
-          {/* 1. Primary Ongoing Batch Selector */}
+          {/* 1. Primary Batch Selector (All teacher assigned batches) */}
           <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200/90 space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-brand-charcoal flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-brand-orange" />
-                Select Ongoing Batch (Recommended)
+                Select Batch <span className="text-red-500">*</span>
               </label>
               <span className="text-[10px] font-bold text-brand-orange bg-white px-2 py-0.5 rounded-full border border-orange-200">
-                Auto-Fills Board, Class & Course
+                Auto-Fills Curriculum
               </span>
             </div>
             <p className="text-[11px] text-brand-text-muted">
-              Select an active cohort to auto-populate the board, class level, subject, and course mapping.
+              Select an assigned batch cohort to automatically bind curriculum and filter relevant subjects.
             </p>
             <select
               value={uploadBatchId}
               onChange={(e) => handleBatchSelect(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl border border-brand-border bg-white text-xs text-brand-charcoal font-semibold focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+              className={cn(
+                "w-full h-10 px-3 rounded-xl border bg-white text-xs text-brand-charcoal font-semibold focus:outline-none focus:ring-2 focus:ring-brand-orange/20",
+                formErrors.batch ? "border-red-500" : "border-brand-border"
+              )}
             >
-              <option value="">-- No Specific Batch / Standalone Course Lecture --</option>
-              {ongoingBatches.map((b) => (
+              <option value="">-- Select Batch * --</option>
+              {availableBatches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.title} ({b.board_label}) {b.subject?.name ? `• ${b.subject.name}` : ""}
+                  {b.title} {b.board_label ? `(${b.board_label})` : ""}
                 </option>
               ))}
             </select>
+            {formErrors.batch && <p className="text-[11px] text-red-500">{formErrors.batch}</p>}
           </div>
 
-          {/* Title */}
+          {/* 2. Lecture Title */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-brand-charcoal">
               Lecture Title <span className="text-red-500">*</span>
@@ -659,92 +704,42 @@ export function RecordedLecturesTab({
             {formErrors.title && <p className="text-[11px] text-red-500">{formErrors.title}</p>}
           </div>
 
-          {/* Academic Taxonomy Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Subject *</label>
-              <select
-                value={uploadSubject}
-                onChange={(e) => setUploadSubject(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                {subjects.length > 0 ? (
-                  subjects.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="Physics">Physics</option>
-                    <option value="Chemistry">Chemistry</option>
-                    <option value="Biology">Biology</option>
-                  </>
-                )}
-              </select>
+          {/* 3. Subject Selector (Filtered strictly by Selected Batch) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-brand-charcoal">
+                Subject <span className="text-red-500">*</span>
+              </label>
+              {uploadBatchId && (
+                <span className="text-[10px] font-bold text-brand-orange bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                  {batchSubjects.length} Batch Subject{batchSubjects.length === 1 ? "" : "s"}
+                </span>
+              )}
             </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Class Level</label>
-              <select
-                value={uploadClassId}
-                onChange={(e) => setUploadClassId(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                <option value="">Select Class</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
+            <select
+              value={uploadSubject}
+              onChange={(e) => {
+                const subName = e.target.value;
+                setUploadSubject(subName);
+                const match = batchSubjects.find((s) => s.name === subName);
+                if (match) setUploadSubjectId(match.id);
+              }}
+              className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+            >
+              {batchSubjects.length > 0 ? (
+                batchSubjects.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
                   </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Board</label>
-              <select
-                value={uploadBoardId}
-                onChange={(e) => setUploadBoardId(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                <option value="">Select Board</option>
-                {boards.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
+                ))
+              ) : (
+                subjects.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name}
                   </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Course Mapping & Lecture Number */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Course Mapping</label>
-              <select
-                value={uploadCourseId}
-                onChange={(e) => setUploadCourseId(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-brand-border/80 bg-white text-xs text-brand-charcoal font-medium"
-              >
-                <option value="">Select Course</option>
-                {courses.map((cr) => (
-                  <option key={cr.id} value={cr.id}>
-                    {cr.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-brand-charcoal">Lecture Number</label>
-              <Input
-                type="number"
-                min="1"
-                value={uploadLectureNumber}
-                onChange={(e) => setUploadLectureNumber(e.target.value)}
-              />
-            </div>
+                ))
+              )}
+            </select>
           </div>
 
           {/* Video Asset Upload Box */}
