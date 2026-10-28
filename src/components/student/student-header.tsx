@@ -73,8 +73,8 @@ export function StudentHeader({
     router.push("/");
   };
 
-  const displayName = profile?.fullName || "Abhay Kumar";
-  const displayClass = "Class 10 · Student";
+  const displayName = profile?.fullName || user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Student";
+  const displayClass = "Student";
 
   return (
     <header

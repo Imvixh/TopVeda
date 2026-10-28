@@ -20,6 +20,7 @@ import {
   ClipboardCheck,
   User,
   Users,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { YoutubeIcon } from "@/components/brand/youtube-icon";
@@ -141,6 +142,12 @@ export const CMS_NAV_SECTIONS: CmsNavSection[] = [
         href: "/admin/cms/quotes",
         icon: Sparkles,
         description: "Daily motivational quotes and inspirational messages.",
+      },
+      {
+        title: "Leaderboard & Visibility",
+        href: "/admin/cms/leaderboard",
+        icon: Trophy,
+        description: "Student rankings, test scores, points, and platform ON/OFF visibility toggle.",
       },
     ],
   },

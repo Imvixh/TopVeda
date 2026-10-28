@@ -15,6 +15,7 @@ export const STUDENT_NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", href: "/student", iconName: "Home", isActive: true },
   { id: "my-learning", label: "My Learning", href: "/student/learning", iconName: "GraduationCap" },
   { id: "progress", label: "Progress", href: "/student/progress", iconName: "TrendingUp" },
+  { id: "leaderboard", label: "Leaderboard", href: "/student/leaderboard", iconName: "Trophy" },
   { id: "live-classes", label: "Live Classes", href: "/student/live", iconName: "PlaySquare" },
   { id: "tests", label: "Tests & Practice", href: "/student/tests", iconName: "ClipboardCheck" },
   { id: "study-material", label: "Study Material", href: "/student/study-material", iconName: "FileText" },

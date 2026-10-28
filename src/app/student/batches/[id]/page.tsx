@@ -222,9 +222,9 @@ export default function BatchDetailPage() {
           .order("scheduled_start", { ascending: true }),
         supabase
           .from("cms_study_materials")
-          .select("id, title, material_type, file_format, file_url, subject, subject_id")
+          .select("id, title, material_type, file_format, file_url, subject_id")
           .eq("batch_id", batchId)
-          .eq("status", "PUBLISHED")
+          .in("status", ["PUBLISHED", "APPROVED"])
           .eq("is_visible", true),
         supabase
           .from("student_tests")
@@ -951,24 +951,15 @@ export default function BatchDetailPage() {
                         </div>
 
                         {batch.is_enrolled ? (
-                          mat.file_url ? (
-                            <a
-                              href={mat.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-2xs shrink-0"
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              <span>View PDF</span>
-                            </a>
-                          ) : (
-                            <Link
-                              href="/student/study-material"
-                              className="text-xs font-bold text-brand-orange hover:underline shrink-0"
-                            >
-                              View Notes →
-                            </Link>
-                          )
+                          <a
+                            href={`/api/student/study-materials/${mat.id}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-2xs shrink-0"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            <span>Download PDF</span>
+                          </a>
                         ) : (
                           <button
                             type="button"

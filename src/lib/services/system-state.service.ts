@@ -23,6 +23,7 @@ export interface LockoutState {
 }
 
 const MAINTENANCE_KEY = "topveda:maintenance_mode";
+const LEADERBOARD_KEY = "topveda:leaderboard_enabled";
 const LOCKOUT_PREFIX = "topveda:lockout:";
 
 interface KVStorage {
@@ -170,6 +171,35 @@ export class SystemStateService {
     };
 
     await this.setRawValue(MAINTENANCE_KEY, JSON.stringify(state));
+    return state;
+  }
+
+  // --------------------------------------------------------------------------
+  // STUDENT LEADERBOARD PLATFORM VISIBILITY (ON / OFF)
+  // --------------------------------------------------------------------------
+
+  public static async getLeaderboardState(): Promise<{ isEnabled: boolean; updatedAt?: string; updatedBy?: string }> {
+    try {
+      const raw = await this.getRawValue(LEADERBOARD_KEY);
+      if (!raw) {
+        return { isEnabled: true };
+      }
+      return JSON.parse(raw);
+    } catch {
+      return { isEnabled: true };
+    }
+  }
+
+  public static async setLeaderboardState(
+    enabled: boolean,
+    updatedBy?: string
+  ): Promise<{ isEnabled: boolean; updatedAt: string; updatedBy: string }> {
+    const state = {
+      isEnabled: enabled,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy || "SUPER_ADMIN",
+    };
+    await this.setRawValue(LEADERBOARD_KEY, JSON.stringify(state));
     return state;
   }
 

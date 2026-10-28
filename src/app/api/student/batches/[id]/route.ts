@@ -61,9 +61,9 @@ export async function GET(
         .order("display_order", { ascending: true }),
       adminDb
         .from("cms_study_materials")
-        .select("id, title, material_type, file_format, file_url, subject, subject_id")
+        .select("id, title, material_type, file_format, file_url, subject_id")
         .eq("batch_id", batchId)
-        .eq("status", "PUBLISHED")
+        .in("status", ["PUBLISHED", "APPROVED"])
         .eq("is_visible", true)
         .order("display_order", { ascending: true }),
     ]);

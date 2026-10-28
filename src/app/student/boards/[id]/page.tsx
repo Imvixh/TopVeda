@@ -304,9 +304,11 @@ export default function BoardDetailPage() {
                                 {batch.className}
                               </span>
                             </div>
-                            <h3 className="text-base font-bold text-slate-900">
-                              {batch.title}
-                            </h3>
+                            <Link href={`/student/batches/${batch.id}`}>
+                              <h3 className="text-base font-bold text-slate-900 hover:text-brand-orange transition-colors">
+                                {batch.title}
+                              </h3>
+                            </Link>
                             <p className="text-xs text-slate-500 mt-0.5">
                               Faculty: {batch.educatorName}
                             </p>
@@ -372,7 +374,7 @@ export default function BoardDetailPage() {
                     {filteredAvailableBatches.map((batch) => (
                       <div
                         key={batch.id}
-                        className="bg-white rounded-2xl border border-slate-200/80 hover:border-slate-300 hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4"
+                        className="bg-white rounded-2xl border border-slate-200/80 hover:border-brand-orange/60 hover:shadow-md transition-all p-5 flex flex-col justify-between space-y-4 group"
                       >
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-2">
@@ -385,12 +387,16 @@ export default function BoardDetailPage() {
                           </div>
 
                           <div>
-                            <h3 className="text-sm font-bold text-slate-900 line-clamp-2">
-                              {batch.title}
-                            </h3>
-                            <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                              {batch.subtitle}
-                            </p>
+                            <Link href={`/student/batches/${batch.id}`}>
+                              <h3 className="text-sm font-bold text-slate-900 line-clamp-2 group-hover:text-brand-orange transition-colors">
+                                {batch.title}
+                              </h3>
+                            </Link>
+                            {batch.subtitle && (
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                                {batch.subtitle}
+                              </p>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2 text-xs text-slate-600 pt-1">
@@ -404,10 +410,10 @@ export default function BoardDetailPage() {
                           </span>
 
                           <Link
-                            href={batch.courseId ? `/student/courses/${batch.courseId}` : "/student/learning"}
+                            href={`/student/batches/${batch.id}`}
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-brand-orange hover:bg-brand-orange-hover text-white text-xs font-bold shadow-sm transition-all"
                           >
-                            <span>Enroll</span>
+                            <span>Explore Batch</span>
                             <ChevronRight className="w-3.5 h-3.5" />
                           </Link>
                         </div>

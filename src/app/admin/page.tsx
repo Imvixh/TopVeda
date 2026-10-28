@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Users,
+  Trophy,
 } from "lucide-react";
 import { AdminAuthView } from "@/components/auth/admin-auth-view";
 import { createClient } from "@/lib/supabase/client";
@@ -43,6 +44,8 @@ export default function AdminFoundationPage() {
   }>({ isEnabled: false });
   const [isConfirmModalOpen, setIsConfirmModalOpen] = React.useState(false);
   const [isTogglingMaintenance, setIsTogglingMaintenance] = React.useState(false);
+  const [leaderboardEnabled, setLeaderboardEnabled] = React.useState<boolean>(true);
+  const [isTogglingLeaderboard, setIsTogglingLeaderboard] = React.useState(false);
 
   const isSuperAdmin = profile?.role === "SUPER_ADMIN";
 
@@ -78,8 +81,40 @@ export default function AdminFoundationPage() {
         .catch(() => {
           // ignore
         });
+
+      // 4. Fetch student leaderboard status
+      fetch("/api/admin/leaderboard/toggle")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && typeof data.isEnabled === "boolean") {
+            setLeaderboardEnabled(data.isEnabled);
+          }
+        })
+        .catch(() => {
+          // ignore
+        });
     }
   }, [isSuperAdmin]);
+
+  const handleToggleLeaderboard = async () => {
+    setIsTogglingLeaderboard(true);
+    const nextState = !leaderboardEnabled;
+    try {
+      const res = await fetch("/api/admin/leaderboard/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextState }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLeaderboardEnabled(nextState);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsTogglingLeaderboard(false);
+    }
+  };
 
   const handleToggleMaintenance = async () => {
     setIsTogglingMaintenance(true);
@@ -439,6 +474,79 @@ export default function AdminFoundationPage() {
                       <Power className="h-3.5 w-3.5 mr-1.5" />
                       {maintenance.isEnabled ? "Deactivate Maintenance Mode" : "Activate Maintenance Mode"}
                     </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* SUPER ADMIN QUICK ACTION: Student Leaderboard Control */}
+            {isSuperAdmin && (
+              <Card
+                className={`p-5 sm:p-6 border-2 transition-all shadow-md ${
+                  leaderboardEnabled
+                    ? "bg-gradient-to-br from-brand-surface via-amber-50/40 to-orange-50/40 border-amber-200/80 shadow-md"
+                    : "bg-slate-50/90 border-slate-300 shadow-sm"
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div
+                      className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md ${
+                        leaderboardEnabled ? "bg-amber-500 text-white" : "bg-slate-500 text-white"
+                      }`}
+                    >
+                      <Trophy className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-bold text-brand-text-primary">
+                          Student Leaderboard Visibility
+                        </h3>
+                        <Badge
+                          variant={leaderboardEnabled ? "peach" : "outline"}
+                          size="sm"
+                          className={`font-mono font-bold text-[10px] uppercase tracking-wider ${
+                            leaderboardEnabled
+                              ? "bg-amber-500 text-white border-amber-600"
+                              : "bg-slate-200 text-slate-700 border-slate-300"
+                          }`}
+                        >
+                          [ {leaderboardEnabled ? "ON - VISIBLE" : "OFF - PAUSED"} ]
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        {leaderboardEnabled
+                          ? "Leaderboard is LIVE. All enrolled students can view cohort podium rankings, test scores, and lecture points."
+                          : "Leaderboard is PAUSED. Student ranking pages display a paused maintenance notice for all students."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={isTogglingLeaderboard}
+                      onClick={handleToggleLeaderboard}
+                      className={`text-xs font-bold shadow-subtle ${
+                        leaderboardEnabled
+                          ? "bg-slate-700 hover:bg-slate-800 text-white"
+                          : "bg-amber-600 hover:bg-amber-700 text-white"
+                      }`}
+                    >
+                      {isTogglingLeaderboard ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Power className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      {leaderboardEnabled ? "Turn OFF Leaderboard" : "Turn ON Leaderboard"}
+                    </Button>
+                    <Link href="/admin/cms/leaderboard">
+                      <Button variant="outline" size="sm" className="text-xs font-bold border-brand-border hover:bg-brand-bg-peach/50">
+                        Inspect Rankings
+                        <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </Card>

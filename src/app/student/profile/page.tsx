@@ -37,7 +37,7 @@ type ProfileTab = "personal" | "password" | "notifications" | "learning" | "help
 function StudentProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout } = useAuth();
+  const { logout, refreshProfile } = useAuth();
 
   const initialTab = (searchParams?.get("tab") as ProfileTab) || "personal";
   const [activeTab, setActiveTab] = React.useState<ProfileTab>(initialTab);
@@ -260,6 +260,7 @@ function StudentProfileContent() {
       if (profile) {
         setProfile({ ...profile, avatar_url: data.avatarUrl });
       }
+      await refreshProfile();
       setFeedbackMessage({ type: "success", text: "Profile picture updated!" });
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));

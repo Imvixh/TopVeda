@@ -20,6 +20,7 @@ import {
   Award,
   Bell,
   User,
+  Trophy,
   X,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +38,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Award,
   Bell,
   User,
+  Trophy,
 };
 
 export interface StudentSidebarProps {
@@ -66,8 +68,8 @@ export function StudentSidebar({
     router.push("/");
   };
 
-  const displayName = profile?.fullName || "Abhay Kumar";
-  const displayEmail = user?.email || profile?.email || "student@gmail.com";
+  const displayName = profile?.fullName || user?.user_metadata?.full_name || user?.email?.split('@')[0] || "Student";
+  const displayEmail = user?.email || profile?.email || "student@topveda.in";
 
   return (
     <>
@@ -220,7 +222,7 @@ export function StudentSidebar({
             >
               <div className="relative w-8 h-8 rounded-full overflow-hidden border border-brand-orange-border/70 bg-brand-bg-peach flex items-center justify-center shrink-0">
                 <Image
-                  src="/assets/student/student-avatar.jpg"
+                  src={profile?.avatarUrl || "/assets/student/student-avatar.jpg"}
                   alt={displayName}
                   width={32}
                   height={32}
@@ -251,7 +253,7 @@ export function StudentSidebar({
             <Link href="/student/profile" title={displayName} className="group">
               <div className="relative w-8 h-8 rounded-full overflow-hidden border border-brand-orange-border/70 bg-brand-bg-peach flex items-center justify-center">
                 <Image
-                  src="/assets/student/student-avatar.jpg"
+                  src={profile?.avatarUrl || "/assets/student/student-avatar.jpg"}
                   alt={displayName}
                   width={32}
                   height={32}
