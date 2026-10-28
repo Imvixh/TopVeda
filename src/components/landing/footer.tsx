@@ -155,14 +155,20 @@ export function Footer({ onOpenTerms, onOpenPrivacy }: FooterProps) {
               Have inquiries regarding our upcoming batches or educator collaborations? Reach our support team.
             </p>
             <div className="flex flex-wrap gap-4 pt-1">
-              <span className="flex items-center gap-1.5 text-gray-300">
+              <a
+                href="mailto:learnx121@gmail.com"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-brand-orange transition-colors"
+              >
                 <Mail className="h-3.5 w-3.5 text-brand-orange" />
-                support@topveda.in
-              </span>
-              <span className="flex items-center gap-1.5 text-gray-300">
+                learnx121@gmail.com
+              </a>
+              <a
+                href="tel:+917546091308"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-brand-orange transition-colors"
+              >
                 <Phone className="h-3.5 w-3.5 text-brand-orange" />
-                +91 (Support Helpline)
-              </span>
+                +91 75460 91308
+              </a>
             </div>
           </div>
         </div>

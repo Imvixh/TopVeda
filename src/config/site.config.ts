@@ -27,7 +27,7 @@ export const siteConfig = {
   links: {
     x: "",
     youtube: "",
-    instagram: "",
+    instagram: "https://www.instagram.com/topveda.live?dlrf=MXU2eDA4c2Zqd3JxOA==",
     facebook: "",
   },
 } as const;
