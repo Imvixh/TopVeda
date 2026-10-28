@@ -54,6 +54,13 @@ export function ReviewInspectionModal({
   const [isLoadingMedia, setIsLoadingMedia] = React.useState(false);
   const [isCheckingProcessing, setIsCheckingProcessing] = React.useState(false);
   const [processingStatus, setProcessingStatus] = React.useState<string | null>(null);
+  const [companionMaterial, setCompanionMaterial] = React.useState<{
+    id: string;
+    title: string;
+    file_url: string;
+    status: string;
+    signedUrl?: string | null;
+  } | null>(null);
 
   // Extract resolved YouTube Video ID & Embed URL
   const resolvedVideoId = React.useMemo(() => {
@@ -114,8 +121,40 @@ export function ReviewInspectionModal({
         } else if (resolvedVideoId) {
           setSignedMediaUrl(getYouTubeThumbnailUrl(resolvedVideoId, "hq"));
         }
+
+        // Fetch companion study material linked to this lecture
+        try {
+          const { data: comp } = await supabase
+            .from("cms_study_materials")
+            .select("id, title, file_url, status")
+            .eq("lecture_id", item.entity_id)
+            .maybeSingle();
+
+          if (comp && isMounted) {
+            let sUrl: string | null = null;
+            if (comp.file_url) {
+              if (comp.file_url.startsWith("http")) {
+                sUrl = comp.file_url;
+              } else {
+                const { signedUrl } = await StorageService.getSignedUrl(
+                  supabase,
+                  "study-materials",
+                  comp.file_url,
+                  600
+                );
+                sUrl = signedUrl;
+              }
+            }
+            setCompanionMaterial({ ...comp, signedUrl: sUrl });
+          } else if (isMounted) {
+            setCompanionMaterial(null);
+          }
+        } catch {
+          if (isMounted) setCompanionMaterial(null);
+        }
       } else {
         setSignedMediaUrl(null);
+        setCompanionMaterial(null);
       }
     }
 
@@ -296,6 +335,44 @@ export function ReviewInspectionModal({
             </div>
           </div>
         </div>
+
+        {/* COMPANION STUDY MATERIAL (Attached to this lecture) */}
+        {isLecture && companionMaterial && (
+          <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-10 w-10 rounded-lg bg-emerald-100 text-emerald-700 border border-emerald-300 flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded">
+                    Companion Notes &amp; PDF Attached
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-600">
+                    Status: {companionMaterial.status}
+                  </span>
+                </div>
+                <p className="font-bold text-slate-900 truncate mt-0.5">{companionMaterial.title}</p>
+              </div>
+            </div>
+
+            {companionMaterial.signedUrl ? (
+              <a
+                href={companionMaterial.signedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100 transition-colors shadow-2xs shrink-0"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>View PDF</span>
+              </a>
+            ) : (
+              <span className="text-[10px] font-semibold text-slate-500 shrink-0">
+                PDF Attached
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Governance Audit Snapshot */}
         <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">

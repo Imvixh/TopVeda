@@ -59,3 +59,5 @@ SECURITY_PRODUCTION_READINESS_REPORT.*
 FINAL-PROJECT-DEPLOYMENT-RESULT.*
 # test outputs
 playwright-report/
+supabase/.temp/
+

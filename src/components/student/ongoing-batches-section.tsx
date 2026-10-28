@@ -111,54 +111,99 @@ export function OngoingBatchesSection({
           {activeBatches.map((item: OngoingBatch) => {
             const IconComponent = ICON_MAP[item.iconType] || Target;
             const isLive = item.statusType === "live";
+            const leadTeacher = item.teachers && item.teachers.length > 0 ? item.teachers[0] : null;
 
             return (
               <div
                 key={item.id}
-                className="flex flex-col justify-between min-w-[220px] max-w-[240px] rounded-2xl bg-white border border-brand-border/80 p-4 shadow-2xs hover:shadow-card hover:border-brand-orange-border/70 transition-all duration-200 shrink-0"
+                className="group flex flex-col justify-between min-w-[280px] max-w-[320px] rounded-3xl bg-white border border-brand-border/90 p-5 shadow-2xs hover:shadow-card hover:border-brand-orange/60 hover:-translate-y-0.5 transition-all duration-200 shrink-0"
               >
-                {/* Top Row: Subject Icon + Title */}
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "w-9 h-9 rounded-xl border flex items-center justify-center shrink-0",
-                      item.iconBg
-                    )}
-                  >
-                    <IconComponent className={cn("h-4 w-4", item.iconColor)} />
-                  </div>
-
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-bold text-brand-text-primary leading-tight">
-                      {item.badge}
-                    </p>
-                    <p className="text-xs font-semibold text-brand-text-muted leading-tight">
-                      {item.batchName}
-                    </p>
-                    <p
+                <div className="space-y-3">
+                  {/* Top Badges: Live / Ongoing indicator + Board tag */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span
                       className={cn(
-                        "text-[11px] font-bold pt-0.5 flex items-center gap-1",
-                        isLive ? "text-emerald-600" : "text-brand-text-muted"
+                        "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border",
+                        isLive
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          : "bg-orange-50 border-orange-200 text-brand-orange"
                       )}
                     >
-                      {isLive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-                      {item.status}
+                      <span
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full",
+                          isLive ? "bg-emerald-500 animate-pulse" : "bg-brand-orange"
+                        )}
+                      />
+                      {isLive ? "Live Cohort" : "Ongoing Batch"}
+                    </span>
+
+                    <span className="text-[10px] font-bold text-slate-600 bg-slate-100/90 px-2 py-0.5 rounded-md border border-slate-200/70 truncate max-w-[120px]">
+                      {item.badge || item.subject || "TopVeda"}
+                    </span>
+                  </div>
+
+                  {/* Batch Title & Description */}
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-brand-charcoal group-hover:text-brand-orange transition-colors line-clamp-1 leading-snug">
+                      {item.batchName}
+                    </h3>
+                    <p className="text-xs text-brand-text-muted line-clamp-2 mt-1 leading-relaxed">
+                      {item.description || "Structured ongoing curriculum with live classes, study materials & doubt support."}
                     </p>
+                  </div>
+
+                  {/* Faculty Strip */}
+                  <div className="flex items-center gap-2.5 pt-2 border-t border-brand-border/50">
+                    <div className="w-7 h-7 rounded-full overflow-hidden bg-brand-bg-peach border border-brand-border/60 flex items-center justify-center shrink-0">
+                      {leadTeacher?.avatarUrl ? (
+                        <img
+                          src={leadTeacher.avatarUrl}
+                          alt={leadTeacher.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-brand-orange">
+                          {leadTeacher ? leadTeacher.name.charAt(0) : "T"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-brand-charcoal truncate">
+                        {leadTeacher ? leadTeacher.name : "TopVeda Faculty"}
+                      </p>
+                      <p className="text-[10px] text-brand-text-muted truncate">
+                        {leadTeacher?.qualification || "Subject Specialist"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Curriculum Content Quick Stats */}
+                  <div className="flex items-center gap-3 text-[11px] text-brand-text-muted font-medium pt-1">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                      {item.lectureCount || 10}+ Lectures
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Notes &amp; PDFs
+                    </span>
                   </div>
                 </div>
 
-                {/* Bottom CTA */}
-                <div className="mt-3.5 pt-2 border-t border-brand-border/40 flex justify-end">
+                {/* Bottom CTA Button */}
+                <div className="mt-4 pt-3 border-t border-brand-border/60 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                    Free / Included
+                  </span>
+
                   <Link
                     href={`/student/batches/${item.id}`}
-                    className={cn(
-                      "inline-flex items-center justify-center px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-150",
-                      isLive
-                        ? "bg-brand-orange hover:bg-brand-orange-hover text-white shadow-xs"
-                        : "bg-[#F4F6F8] hover:bg-[#EAEFF4] text-brand-text-primary"
-                    )}
+                    className="inline-flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-brand-orange hover:bg-brand-orange-hover text-white shadow-xs group-hover:translate-x-0.5 transition-all duration-150"
                   >
-                    {item.ctaText}
+                    <span>Explore Batch</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
               </div>

@@ -268,6 +268,19 @@ export class CmsService {
         };
       }
 
+      // Cascade review decision to companion study materials linked to this lecture
+      if (entityType === "LECTURE") {
+        await supabase
+          .from("cms_study_materials")
+          .update({
+            status: decision,
+            reviewed_by: reviewerId,
+            reviewed_at: new Date().toISOString(),
+            review_note: reviewNote || null,
+          })
+          .eq("lecture_id", entityId);
+      }
+
       // Dispatch notification to educator
       const authorId = data.submitted_by || data.educator_id || data.created_by;
       if (authorId) {
@@ -348,6 +361,29 @@ export class CmsService {
         .eq("id", entityId);
 
       if (error) throw new Error(error.message);
+
+      // Cascade publish to companion study materials linked to this lecture
+      if (entityType === "LECTURE") {
+        const { data: lecData } = await supabase
+          .from("cms_lectures")
+          .select("batch_id, subject_id, course_id")
+          .eq("id", entityId)
+          .maybeSingle();
+
+        const companionPayload: Record<string, unknown> = {
+          status: "PUBLISHED",
+          is_visible: true,
+        };
+        if (lecData?.batch_id) companionPayload.batch_id = lecData.batch_id;
+        if (lecData?.subject_id) companionPayload.subject_id = lecData.subject_id;
+        if (lecData?.course_id) companionPayload.course_id = lecData.course_id;
+
+        await supabase
+          .from("cms_study_materials")
+          .update(companionPayload)
+          .eq("lecture_id", entityId);
+      }
+
       return { success: true, error: null };
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));

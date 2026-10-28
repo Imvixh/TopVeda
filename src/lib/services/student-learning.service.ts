@@ -458,40 +458,33 @@ export class StudentLearningService {
         }
       }
 
-      // 3. Check for Duplicate Enrollment & Update Batch Binding if unlinked
-      const { data: existing } = await supabase
-        .from("student_enrollments")
-        .select("*")
-        .eq("student_id", userId)
-        .eq("course_id", courseId)
-        .maybeSingle();
+      // 3. Check for Duplicate Enrollment (scoped by batch_id if enrolling in batch, or course_id)
+      let existing: any = null;
+      if (resolvedBatchId) {
+        const { data: batchEnrollment } = await supabase
+          .from("student_enrollments")
+          .select("*")
+          .eq("student_id", userId)
+          .eq("batch_id", resolvedBatchId)
+          .maybeSingle();
+        existing = batchEnrollment;
+      } else {
+        const { data: courseEnrollment } = await supabase
+          .from("student_enrollments")
+          .select("*")
+          .eq("student_id", userId)
+          .eq("course_id", courseId)
+          .maybeSingle();
+        existing = courseEnrollment;
+      }
 
       if (existing) {
-        if (resolvedBatchId && (!existing.batch_id || existing.batch_id !== resolvedBatchId)) {
-          const { data: updated, error: updateErr } = await supabase
-            .from("student_enrollments")
-            .update({
-              batch_id: resolvedBatchId,
-              status: "ACTIVE",
-              last_accessed_at: new Date().toISOString(),
-            })
-            .eq("id", existing.id)
-            .select("*")
-            .single();
-
-          if (!updateErr && updated) {
-            return {
-              success: true,
-              enrollment: updated as StudentEnrollment,
-            };
-          }
-        }
-
         return {
           success: true,
           enrollment: existing as StudentEnrollment,
         };
       }
+
 
       // 4. Insert New Enrollment Record with resolved batch_id
       const { data: newEnrollment, error: insertError } = await supabase

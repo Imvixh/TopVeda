@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   SafeTestQuestion,
@@ -91,8 +91,11 @@ export default function TestRunnerPage() {
     };
   }, [testId]);
 
+  const searchParams = useSearchParams();
+  const urlAttemptId = searchParams?.get("attemptId") || null;
+
   // Load Previous Completed Scorecard
-  const handleLoadPreviousScorecard = async (prevAttemptId: string) => {
+  const handleLoadPreviousScorecard = React.useCallback(async (prevAttemptId: string) => {
     try {
       setIsLoading(true);
       const res = await fetch(`/api/student/tests/attempts/${prevAttemptId}`);
@@ -108,7 +111,14 @@ export default function TestRunnerPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Auto-load scorecard if requested in URL
+  React.useEffect(() => {
+    if (urlAttemptId) {
+      void handleLoadPreviousScorecard(urlAttemptId);
+    }
+  }, [urlAttemptId, handleLoadPreviousScorecard]);
 
   // Submit Test Attempt for Server-Side Grading
   const handleSubmitTest = React.useCallback(async () => {

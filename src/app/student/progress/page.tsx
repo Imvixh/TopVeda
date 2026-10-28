@@ -595,45 +595,69 @@ export default function ProgressTrackerPage() {
 
                 {testResults.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                    {testResults.map((t) => (
-                      <div
-                        key={t.id}
-                        className="p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs flex flex-col justify-between space-y-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 space-y-0.5">
-                            <span className="text-[10px] font-extrabold uppercase text-brand-text-muted">
-                              {t.subjectName}
-                            </span>
-                            <h3 className="text-xs sm:text-sm font-bold text-brand-charcoal truncate">
-                              {t.testTitle}
-                            </h3>
-                          </div>
-                          <span
-                            className={cn(
-                              "px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 border",
-                              t.percentage >= 60
-                                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                                : "bg-amber-50 border-amber-200 text-amber-800"
-                            )}
-                          >
-                            {t.percentage}%
-                          </span>
-                        </div>
+                    {testResults.map((t) => {
+                      const testTargetId = t.testId || t.id;
+                      const scorecardUrl = `/student/tests/${testTargetId}?attemptId=${t.id}`;
+                      const reattemptUrl = `/student/tests/${testTargetId}`;
 
-                        <div className="flex items-center justify-between text-xs text-brand-text-muted pt-1 border-t border-gray-100">
-                          <span className="font-semibold text-brand-charcoal">
-                            Score: {t.scoreObtained}/{t.maxScore}
-                          </span>
-                          <span>
-                            {new Date(t.attemptedAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
+                      return (
+                        <div
+                          key={t.id}
+                          className="group p-4 rounded-2xl bg-white border border-brand-border/80 shadow-2xs hover:shadow-card hover:border-brand-orange/40 transition-all duration-200 flex flex-col justify-between space-y-3"
+                        >
+                          <Link href={scorecardUrl} className="block space-y-2 cursor-pointer">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 space-y-0.5">
+                                <span className="text-[10px] font-extrabold uppercase text-brand-orange bg-orange-50 px-2 py-0.5 rounded border border-orange-100">
+                                  {t.subjectName}
+                                </span>
+                                <h3 className="text-xs sm:text-sm font-bold text-brand-charcoal truncate group-hover:text-brand-orange transition-colors mt-1">
+                                  {t.testTitle}
+                                </h3>
+                              </div>
+                              <span
+                                className={cn(
+                                  "px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 border",
+                                  t.percentage >= 60
+                                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                                    : "bg-amber-50 border-amber-200 text-amber-800"
+                                )}
+                              >
+                                {t.percentage}%
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs text-brand-text-muted pt-1 border-t border-gray-100">
+                              <span className="font-semibold text-brand-charcoal">
+                                Score: {t.scoreObtained}/{t.maxScore}
+                              </span>
+                              <span>
+                                {new Date(t.attemptedAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
+                            </div>
+                          </Link>
+
+                          {/* Quick Interactive Actions */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                            <Link
+                              href={scorecardUrl}
+                              className="flex-1 text-center py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-brand-bg-warm hover:bg-brand-orange/10 text-brand-charcoal hover:text-brand-orange transition-colors"
+                            >
+                              View Scorecard
+                            </Link>
+                            <Link
+                              href={reattemptUrl}
+                              className="py-1.5 px-3 rounded-xl text-[11px] font-bold bg-brand-orange hover:bg-brand-orange-hover text-white transition-colors shadow-2xs"
+                            >
+                              Re-attempt
+                            </Link>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="p-6 rounded-3xl bg-white border border-brand-border/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">

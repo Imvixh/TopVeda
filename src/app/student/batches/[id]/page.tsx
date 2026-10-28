@@ -33,6 +33,7 @@ import {
   Award,
 } from "lucide-react";
 import { formatLiveTimeDisplay } from "@/lib/utils/timezone";
+import { cn } from "@/lib/utils";
 
 function getSubjectIconComponent(name?: string) {
   const n = (name || "").toLowerCase();
@@ -77,18 +78,25 @@ interface BatchDetailData {
     title: string;
     duration_formatted: string;
     teacher_name: string;
+    subject?: string;
+    subject_id?: string;
   }>;
   liveClasses: Array<{
     id: string;
     topic: string;
     time_display: string;
     is_live: boolean;
+    subject?: string;
+    subject_id?: string;
   }>;
   studyMaterials: Array<{
     id: string;
     title: string;
     material_type: string;
     file_format: string;
+    file_url?: string;
+    subject?: string;
+    subject_id?: string;
   }>;
   tests: Array<{
     id: string;
@@ -98,6 +106,7 @@ interface BatchDetailData {
     duration_minutes: number;
     total_questions: number;
     subject_name?: string;
+    subject_id?: string;
   }>;
 }
 
@@ -109,6 +118,7 @@ export default function BatchDetailPage() {
   const supabase = React.useMemo(() => createClient(), []);
 
   const [batch, setBatch] = React.useState<BatchDetailData | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = React.useState<string>("ALL");
   const [isLoading, setIsLoading] = React.useState(true);
   const [isEnrolling, setIsEnrolling] = React.useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -198,7 +208,7 @@ export default function BatchDetailPage() {
           .eq("batch_id", batchId),
         supabase
           .from("cms_lectures")
-          .select("id, title, duration_formatted, duration_human, teacher_name, display_order")
+          .select("id, title, duration_formatted, duration_human, duration_seconds, teacher_name, display_order, subject, subject_id")
           .eq("batch_id", batchId)
           .eq("status", "PUBLISHED")
           .eq("is_visible", true)
@@ -212,13 +222,13 @@ export default function BatchDetailPage() {
           .order("scheduled_start", { ascending: true }),
         supabase
           .from("cms_study_materials")
-          .select("id, title, material_type, file_url")
+          .select("id, title, material_type, file_format, file_url, subject, subject_id")
           .eq("batch_id", batchId)
           .eq("status", "PUBLISHED")
           .eq("is_visible", true),
         supabase
           .from("student_tests")
-          .select("id, title, test_type, total_marks, duration_minutes, total_questions, subject_name")
+          .select("id, title, test_type, total_marks, duration_minutes, total_questions, subject_name, subject_id")
           .eq("batch_id", batchId)
           .eq("status", "PUBLISHED")
           .eq("is_visible", true)
@@ -301,7 +311,7 @@ export default function BatchDetailPage() {
           lecturesRes.data && lecturesRes.data.length > 0
             ? lecturesRes.data
             : (batchData.batch_lectures || [])
-        ).map((l: { id: string; title: string; duration_formatted?: string | null; duration_human?: string | null; duration_seconds?: number | null; teacher_name?: string | null }) => {
+        ).map((l: { id: string; title: string; duration_formatted?: string | null; duration_human?: string | null; duration_seconds?: number | null; teacher_name?: string | null; subject?: string | null; subject_id?: string | null }) => {
           let durationStr = l.duration_formatted;
           if (!durationStr || durationStr === "45:00") {
             if (l.duration_human && l.duration_human !== "45 min") {
@@ -315,27 +325,34 @@ export default function BatchDetailPage() {
           return {
             id: l.id,
             title: l.title,
-            duration_formatted: durationStr || l.duration_human || (l.duration_seconds ? `${Math.floor(l.duration_seconds / 60)} min` : ""),
-            teacher_name: l.teacher_name,
+            duration_formatted: durationStr || l.duration_human || (l.duration_seconds ? `${Math.floor(l.duration_seconds / 60)} min` : "45 min"),
+            teacher_name: l.teacher_name || "TopVeda Faculty",
+            subject: l.subject || undefined,
+            subject_id: l.subject_id || undefined,
           };
         }),
-        liveClasses: (liveRes.data || []).map((lc) => ({
+        liveClasses: (liveRes.data || []).map((lc: any) => ({
           id: lc.id,
           topic: lc.topic,
           time_display: lc.scheduled_start ? formatLiveTimeDisplay(lc.scheduled_start) : lc.time_display,
           is_live: lc.live_status === "LIVE" || lc.is_live,
+          subject: lc.subject || undefined,
+          subject_id: lc.subject_id || undefined,
         })),
         studyMaterials: (
           materialsRes.data && materialsRes.data.length > 0
             ? materialsRes.data
             : (batchData.batch_study_materials || [])
-        ).map((m: { id: string; title: string; material_type?: string | null; file_format?: string | null }) => ({
+        ).map((m: { id: string; title: string; material_type?: string | null; file_format?: string | null; file_url?: string | null; subject?: string | null; subject_id?: string | null }) => ({
           id: m.id,
           title: m.title,
           material_type: m.material_type || "Notes",
           file_format: m.file_format || "PDF",
+          file_url: m.file_url || undefined,
+          subject: m.subject || undefined,
+          subject_id: m.subject_id || undefined,
         })),
-        tests: (testsRes.data || []).map((t) => ({
+        tests: (testsRes.data || []).map((t: any) => ({
           id: t.id,
           title: t.title,
           test_type: t.test_type,
@@ -343,6 +360,7 @@ export default function BatchDetailPage() {
           duration_minutes: t.duration_minutes || 0,
           total_questions: t.total_questions || 0,
           subject_name: t.subject_name,
+          subject_id: t.subject_id,
         })),
       });
     } catch (err) {
@@ -388,6 +406,33 @@ export default function BatchDetailPage() {
       setIsEnrolling(false);
     }
   };
+
+  const filteredLectures = React.useMemo(() => {
+    if (!batch) return [];
+    if (selectedSubjectId === "ALL") return batch.lectures;
+    const targetSub = batch.subjects.find((s) => s.id === selectedSubjectId);
+    return batch.lectures.filter((l) =>
+      l.subject_id === selectedSubjectId || (targetSub && l.subject?.toLowerCase().includes(targetSub.name.toLowerCase()))
+    );
+  }, [batch, selectedSubjectId]);
+
+  const filteredMaterials = React.useMemo(() => {
+    if (!batch) return [];
+    if (selectedSubjectId === "ALL") return batch.studyMaterials;
+    const targetSub = batch.subjects.find((s) => s.id === selectedSubjectId);
+    return batch.studyMaterials.filter((m) =>
+      m.subject_id === selectedSubjectId || (targetSub && m.subject?.toLowerCase().includes(targetSub.name.toLowerCase()))
+    );
+  }, [batch, selectedSubjectId]);
+
+  const filteredTests = React.useMemo(() => {
+    if (!batch) return [];
+    if (selectedSubjectId === "ALL") return batch.tests;
+    const targetSub = batch.subjects.find((s) => s.id === selectedSubjectId);
+    return batch.tests.filter((t) =>
+      t.subject_id === selectedSubjectId || (targetSub && t.subject_name?.toLowerCase().includes(targetSub.name.toLowerCase()))
+    );
+  }, [batch, selectedSubjectId]);
 
   return (
     <div className="min-h-screen bg-[#FDFDFC] text-brand-text-primary flex flex-col font-sans antialiased">
@@ -687,27 +732,109 @@ export default function BatchDetailPage() {
                 </div>
               )}
 
+              {/* SUBJECT FILTER NAVIGATION TABS (Mathematics, Science, etc.) */}
+              {batch.subjects.length > 0 && (
+                <div className="p-4 sm:p-5 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-brand-charcoal flex items-center gap-1.5">
+                      <BookOpen className="h-4 w-4 text-brand-orange" />
+                      Browse Curriculum By Subject
+                    </span>
+                    <span className="text-[11px] font-bold text-brand-text-muted">
+                      {selectedSubjectId === "ALL"
+                        ? `All Subjects (${batch.subjects.length})`
+                        : batch.subjects.find((s) => s.id === selectedSubjectId)?.name}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSubjectId("ALL")}
+                      className={cn(
+                        "px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5",
+                        selectedSubjectId === "ALL"
+                          ? "bg-brand-orange text-white shadow-xs"
+                          : "bg-brand-bg-warm text-brand-charcoal hover:bg-orange-50"
+                      )}
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      <span>All Curriculum ({batch.lectures.length})</span>
+                    </button>
+
+                    {batch.subjects.map((sub) => {
+                      const Icon = getSubjectIconComponent(sub.name);
+                      const isSelected = selectedSubjectId === sub.id;
+                      const subLectureCount = batch.lectures.filter(
+                        (l) => l.subject_id === sub.id || (l.subject && l.subject.toLowerCase().includes(sub.name.toLowerCase()))
+                      ).length;
+
+                      return (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onClick={() => setSelectedSubjectId(sub.id)}
+                          className={cn(
+                            "px-4 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 border",
+                            isSelected
+                              ? "bg-brand-orange text-white border-brand-orange shadow-xs"
+                              : "bg-white text-brand-charcoal border-brand-border/80 hover:bg-orange-50/60 hover:border-orange-200"
+                          )}
+                        >
+                          <Icon className={cn("h-3.5 w-3.5", isSelected ? "text-white" : "text-brand-orange")} />
+                          <span>{sub.name}</span>
+                          <span
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.2 rounded-full font-extrabold",
+                              isSelected ? "bg-white/20 text-white" : "bg-orange-100 text-brand-orange"
+                            )}
+                          >
+                            {subLectureCount}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Real Database Batch Lectures */}
               <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center gap-2">
                     <PlayCircle className="h-4 w-4 text-brand-orange" />
-                    Recorded Lectures ({batch.lectures.length})
+                    Recorded Lectures ({filteredLectures.length})
                   </h3>
+                  {selectedSubjectId !== "ALL" && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSubjectId("ALL")}
+                      className="text-[11px] font-bold text-brand-orange hover:underline cursor-pointer"
+                    >
+                      Show All Subjects
+                    </button>
+                  )}
                 </div>
 
-                {batch.lectures.length > 0 ? (
+                {filteredLectures.length > 0 ? (
                   <div className="space-y-2">
-                    {batch.lectures.map((lec) => (
+                    {filteredLectures.map((lec) => (
                       <div
                         key={lec.id}
                         className="p-3.5 rounded-2xl bg-brand-bg-warm/40 border border-brand-border/60 flex items-center justify-between gap-3 hover:bg-brand-bg-warm/70 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <PlayCircle className="h-4 w-4 text-brand-orange shrink-0" />
-                          <div>
-                            <h4 className="text-xs font-bold text-brand-charcoal truncate">{lec.title}</h4>
-                            <p className="text-[11px] text-brand-text-muted">{lec.teacher_name}</p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              {lec.subject && (
+                                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-orange-100 text-brand-orange">
+                                  {lec.subject}
+                                </span>
+                              )}
+                              <h4 className="text-xs font-bold text-brand-charcoal truncate">{lec.title}</h4>
+                            </div>
+                            <p className="text-[11px] text-brand-text-muted mt-0.5">{lec.teacher_name}</p>
                           </div>
                         </div>
 
@@ -725,6 +852,7 @@ export default function BatchDetailPage() {
                             </Link>
                           ) : (
                             <button
+                              type="button"
                               onClick={handleEnroll}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors"
                             >
@@ -737,8 +865,10 @@ export default function BatchDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-brand-text-muted text-center py-4">
-                    {batch.is_upcoming
+                  <p className="text-xs text-brand-text-muted text-center py-6">
+                    {selectedSubjectId !== "ALL"
+                      ? "No recorded lectures published for this subject yet."
+                      : batch.is_upcoming
                       ? "Lectures will be added as the batch commences."
                       : "No recorded lectures published in this batch yet."}
                   </p>
@@ -746,17 +876,17 @@ export default function BatchDetailPage() {
               </div>
 
               {/* Real Database Batch Tests & Quizzes */}
-              {batch.tests.length > 0 && (
+              {filteredTests.length > 0 && (
                 <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center gap-2">
                       <ClipboardCheck className="h-4 w-4 text-purple-600" />
-                      Tests &amp; Practice Assessments ({batch.tests.length})
+                      Tests &amp; Practice Assessments ({filteredTests.length})
                     </h3>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {batch.tests.map((test) => (
+                    {filteredTests.map((test) => (
                       <div
                         key={test.id}
                         className="p-4 rounded-2xl bg-purple-50/40 border border-purple-100 flex items-center justify-between gap-3 hover:bg-purple-50 transition-colors"
@@ -778,13 +908,14 @@ export default function BatchDetailPage() {
 
                         {batch.is_enrolled ? (
                           <Link
-                            href="/student/tests"
+                            href={`/student/tests/${test.id}`}
                             className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors shadow-2xs shrink-0"
                           >
                             Take Test
                           </Link>
                         ) : (
                           <button
+                            type="button"
                             onClick={handleEnroll}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors shrink-0"
                           >
@@ -798,16 +929,16 @@ export default function BatchDetailPage() {
                 </div>
               )}
 
-              {/* Real Database Batch Study Materials */}
-              {batch.studyMaterials.length > 0 && (
+              {/* Real Database Batch Study Materials & Companion PDFs */}
+              {filteredMaterials.length > 0 && (
                 <div className="p-6 sm:p-8 rounded-3xl bg-white border border-brand-border/80 shadow-2xs space-y-4">
                   <h3 className="text-sm sm:text-base font-bold text-brand-charcoal flex items-center gap-2">
                     <FileText className="h-4 w-4 text-emerald-600" />
-                    Attached Notes &amp; Study Materials ({batch.studyMaterials.length})
+                    Attached Notes &amp; Study Materials ({filteredMaterials.length})
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {batch.studyMaterials.map((mat) => (
+                    {filteredMaterials.map((mat) => (
                       <div
                         key={mat.id}
                         className="p-3.5 rounded-2xl bg-emerald-50/40 border border-emerald-100 flex items-center justify-between gap-2 hover:bg-emerald-50 transition-colors"
@@ -815,19 +946,32 @@ export default function BatchDetailPage() {
                         <div className="min-w-0">
                           <h4 className="text-xs font-bold text-brand-charcoal truncate">{mat.title}</h4>
                           <span className="text-[10px] font-semibold text-emerald-700 uppercase">
-                            {mat.material_type} · {mat.file_format}
+                            {mat.subject ? `${mat.subject} · ` : ""}{mat.material_type} · {mat.file_format}
                           </span>
                         </div>
 
                         {batch.is_enrolled ? (
-                          <Link
-                            href="/student/study-material"
-                            className="text-xs font-bold text-brand-orange hover:underline shrink-0"
-                          >
-                            View →
-                          </Link>
+                          mat.file_url ? (
+                            <a
+                              href={mat.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-2xs shrink-0"
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              <span>View PDF</span>
+                            </a>
+                          ) : (
+                            <Link
+                              href="/student/study-material"
+                              className="text-xs font-bold text-brand-orange hover:underline shrink-0"
+                            >
+                              View Notes →
+                            </Link>
+                          )
                         ) : (
                           <button
+                            type="button"
                             onClick={handleEnroll}
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 transition-colors shrink-0"
                           >

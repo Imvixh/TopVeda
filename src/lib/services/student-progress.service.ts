@@ -284,6 +284,7 @@ export class StudentProgressService {
           if (recentTestResults.length < 6) {
             recentTestResults.push({
               id: att.id,
+              testId: testData?.id || att.test_id,
               testTitle: testData?.title || "Academic Assessment",
               subjectName: testData?.subject_name || "General",
               scoreObtained: obtSc,
