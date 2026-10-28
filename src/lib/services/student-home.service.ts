@@ -291,7 +291,7 @@ export async function fetchPublishedOngoingBatches(
         .from("cms_lectures")
         .select("id, batch_id")
         .in("batch_id", batchIds)
-        .eq("status", "PUBLISHED")
+        .in("status", ["PUBLISHED", "APPROVED"])
         .eq("is_visible", true);
 
       (lecturesData || []).forEach((lec) => {

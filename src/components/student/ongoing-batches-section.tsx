@@ -148,46 +148,23 @@ export function OngoingBatchesSection({
                     <h3 className="text-sm sm:text-base font-black text-brand-charcoal group-hover:text-brand-orange transition-colors line-clamp-1 leading-snug">
                       {item.batchName}
                     </h3>
-                    <p className="text-xs text-brand-text-muted line-clamp-2 mt-1 leading-relaxed">
-                      {item.description || "Structured ongoing curriculum with live classes, study materials & doubt support."}
-                    </p>
+                    {(item.description || item.subject) && (
+                      <p className="text-xs text-brand-text-muted line-clamp-2 mt-1 leading-relaxed">
+                        {item.description || item.subject}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Faculty Strip */}
-                  <div className="flex items-center gap-2.5 pt-2 border-t border-brand-border/50">
-                    <div className="w-7 h-7 rounded-full overflow-hidden bg-brand-bg-peach border border-brand-border/60 flex items-center justify-center shrink-0">
-                      {leadTeacher?.avatarUrl ? (
-                        <img
-                          src={leadTeacher.avatarUrl}
-                          alt={leadTeacher.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-xs font-bold text-brand-orange">
-                          {leadTeacher ? leadTeacher.name.charAt(0) : "T"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-brand-charcoal truncate">
-                        {leadTeacher ? leadTeacher.name : "TopVeda Faculty"}
-                      </p>
-                      <p className="text-[10px] text-brand-text-muted truncate">
-                        {leadTeacher?.qualification || "Subject Specialist"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Curriculum Content Quick Stats */}
+                  {/* Curriculum Content Quick Stats (Exact Real Count) */}
                   <div className="flex items-center gap-3 text-[11px] text-brand-text-muted font-medium pt-1">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 font-semibold text-brand-charcoal">
                       <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                      {item.lectureCount || 10}+ Lectures
+                      {item.lectureCount || 0} {item.lectureCount === 1 ? "Lecture" : "Lectures"}
                     </span>
                     <span>•</span>
                     <span className="flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      Notes &amp; PDFs
+                      Study Materials
                     </span>
                   </div>
                 </div>

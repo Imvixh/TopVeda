@@ -185,7 +185,7 @@ export class ContentAccessService {
           };
         }
 
-        if (lecture.status !== "PUBLISHED") {
+        if (lecture.status !== "PUBLISHED" && lecture.status !== "APPROVED") {
           return {
             granted: false,
             isLocked: true,

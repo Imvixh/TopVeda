@@ -97,7 +97,7 @@ export class StudentLearningService {
             course_id
           )
         `)
-        .eq("status", "PUBLISHED")
+        .in("status", ["PUBLISHED", "APPROVED"])
         .eq("is_visible", true)
         .order("display_order", { ascending: true });
 
@@ -208,11 +208,17 @@ export class StudentLearningService {
 
         const resumeUrl = targetLecture?.id
           ? `/student/lectures/${targetLecture.id}`
+          : batchId
+          ? `/student/batches/${batchId}`
           : courseId
           ? `/student/courses/${courseId}`
-          : `/student/batches/${batchId}`;
+          : `/student/learning`;
 
-        const detailsUrl = courseId ? `/student/courses/${courseId}` : `/student/batches/${batchId}`;
+        const detailsUrl = batchId
+          ? `/student/batches/${batchId}`
+          : courseId
+          ? `/student/courses/${courseId}`
+          : `/student/learning`;
 
         // Faculty extraction
         let educatorName = batch?.educator_name || null;
@@ -225,14 +231,14 @@ export class StudentLearningService {
           }
         }
 
-        // Format titles
+        // Format titles: prioritize explicit batch title when batch is enrolled
         const classTitle = course?.class_level?.name || course?.title || batch?.title || "Academic Course";
         const subjectTitle = course?.subject?.name || course?.category || "Comprehensive";
-        const formattedTitle = course ? `${classTitle} – ${subjectTitle}` : batch?.title || "Batch Enrollment";
-        const boardName = course?.board?.name
-          ? `${course.board.name} Board`
-          : batch?.board_label
+        const formattedTitle = batch?.title || (course ? `${classTitle} – ${subjectTitle}` : "Batch Enrollment");
+        const boardName = batch?.board_label
           ? `${batch.board_label}`
+          : course?.board?.name
+          ? `${course.board.name} Board`
           : "TopVeda Board";
 
         const cardData: EnrolledCourseCardData = {
@@ -297,6 +303,29 @@ export class StudentLearningService {
             thumbnailUrl: targetLecture.thumbnail_url || null,
           };
         }
+      }
+
+      // Fallback: If no specific lecture checkpoint was watched yet, use the top enrolled batch/course
+      if (!candidateCheckpoint && mappedEnrolled.length > 0) {
+        const topEnrolled = mappedEnrolled[0];
+        candidateCheckpoint = {
+          courseId: topEnrolled.courseId,
+          batchId: topEnrolled.batchId,
+          courseTitle: topEnrolled.title,
+          batchTitle: topEnrolled.batchTitle,
+          boardName: topEnrolled.boardName,
+          subjectName: topEnrolled.subjectName,
+          chapterTitle: null,
+          lectureId: topEnrolled.lastWatchedLectureId || (topEnrolled.batchId || "intro"),
+          lectureTitle: topEnrolled.lastWatchedLectureTitle || (topEnrolled.batchId ? "Batch Curriculum & Recorded Lectures" : "Start Course"),
+          educatorName: topEnrolled.educatorName,
+          lastPositionSeconds: topEnrolled.lastWatchedPosition || 0,
+          totalDurationSeconds: 2700,
+          durationFormatted: "45:00",
+          progressPercent: topEnrolled.progressPercent,
+          resumeUrl: topEnrolled.resumeUrl,
+          thumbnailUrl: null,
+        };
       }
 
       // 5. Fetch Recommended for You (Published courses/batches not yet enrolled in)

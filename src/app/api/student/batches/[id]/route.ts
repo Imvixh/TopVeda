@@ -56,7 +56,7 @@ export async function GET(
         .from("cms_lectures")
         .select("id, title, duration_formatted, duration_human, teacher_name, display_order, subject, subject_id")
         .eq("batch_id", batchId)
-        .eq("status", "PUBLISHED")
+        .in("status", ["PUBLISHED", "APPROVED"])
         .eq("is_visible", true)
         .order("display_order", { ascending: true }),
       adminDb

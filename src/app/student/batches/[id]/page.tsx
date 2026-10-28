@@ -210,7 +210,7 @@ export default function BatchDetailPage() {
           .from("cms_lectures")
           .select("id, title, duration_formatted, duration_human, duration_seconds, teacher_name, display_order, subject, subject_id")
           .eq("batch_id", batchId)
-          .eq("status", "PUBLISHED")
+          .in("status", ["PUBLISHED", "APPROVED"])
           .eq("is_visible", true)
           .order("display_order", { ascending: true }),
         supabase
