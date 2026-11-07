@@ -32,6 +32,19 @@ export class AdminProfileService {
         return null; // Reject non-admin profiles
       }
 
+      if (profile.role === "ADMIN") {
+        const { data: app } = await supabase
+          .from("admin_applications")
+          .select("status")
+          .eq("user_id", adminId)
+          .eq("status", "APPROVED")
+          .maybeSingle();
+
+        if (!app) {
+          return null; // Reject unapproved admin profiles
+        }
+      }
+
       // Count unread admin notifications
       const isSuperAdmin = profile.role === "SUPER_ADMIN";
       let notifQuery = supabase
@@ -84,6 +97,19 @@ export class AdminProfileService {
 
       if (!profile || (profile.role !== "ADMIN" && profile.role !== "SUPER_ADMIN")) {
         return { success: false, error: "Unauthorized. Admin privileges required." };
+      }
+
+      if (profile.role === "ADMIN") {
+        const { data: app } = await supabase
+          .from("admin_applications")
+          .select("status")
+          .eq("user_id", adminId)
+          .eq("status", "APPROVED")
+          .maybeSingle();
+
+        if (!app) {
+          return { success: false, error: "Unauthorized. Admin approval required." };
+        }
       }
 
       const updateData: Record<string, unknown> = {

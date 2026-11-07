@@ -338,6 +338,7 @@ export default function FeaturedBatchesCmsPage() {
         ...(editingBatch ? { id: editingBatch.id } : {}),
         title: formTitle.trim(),
         slug,
+        course_id: editingBatch?.course_id || null,
         board_label: autoBoardLabel,
         board_id: formBoardId,
         class_id: formClassId,

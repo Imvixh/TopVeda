@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => {
     env.NEXT_PUBLIC_APP_URL ||
     (isProduction ? "https://topveda.in" : "http://localhost:3000");
 
+  const gaId =
+    process.env.NEXT_PUBLIC_GA_ID ||
+    env.NEXT_PUBLIC_GA_ID ||
+    "G-1VT09QZFVM";
+
   // Production environment resolution:
   // Must use explicit production build env / .env.production, and NEVER accept local development test key
   let turnstileSiteKey = "";
@@ -86,6 +91,7 @@ export default defineConfig(({ mode }) => {
       "process.env.NEXT_PUBLIC_APP_URL": JSON.stringify(appUrl),
       "process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY": JSON.stringify(resolvedTurnstileKey),
       "process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY": JSON.stringify(resolvedTurnstileKey),
+      "process.env.NEXT_PUBLIC_GA_ID": JSON.stringify(gaId),
     },
     plugins: [
       vinext(),

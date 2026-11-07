@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       }
 
       if (userRole === "ADMIN") {
-        return NextResponse.redirect(`${baseOrigin}/?auth=register&type=admin&email_verified=true`);
+        return NextResponse.redirect(`${baseOrigin}/admin?step=upload&email_verified=true`);
       }
 
       return NextResponse.redirect(`${baseOrigin}/student`);

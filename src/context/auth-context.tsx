@@ -332,54 +332,8 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
         }
 
         if (userRole === "ADMIN") {
-          // Verify admin application status
-          const { data: latestApp } = await supabase
-            .from("admin_applications")
-            .select("status")
-            .eq("user_id", authUser.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (!latestApp) {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            return {
-              success: false,
-              error: "Your admin registration is pending approval.",
-            };
-          }
-
-          if (latestApp.status === "PENDING") {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            return {
-              success: false,
-              error: "Your admin registration is pending approval.",
-            };
-          }
-
-          if (latestApp.status === "REJECTED") {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            return {
-              success: false,
-              error: "Your admin registration was rejected.",
-            };
-          }
-
-          if (latestApp.status !== "APPROVED") {
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            return {
-              success: false,
-              error: "Your admin registration is pending approval.",
-            };
-          }
+          // Authoritatively allow authentication; access to Admin Workspace vs Pending/Incomplete screens
+          // is strictly enforced at /admin and in middleware based on admin_applications status.
         }
       }
 
@@ -424,16 +378,16 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
     const assignedRole = params.role === "ADMIN" ? "ADMIN" : "STUDENT";
 
     try {
-      const { data: existingPhone } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("phone", normalizedPhone)
-        .maybeSingle();
+      // 1. Authoritative check for existing phone number across all accounts via Security Definer RPC
+      const { data: existingPhoneEmail } = await supabase.rpc(
+        "get_auth_email_by_phone",
+        { p_phone: normalizedPhone }
+      );
 
-      if (existingPhone) {
+      if (existingPhoneEmail) {
         return {
           success: false,
-          error: "This mobile number is already associated with an account.",
+          error: "This mobile number is already associated with an account. Please sign in or use a different number.",
         };
       }
 
@@ -454,13 +408,15 @@ async function verifyTurnstileOnServer(token?: string): Promise<{ success: boole
       });
 
       if (error) {
+        const errMsg = error.message.toLowerCase();
         if (
-          error.message.toLowerCase().includes("already registered") ||
-          error.message.toLowerCase().includes("unique")
+          errMsg.includes("already registered") ||
+          errMsg.includes("unique") ||
+          errMsg.includes("database error saving new user")
         ) {
           return {
             success: false,
-            error: "An account with this email address already exists. Please sign in.",
+            error: "An account with this email address or mobile number already exists. Please sign in.",
           };
         }
         return { success: false, error: error.message };

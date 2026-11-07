@@ -2,11 +2,11 @@ import type { NextConfig } from "next";
 
 const cspHeader = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.youtube.com https://s.ytimg.com;
+  script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.youtube.com https://s.ytimg.com https://www.googletagmanager.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  img-src 'self' data: blob: https://uxkvwuavidufnqliauuj.supabase.co https://img.youtube.com https://i.ytimg.com https://images.unsplash.com https://videodelivery.net;
+  img-src 'self' data: blob: https://uxkvwuavidufnqliauuj.supabase.co https://img.youtube.com https://i.ytimg.com https://images.unsplash.com https://videodelivery.net https://www.google-analytics.com https://*.google-analytics.com https://*.googletagmanager.com;
   font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' https://uxkvwuavidufnqliauuj.supabase.co wss://uxkvwuavidufnqliauuj.supabase.co https://challenges.cloudflare.com https://api.cloudflare.com https://*.cloudflarestream.com https://videodelivery.net;
+  connect-src 'self' https://uxkvwuavidufnqliauuj.supabase.co wss://uxkvwuavidufnqliauuj.supabase.co https://challenges.cloudflare.com https://api.cloudflare.com https://*.cloudflarestream.com https://videodelivery.net https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com;
   media-src 'self' blob: data: https://videodelivery.net https://*.cloudflarestream.com https://uxkvwuavidufnqliauuj.supabase.co;
   frame-src 'self' https://challenges.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com https://iframe.videodelivery.net;
   frame-ancestors 'self';

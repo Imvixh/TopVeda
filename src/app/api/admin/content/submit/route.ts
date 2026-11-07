@@ -42,6 +42,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (profile.role === "ADMIN") {
+      const { data: app } = await supabase
+        .from("admin_applications")
+        .select("status")
+        .eq("user_id", user.id)
+        .eq("status", "APPROVED")
+        .maybeSingle();
+
+      if (!app) {
+        return NextResponse.json(
+          { error: "Forbidden: Administrator application must be approved by Super Admin." },
+          { status: 403 }
+        );
+      }
+    }
+
     const body: SubmitForReviewRequest = await request.json();
     const { entityType, entityId } = body;
 

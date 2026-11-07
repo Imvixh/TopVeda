@@ -20,6 +20,7 @@
     "NEXT_PUBLIC_APP_URL": "https://topveda.in",
     "NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY": "0x4AAAAAAFHxSEIMvYFpoutX",
     "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFHxSEIMvYFpoutX",
+    "NEXT_PUBLIC_GA_ID": "G-1VT09QZFVM",
     "GOOGLE_YOUTUBE_REDIRECT_URI": "https://topveda.in/api/youtube/oauth/callback"
   }
 }

@@ -44,7 +44,7 @@ export interface StudentContentEntitlement {
 export interface StudentEnrollment {
   id: string;
   studentId: string;
-  courseId: string;
+  courseId?: string | null;
   batchId?: string | null;
   status: StudentEnrollmentStatus;
   enrolledAt: string;

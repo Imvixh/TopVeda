@@ -335,6 +335,7 @@ export default function OngoingBatchesCmsPage() {
         ...(editingBatch ? { id: editingBatch.id } : {}),
         title: formTitle.trim(),
         slug: editingBatch ? editingBatch.slug : `${cleanSlug}-${Date.now().toString().slice(-4)}`,
+        course_id: editingBatch?.course_id || null,
         board_id: formBoardId,
         class_id: formClassId,
         subject_id: formSelectedSubjectIds[0] || formSubjectId || null,

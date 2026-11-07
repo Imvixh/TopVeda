@@ -68,6 +68,33 @@ export function AdminApplicationFlow({
   };
 
   const [step, setStep] = React.useState<AdminStep>(determineInitialStep);
+
+  React.useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("admin_applications")
+          .select("id, status, created_at, rejection_reason")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && data && isMounted) {
+          if (data.status === "PENDING") {
+            setStep(5);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [user, supabase]);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);

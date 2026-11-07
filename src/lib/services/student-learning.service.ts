@@ -448,7 +448,7 @@ export class StudentLearningService {
     supabase: SupabaseClient,
     params: {
       userId: string;
-      courseId: string;
+      courseId?: string | null;
       batchId?: string | null;
     }
   ): Promise<{ success: boolean; enrollment?: StudentEnrollment; error?: string }> {
@@ -459,7 +459,7 @@ export class StudentLearningService {
       const access = await ContentAccessService.checkAccess(supabase, {
         userId,
         contentType: batchId ? "BATCH" : "COURSE",
-        contentId: batchId || courseId,
+        contentId: (batchId || courseId) as string,
       });
 
       if (!access.granted || access.isLocked) {
@@ -469,13 +469,15 @@ export class StudentLearningService {
         };
       }
 
-      // 2. Resolve target batch binding (if not explicitly passed, find the primary active batch for this course)
+      // 2. Resolve target batch & course bindings
       let resolvedBatchId = batchId || null;
-      if (!resolvedBatchId) {
+      let resolvedCourseId = courseId || null;
+
+      if (!resolvedBatchId && resolvedCourseId) {
         const { data: defaultBatch } = await supabase
           .from("cms_batches")
           .select("id")
-          .eq("course_id", courseId)
+          .eq("course_id", resolvedCourseId)
           .eq("status", "PUBLISHED")
           .eq("is_visible", true)
           .order("display_order", { ascending: true })
@@ -484,6 +486,18 @@ export class StudentLearningService {
 
         if (defaultBatch?.id) {
           resolvedBatchId = defaultBatch.id;
+        }
+      }
+
+      // If enrolling in batch without courseId, inherit the batch's genuine course_id if linked
+      if (resolvedBatchId && !resolvedCourseId) {
+        const { data: bData } = await supabase
+          .from("cms_batches")
+          .select("course_id")
+          .eq("id", resolvedBatchId)
+          .maybeSingle();
+        if (bData?.course_id) {
+          resolvedCourseId = bData.course_id;
         }
       }
 
@@ -497,12 +511,12 @@ export class StudentLearningService {
           .eq("batch_id", resolvedBatchId)
           .maybeSingle();
         existing = batchEnrollment;
-      } else {
+      } else if (resolvedCourseId) {
         const { data: courseEnrollment } = await supabase
           .from("student_enrollments")
           .select("*")
           .eq("student_id", userId)
-          .eq("course_id", courseId)
+          .eq("course_id", resolvedCourseId)
           .maybeSingle();
         existing = courseEnrollment;
       }
@@ -514,13 +528,12 @@ export class StudentLearningService {
         };
       }
 
-
-      // 4. Insert New Enrollment Record with resolved batch_id
+      // 4. Insert New Enrollment Record with resolved batch_id and course_id
       const { data: newEnrollment, error: insertError } = await supabase
         .from("student_enrollments")
         .insert({
           student_id: userId,
-          course_id: courseId,
+          course_id: resolvedCourseId,
           batch_id: resolvedBatchId,
           status: "ACTIVE",
           enrolled_at: new Date().toISOString(),

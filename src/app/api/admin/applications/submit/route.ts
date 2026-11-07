@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createAdminClient } from "@/lib/supabase/server";
 import { EmailService } from "@/lib/email/email-service";
 
 export async function POST(request: NextRequest) {
@@ -82,9 +83,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const adminClient = process.env.SUPABASE_SERVICE_ROLE_KEY ? createAdminClient() : supabase;
+
     // 7. Verify document actually exists in the private 'admin-documents' storage bucket
     const fileNameOnly = documentStoragePath.replace(`${user.id}/`, "");
-    const { data: fileList, error: listError } = await supabase.storage
+    const { data: fileList, error: listError } = await adminClient.storage
       .from("admin-documents")
       .list(user.id, {
         search: fileNameOnly,
@@ -102,7 +105,7 @@ export async function POST(request: NextRequest) {
     const applicationPhone = reqPhone || profile.phone || user.phone || "";
 
     // 8. Insert into public.admin_applications
-    const { data: appData, error: insertError } = await supabase
+    const { data: appData, error: insertError } = await adminClient
       .from("admin_applications")
       .insert({
         user_id: user.id,

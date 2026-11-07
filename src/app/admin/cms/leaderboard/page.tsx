@@ -66,6 +66,55 @@ export default function AdminLeaderboardPage() {
   const [inspectStudent, setInspectStudent] = React.useState<LeaderboardEntry | null>(null);
   const [notificationSent, setNotificationSent] = React.useState(false);
 
+  // Appreciation composer modal state
+  const [isAppreciationOpen, setIsAppreciationOpen] = React.useState(false);
+  const [awardType, setAwardType] = React.useState<string>("LEADERBOARD_EXCELLENCE");
+  const [customTitle, setCustomTitle] = React.useState("");
+  const [customMessage, setCustomMessage] = React.useState("");
+  const [isSendingAppreciation, setIsSendingAppreciation] = React.useState(false);
+  const [appreciationStatus, setAppreciationStatus] = React.useState<{ success?: boolean; message?: string } | null>(null);
+
+  const openAppreciationComposer = (student: LeaderboardEntry) => {
+    setAwardType("LEADERBOARD_EXCELLENCE");
+    setCustomTitle(`🌟 Super Admin Appreciation Award - Rank #${student.rank}`);
+    setCustomMessage(`Congratulations ${student.fullName}! Your outstanding performance on the TopVeda Leaderboard (${student.points} pts, ${student.averageScore}% accuracy) has been recognized by the Super Administration. Keep up the brilliant work!`);
+    setAppreciationStatus(null);
+    setIsAppreciationOpen(true);
+  };
+
+  const handleSendAppreciation = async () => {
+    if (!inspectStudent || !customTitle.trim() || !customMessage.trim()) return;
+    setIsSendingAppreciation(true);
+    setAppreciationStatus(null);
+    try {
+      const res = await fetch("/api/admin/leaderboard/appreciate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: inspectStudent.id,
+          title: customTitle,
+          message: customMessage,
+          awardType,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAppreciationStatus({ success: false, message: data.error || "Failed to send appreciation." });
+      } else {
+        setAppreciationStatus({ success: true, message: `Appreciation delivered to ${inspectStudent.fullName}'s inbox!` });
+        setNotificationSent(true);
+        setTimeout(() => {
+          setIsAppreciationOpen(false);
+          setNotificationSent(false);
+        }, 1800);
+      }
+    } catch {
+      setAppreciationStatus({ success: false, message: "Network error occurred." });
+    } finally {
+      setIsSendingAppreciation(false);
+    }
+  };
+
   const fetchLeaderboard = React.useCallback(async (batchId: string) => {
     try {
       setIsLoading(true);
@@ -457,22 +506,10 @@ export default function AdminLeaderboardPage() {
                 variant="primary"
                 size="sm"
                 className="flex-1 text-xs"
-                onClick={() => {
-                  setNotificationSent(true);
-                  setTimeout(() => setNotificationSent(false), 3000);
-                }}
+                onClick={() => openAppreciationComposer(inspectStudent)}
               >
-                {notificationSent ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 mr-1 text-white" />
-                    <span>Appreciation Sent!</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 mr-1" />
-                    <span>Send Appreciation / Award</span>
-                  </>
-                )}
+                <Sparkles className="h-4 w-4 mr-1" />
+                <span>Customize & Send Appreciation</span>
               </Button>
 
               <Button
@@ -485,6 +522,131 @@ export default function AdminLeaderboardPage() {
                 }}
               >
                 Copy Info
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Direct / Custom Appreciation Message Composer Modal */}
+      {isAppreciationOpen && inspectStudent && (
+        <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in-50 duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-4 border border-brand-border shadow-2xl relative">
+            <button
+              onClick={() => setIsAppreciationOpen(false)}
+              className="absolute right-5 top-5 p-2 rounded-full text-brand-text-muted hover:text-brand-charcoal hover:bg-gray-100 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 border border-amber-200">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-brand-charcoal">Send Direct Appreciation</h3>
+                <p className="text-xs text-brand-text-muted">
+                  Recipient: <strong className="text-brand-charcoal">{inspectStudent.fullName}</strong> (Rank #{inspectStudent.rank})
+                </p>
+              </div>
+            </div>
+
+            {/* Award Category Selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-brand-charcoal">Award Badge / Category</label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {[
+                  { id: "LEADERBOARD_EXCELLENCE", label: "🌟 Leaderboard Excellence" },
+                  { id: "STAR_PERFORMER", label: "🏆 Star Performer" },
+                  { id: "SPEED_ACCURACY", label: "⚡ Speed & Accuracy" },
+                  { id: "CONSISTENCY_CHAMPION", label: "🎯 Consistency Champion" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setAwardType(item.id);
+                      setCustomTitle(`${item.label.split(" ")[0]} TopVeda ${item.label.slice(2)} - Rank #${inspectStudent.rank}`);
+                    }}
+                    className={cn(
+                      "p-2 rounded-xl text-left font-semibold border transition-all text-[11px]",
+                      awardType === item.id
+                        ? "bg-amber-50 border-amber-300 text-amber-900 shadow-xs"
+                        : "bg-gray-50/70 border-gray-200 text-brand-text-muted hover:bg-gray-100"
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notification Title Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-brand-charcoal">Award Title</label>
+              <input
+                type="text"
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+                placeholder="Enter award title"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange"
+              />
+            </div>
+
+            {/* Notification Custom Message Input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-brand-charcoal">Personalized Appreciation Message</label>
+              <textarea
+                rows={4}
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                placeholder="Type your direct encouragement message to the student..."
+                className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange resize-none"
+              />
+            </div>
+
+            {appreciationStatus && (
+              <div
+                className={cn(
+                  "p-3 rounded-xl text-xs font-semibold flex items-center gap-2",
+                  appreciationStatus.success
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-red-50 text-red-800 border border-red-200"
+                )}
+              >
+                {appreciationStatus.success ? <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> : <X className="h-4 w-4 text-red-600 shrink-0" />}
+                <span>{appreciationStatus.message}</span>
+              </div>
+            )}
+
+            <div className="flex gap-2.5 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs"
+                onClick={() => setIsAppreciationOpen(false)}
+                disabled={isSendingAppreciation}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="flex-2 text-xs"
+                onClick={handleSendAppreciation}
+                disabled={isSendingAppreciation || !customTitle.trim() || !customMessage.trim()}
+              >
+                {isSendingAppreciation ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    Delivering to Student...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-1.5" />
+                    Deliver Direct Award
+                  </>
+                )}
               </Button>
             </div>
           </div>

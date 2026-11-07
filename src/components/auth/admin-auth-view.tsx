@@ -33,6 +33,20 @@ export function AdminAuthView({ initialMode = "login", onSuccess }: AdminAuthVie
   const { login } = useAuth();
 
   const [mode, setMode] = React.useState<"login" | "register">(initialMode);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (
+        params.get("step") === "upload" ||
+        params.get("email_verified") === "true" ||
+        params.get("auth") === "register" ||
+        params.get("mode") === "register"
+      ) {
+        setMode("register");
+      }
+    }
+  }, []);
   const [loginIdentifier, setLoginIdentifier] = React.useState("");
   const [loginPassword, setLoginPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
