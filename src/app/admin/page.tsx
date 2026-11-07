@@ -238,56 +238,8 @@ export default function AdminFoundationPage() {
     );
   }
 
-  // Guard: Logged in ADMIN whose application is checking
-  if (profile?.role === "ADMIN" && adminAppStatus === "CHECKING") {
-    return (
-      <div className="min-h-screen bg-brand-bg-warm flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-          <p className="text-xs font-semibold text-brand-text-muted">Verifying Super Admin Authorization...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Guard: Logged in ADMIN whose application is NOT approved
   if (profile?.role === "ADMIN" && adminAppStatus !== "APPROVED") {
-    if (adminAppStatus === "NO_APPLICATION") {
-      return (
-        <div className="min-h-screen bg-brand-bg-warm flex flex-col justify-center items-center py-12 px-4 sm:px-6 lg:px-8">
-          <div className="w-full max-w-lg space-y-6">
-            <div className="text-center space-y-2 flex flex-col items-center">
-              <TopVedaLogo size={42} />
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold tracking-wide uppercase mt-1">
-                <Clock className="h-3.5 w-3.5 text-amber-600" />
-                Application Incomplete
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-text-primary tracking-tight">
-                Complete Admin Application
-              </h1>
-              <p className="text-xs sm:text-sm text-brand-text-muted max-w-md mx-auto">
-                You have registered your administrator account, but your verification document has not been uploaded yet. Please complete the application below for Super Administrator review.
-              </p>
-            </div>
-            <Card className="p-6 sm:p-8 bg-brand-surface border border-brand-border/90 shadow-md">
-              <AdminApplicationFlow
-                onSuccess={() => {
-                  router.refresh();
-                }}
-                onSwitchToLogin={handleLogout}
-              />
-            </Card>
-            <div className="text-center">
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-xs text-brand-text-muted hover:text-brand-text-primary">
-                <LogOut className="h-3.5 w-3.5 mr-1.5" />
-                Sign Out
-              </Button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     if (adminAppStatus === "PENDING") {
       return (
         <div className="min-h-screen bg-brand-bg-warm flex items-center justify-center p-4">
@@ -350,6 +302,9 @@ export default function AdminFoundationPage() {
         </div>
       );
     }
+
+    // NO_APPLICATION or initial CHECKING state: render smooth registration flow without full-page flicker
+    return <AdminAuthView initialMode="register" onSuccess={() => router.refresh()} />;
   }
 
   const profileHref = isSuperAdmin ? "/admin/cms/profile" : "/admin/profile";

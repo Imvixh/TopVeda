@@ -60,8 +60,14 @@ export function AdminApplicationFlow({
 
   const supabase = React.useMemo(() => createClient(), []);
 
-  // Determine starting step based on authenticated user state
+  // Determine starting step based on authenticated user state & URL query params
   const determineInitialStep = (): AdminStep => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("step") === "upload" || params.get("email_verified") === "true") {
+        return 3;
+      }
+    }
     if (!user) return 1;
     if (!user.email_confirmed_at) return 2;
     return 3;
@@ -632,108 +638,81 @@ export function AdminApplicationFlow({
           ===================================================================== */}
       {step === 3 && (
         <div className="space-y-4">
-          {!user ? (
-            <div className="py-6 text-center space-y-4">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-200">
-                <LogIn className="h-7 w-7" />
-              </div>
-              <div className="space-y-1">
-                <h4 className="text-sm font-bold text-brand-text-primary">
-                  Authentication Required
-                </h4>
-                <p className="text-xs text-brand-text-muted">
-                  Please sign in to continue your Admin Registration.
+          <div className="text-center space-y-1">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-bg-peach text-brand-orange border border-brand-orange-border">
+              <FileCheck className="h-7 w-7" />
+            </div>
+            <h4 className="text-base font-bold text-brand-text-primary">
+              Government ID
+            </h4>
+            <p className="text-xs text-brand-text-muted max-w-sm mx-auto">
+              Upload your document (PDF, JPG, JPEG, PNG under 10MB).
+            </p>
+          </div>
+
+          {!uploadedDocMetadata ? (
+            <div className="space-y-3">
+              <DocumentUploader
+                selectedFile={selectedFile}
+                onFileSelect={(f) => setSelectedFile(f)}
+                onClear={() => setSelectedFile(null)}
+                disabled={isUploadingDoc}
+              />
+
+              <div className="rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 p-3 text-[11px] text-brand-text-muted space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-brand-text-primary">
+                  <ShieldCheck className="h-4 w-4 text-brand-orange" />
+                  <span>Private & Encrypted Storage</span>
+                </div>
+                <p>
+                  Documents are stored in a private vault with no public URL and reviewed exclusively by the Super Administrator.
                 </p>
               </div>
+
               <Button
                 type="button"
                 variant="primary"
-                size="md"
-                onClick={onSwitchToLogin}
-                className="w-full text-xs font-semibold"
+                size="lg"
+                className="w-full shadow-subtle"
+                onClick={handleUploadDocument}
+                disabled={!selectedFile || isUploadingDoc}
               >
-                Sign In to Continue
+                {isUploadingDoc ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading Document...
+                  </>
+                ) : (
+                  <>
+                    Upload Document
+                    <ArrowRight className="h-4 w-4 ml-1.5" />
+                  </>
+                )}
               </Button>
             </div>
           ) : (
-            <>
-              <div className="text-center space-y-1">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-bg-peach text-brand-orange border border-brand-orange-border">
-                  <FileCheck className="h-7 w-7" />
+            <div className="py-2 text-center space-y-4">
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                <div className="font-bold flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span>Government ID Uploaded ✓</span>
                 </div>
-                <h4 className="text-base font-bold text-brand-text-primary">
-                  Government ID
-                </h4>
-                <p className="text-xs text-brand-text-muted max-w-sm mx-auto">
-                  Upload your document (PDF, JPG, JPEG, PNG under 10MB).
+                <p className="text-emerald-700">
+                  File: <strong>{uploadedDocMetadata.fileName}</strong> ({formatFileSize(uploadedDocMetadata.fileSize)})
                 </p>
               </div>
 
-              {!uploadedDocMetadata ? (
-                <div className="space-y-3">
-                  <DocumentUploader
-                    selectedFile={selectedFile}
-                    onFileSelect={(f) => setSelectedFile(f)}
-                    onClear={() => setSelectedFile(null)}
-                    disabled={isUploadingDoc}
-                  />
-
-                  <div className="rounded-xl bg-brand-bg-warm/80 border border-brand-border/60 p-3 text-[11px] text-brand-text-muted space-y-1">
-                    <div className="flex items-center gap-1.5 font-bold text-brand-text-primary">
-                      <ShieldCheck className="h-4 w-4 text-brand-orange" />
-                      <span>Private & Encrypted Storage</span>
-                    </div>
-                    <p>
-                      Documents are stored in a private vault with no public URL and reviewed exclusively by the Super Administrator.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="lg"
-                    className="w-full shadow-subtle"
-                    onClick={handleUploadDocument}
-                    disabled={!selectedFile || isUploadingDoc}
-                  >
-                    {isUploadingDoc ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading Document...
-                      </>
-                    ) : (
-                      <>
-                        Upload Document
-                        <ArrowRight className="h-4 w-4 ml-1.5" />
-                      </>
-                    )}
-                  </Button>
-                </div>
-              ) : (
-                <div className="py-2 text-center space-y-4">
-                  <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
-                    <div className="font-bold flex items-center justify-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                      <span>Government ID Uploaded ✓</span>
-                    </div>
-                    <p className="text-emerald-700">
-                      File: <strong>{uploadedDocMetadata.fileName}</strong> ({formatFileSize(uploadedDocMetadata.fileSize)})
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="lg"
-                    className="w-full shadow-subtle"
-                    onClick={() => setStep(4)}
-                  >
-                    Continue to Review
-                    <ArrowRight className="h-4 w-4 ml-1.5" />
-                  </Button>
-                </div>
-              )}
-            </>
+              <Button
+                type="button"
+                variant="primary"
+                size="lg"
+                className="w-full shadow-subtle"
+                onClick={() => setStep(4)}
+              >
+                Continue to Review
+                <ArrowRight className="h-4 w-4 ml-1.5" />
+              </Button>
+            </div>
           )}
         </div>
       )}
