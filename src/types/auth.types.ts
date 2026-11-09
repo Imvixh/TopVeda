@@ -11,6 +11,7 @@ export interface UserProfile {
   fullName: string;
   role: UserRole;
   avatarUrl?: string;
+  avatar_url?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -159,7 +159,7 @@ export function StudentHeader({
             >
               <div className="relative w-9 h-9 rounded-full overflow-hidden border border-brand-orange-border/60 bg-brand-bg-peach flex items-center justify-center shrink-0">
                 <Image
-                  src={profile?.avatarUrl || "/assets/student/student-avatar.jpg"}
+                  src={profile?.avatar_url || "/assets/student/student-avatar.jpg"}
                   alt={displayName}
                   width={36}
                   height={36}

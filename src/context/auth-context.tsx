@@ -84,6 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phone: data.phone,
           role: data.role as UserRole,
           avatarUrl: data.avatar_url || undefined,
+          avatar_url: data.avatar_url || undefined,
           createdAt: data.created_at,
           updatedAt: data.updated_at,
         };
